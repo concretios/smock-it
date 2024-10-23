@@ -1,0 +1,21 @@
+{
+  "templateFileName": "Verify_Contact_Fields_data_template.json",
+  "namespaceToExclude": [],
+  "outputFormat": [
+    "csv",
+    "json"
+  ],
+  "language": "en",
+  "count": 67,
+  "sObjects": [
+    {
+      "contact": {
+        "fieldsToExclude": [
+          "name"
+        ],
+        "count": 5,
+        "language": "en"
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "templateFileName": "default_data_template.json",
+  "namespaceToExclude": [],
+  "outputFormat": [
+    "csv"
+  ],
+  "language": "en",
+  "count": 1,
+  "sObjects": [
+    {
+      "account": {},
+      "contact": {},
+      "lead": {
+        "fieldsToExclude": [
+          "fax",
+          "website"
+        ],
+        "language": "en",
+        "count": 5
+      }
+    }
+  ]
+}
