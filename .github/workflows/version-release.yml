@@ -1,0 +1,39 @@
+name: Release SMOCKER plugin version
+
+on:
+  push:
+    branches: [ "main" ] 
+  workflow_dispatch:
+  
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write #Creating Github release
+      packages: write #Publish to npm
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v4
+        
+      - name: setup node environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: npm
+          
+      - name: install dependencies
+        run: npm install
+
+      # setup npm to publish to github packages under concretio's scope
+      - name: configure npm for GitHub
+        run: |
+          echo "@concretio:registry=https://npm.pkg.github.com" >> ~/.npmrc 
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+          
+      - name: install dependencies
+        run: npm install
+
+      - name: Semantic Release
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
