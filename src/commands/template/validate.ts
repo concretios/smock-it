@@ -142,7 +142,8 @@ export class TemplateValidate extends SfCommand<TemplateValidateResult> {
   public async run(): Promise<TemplateValidateResult> {
     const { flags } = await this.parse(TemplateValidate);
     const __cwd = process.cwd();
-    const templateDirPath = path.join(__cwd, `data_gen/templates/${flags.templateName}`);
+    const sanitizeFilename = flags.templateName.endsWith('.json') ? flags.templateName : flags.templateName + '.json';
+    const templateDirPath = path.join(__cwd, `data_gen/templates/${sanitizeFilename}`);
 
     if (fs.existsSync(templateDirPath)) {
       const connection = await getConnectionWithSalesforce();

@@ -89,12 +89,11 @@ const _excludeFieldsSet = new Set<string>();
 const createdRecordsIds: Map<string, string[]> = new Map();
 
 export default class CreateRecord extends SfCommand<CreateRecordResult> {
-
   public static readonly flags = {
     ...templateAddFlags,
     templateName: Flags.string({
       summary: messages.getMessage('flags.confDir.summary'),
-      char: 'd',
+      char: 't',
     }),
     'include-files': Flags.string({
       summary: messages.getMessage('flags.include-files.summary'),
@@ -145,7 +144,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
       const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
       const jsonData = await this.fetchMockarooData(url, processedFields);
 
-      if (outputFormat.includes('json') || outputFormat.includes('csv')) {
+      if (outputFormat.includes('json') || outputFormat.includes('json')) {
         const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
         const jsonFilePath = `${process.cwd()}/data_gen/output/${object}_${flags.templateName?.replace(
           '.json',
@@ -171,18 +170,18 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
         const errorSet: Set<string> = new Set();
         const insertedIds: string[] = [];
         const insertResult = await this.insertRecords(conn, object, jsonData);
-        insertResult.forEach((result: { id?: string, success: boolean, errors?: any[] }) => {
+        insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }) => {
           if (result.success && result.id) {
-              insertedIds.push(result.id);
+            insertedIds.push(result.id);
           } else if (result.errors) {
-              result.errors.forEach((error) => errorSet.add(error.message));
+            result.errors.forEach((error) => errorSet.add(error.message));
           }
-      });
+        });
         this.log(`Records inserted for ${object}`);
         if (errorSet.size > 0) {
-          this.log(`\nFailed to insert ${errorSet.size} errors for ${object}:`);
+          this.log(`\nFailed to insert ${errorSet.size} record(s) for '${object}' object with following error(s):`);
           errorSet.forEach((error) => this.log(`- ${error}`));
-      }
+        }
         this.updateCreatedRecordIds(object, insertResult);
 
         if (flags['include-files'] !== undefined && flags['include-files']?.length > 0) {
@@ -195,7 +194,10 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     if (outputFormat.includes('DI') || outputFormat.includes('di')) {
       this.saveMapToJsonFile(
         'data_gen',
-        flags.templateName?.replace('.json', '') + 'createdRecords ' + new Date().toLocaleString() + '.json'
+        flags.templateName?.replace('.json', '') +
+          'createdRecords_' +
+          new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0] +
+          '.json'
       );
     }
 
@@ -401,7 +403,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
       const fieldName = isParentObject ? item.QualifiedApiName : item.name;
       const dataType = isParentObject ? item.DataType : item.type;
       const isReference = dataType === 'reference';
-      const isPicklist = dataType === 'picklist';
+      const isPicklist = dataType === 'picklist' || dataType === 'multipicklist';
 
       // const isNonNillableReference = isParentObject && !item.IsNillable;
 
@@ -533,7 +535,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     if (fieldName.includes('site')) return '';
     if (fieldName.includes('department')) return 'Department (Corporate)';
     if (fieldName.includes('language')) return 'Language';
-    return '';
+    return 'App Name';
   }
 
   /**
@@ -916,7 +918,13 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
   }
 
   private convertJsonToCsv(jsonData: any[]): string {
-    const fields = Object.keys(jsonData[0]);
+    let fields;
+    if (Array.isArray(jsonData)) {
+      fields = Object.keys(jsonData[0]);
+    } else {
+      fields = Object.keys(jsonData);
+      jsonData = [jsonData];
+    }
     const csvRows = jsonData.map((row) => fields.map((field) => row[field]).join(','));
     return [fields.join(','), ...csvRows].join('\n');
   }

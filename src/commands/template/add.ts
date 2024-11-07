@@ -49,12 +49,20 @@ export function updateOrInitializeConfig(
           .filter(Boolean);
         // Push to array if it exists else assign to new
         if (key == 'outputFormat') {
-          if(!valuesArray.every(format => ['csv', 'json', 'di'].includes(format))){
+          if (!valuesArray.every((format) => ['csv', 'json', 'di'].includes(format))) {
             throw new Error(chalk.red('Invalid output format passed. supports `csv`, `json` and `di` only'));
-          } else if( valuesArray.includes('di') && (configObject['count'] > 200 || configObject['sObjects'].some((obj: { [x: string]: { count: number } }) => obj[Object.keys(obj)[0]]?.count > 200))){
-              throw new Error(chalk.red('All count values should be within 1-200 to add DI-Direct Insertion in template'));
+          } else if (
+            valuesArray.includes('di') &&
+            (configObject['count'] > 200 ||
+              configObject['sObjects'].some(
+                (obj: { [x: string]: { count: number } }) => obj[Object.keys(obj)[0]]?.count > 200
+              ))
+          ) {
+            throw new Error(
+              chalk.red('All count values should be within 1-200 to add DI-Direct Insertion in template')
+            );
           }
-        }        
+        }
 
         if (Array.isArray(configObject[key])) {
           valuesArray.forEach((item: string) => {
@@ -68,15 +76,24 @@ export function updateOrInitializeConfig(
 
         log(`Updated '${key}' to: ${configObject[key].join(', ')}`);
       } else {
-        if (key == 'language' && value != 'en' && value != 'jp')
+        if (key == 'language' && value != 'en' && value != 'jp') {
           throw new Error('Invalid language input. supports `en` or `jp` only');
-        if(key == 'count' && configObject['outputFormat'].includes('di') && (value as number) < 1 && (value as number) > 200)
-          throw new Error('Invalid input. Please enter between 1-200, with DI- direct insertion');
+        }
+
+        if (
+          key == 'count' &&
+          ((value as number) < 1 || (value as number) > 200) &&
+          config.outputFormat.includes('di')
+        ) {
+          throw new Error('Invalid input. Please enter between 1-200');
+        }
+
         configObject[key] = value;
-        log(`Updated '${key}' to: ${configObject[key]}`);
+        log(`Setting '${key}' to: ${configObject[key]}`);
       }
-    } else if (!['sObject', 'templateName'].includes(key))
+    } else if (!['sObject', 'templateName'].includes(key)) {
       log(chalk.yellow(`Skipped: '${key}' flag can not be passed in the current command`));
+    }
   }
 }
 export const templateAddFlags = {
@@ -102,7 +119,7 @@ export const templateAddFlags = {
     char: 'c',
     summary: messages.getMessage('flags.count.summary'),
     description: messages.getMessage('flags.count.description'),
-    required: false
+    required: false,
   }),
   namespaceToExclude: Flags.string({
     char: 'x',
@@ -123,6 +140,8 @@ export const templateAddFlags = {
     required: false,
   }),
 };
+
+let config: any;
 export default class TemplateAdd extends SfCommand<void> {
   public static readonly flags = templateAddFlags;
   public async run(): Promise<void> {
@@ -131,7 +150,7 @@ export default class TemplateAdd extends SfCommand<void> {
     let filename = flags.templateName;
     if (!filename) {
       this.error('Error: You must specify a filename using the --templateName flag.');
-    } else if(!filename.endsWith('.json')){
+    } else if (!filename.endsWith('.json')) {
       filename += '.json';
     }
 
@@ -152,7 +171,7 @@ export default class TemplateAdd extends SfCommand<void> {
         this.error(`Config file not found at ${configFilePath}`);
       }
 
-      const config = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
+      config = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
       let allowedFlags = [];
       let configFile = {};
 
@@ -188,7 +207,7 @@ export default class TemplateAdd extends SfCommand<void> {
       // await validateConfigJson(connection, configFilePath);
       this.log(chalk.green(`Success: Configuration updated in ${configFilePath}`));
     } catch (error) {
-      this.error(`Unexpected error occurred: ${(error as Error).message}`);
+      this.error(`Process halted: ${(error as Error).message}`);
     }
   }
 }

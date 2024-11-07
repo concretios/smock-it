@@ -141,8 +141,6 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     }),
   };
 
-
-
   public async run(): Promise<SetupInitResult> {
     const { flags } = await this.parse(SetupInit);
     const { start, stop } = loading('Establishing Connection with Org', {
@@ -160,17 +158,66 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     console.log(chalk.bold('🚀 Creating Data Template File 🚀'));
     console.log(chalk.bold('====================================='));
 
-    if(flags.default !== undefined) {
-      const defaultTemplate = '{"templateFileName":"default_data_template.json","namespaceToExclude":[],"outputFormat":["csv"],"language":"en","count":1,"sObjects":[{"account":{},"contact":{},"lead":{"fieldsToExclude":["fax","website"],"language":"en","count":5}}]}';
-      const jsonObject: SetupInitResult = JSON.parse(defaultTemplate); 
-      let defaultTemplatePath = path.join(templatePath,'default_data_template.json');
+    if (flags.default !== undefined) {
+      let defaultTemplatePath = path.join(templatePath, 'default_data_template.json');
       let defaultTemplateNumber: number = 0;
-      while(fs.existsSync(defaultTemplatePath)){
+
+      while (fs.existsSync(defaultTemplatePath)) {
         defaultTemplateNumber++;
-        defaultTemplatePath = path.join(templatePath,`default_data_template_${defaultTemplateNumber}.json`);
+        defaultTemplatePath = path.join(templatePath, `default_data_template_${defaultTemplateNumber}.json`);
       }
-      fs.writeFileSync(defaultTemplatePath, JSON.stringify(jsonObject, null, 2), 'utf8');
+
+      const defaultTemplate = `
+        {
+          "_comment_importantNote": "We highly recommend removing all the comments for a cleaner exeperience once you are comfortable with this json format",
+
+          "_comment_templateFileName": "The filename of the data template.",
+          "templateFileName": "default_data_template_8.json",
+          
+          "_comment_namespaceToExclude": "Fields from these namespace(s) will be excluded while generating test data",
+          "_example_namespaceToExclude": "namespaceToExclude:['namespace1','namespace2']",
+          "namespaceToExclude": [],
+          
+          "_comment_outputFormat": "Desired output format(s) for the storing the generated test data; Only 3 values are valid- csv,json and di(i.e. for direct insertion of upto 200 records into the connected org)",
+          "_example_outputFormat": "outputFormat:['csv','json','di']",
+          "outputFormat": ["csv"],
+          
+          "_comment_language": "Specifies the default language for data generation; applies to all sObjects unless overridden (e.g., 'en' for English).",
+          "language": "en",
+          
+          "_comment_count": "Specifies the default count for data generation; applies to all sObjects unless overridden",
+          "count": 1,
+          
+          "_comment_sObjects": "Lists Salesforce objects (API names) to generate test data for.",
+          "sObjects": [
+            {"account": {}},
+            {"contact": {}},
+            {
+              "lead": {
+                "_comment_sobjectLevel": "These settings are object specific, so here these are set for lead object only",
+                "_comment_fieldsToExclude": "Lists fields to exclude from generating test data for the Lead object.",
+                "fieldsToExclude": ["fax", "website"],
+
+                "_comment_language": "Specifies language for generating test data for the Lead object.",
+                "language": "en",
+
+                "_comment_count": "Specifies count for generating test data for the Lead object.",
+                "count": 5
+              }
+            }
+          ]
+        }
+        `;
+
+      // Parse the string to ensure it's valid JSON before continuing
+      const jsonObject = JSON.parse(defaultTemplate);
+
+      // Write the JSON object to the file with custom formatting
+      fs.writeFileSync(defaultTemplatePath, defaultTemplate, 'utf8');
+
+      // Log success message
       console.log(chalk.green(`Success: default data template created at ${defaultTemplatePath}`));
+
       return jsonObject;
     }
 
@@ -198,14 +245,17 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
           .split(/[\s,]+/)
           .filter(Boolean)
       : [];
-  
+
     const validFormats = new Set(['csv', 'json', 'di']);
     let outputFormat: string[] = [];
     while (true) {
-      const outputFormatValue = await askQuestion('Provide output format for generated records ' + chalk.dim('[CSV, JSON, and DI-Direct Insertion Supported]'), '');
+      const outputFormatValue = await askQuestion(
+        'Provide output format for generated records ' + chalk.dim('[CSV, JSON, and DI-Direct Insertion Supported]'),
+        ''
+      );
       outputFormat = outputFormatValue ? outputFormatValue.toLowerCase().split(/[\s,]+/) : [];
-      if (outputFormat.length > 0 && outputFormat.every(format => validFormats.has(format))) {
-        break; 
+      if (outputFormat.length > 0 && outputFormat.every((format) => validFormats.has(format))) {
+        break;
       }
       console.log(chalk.yellow('Invalid input. Please enter only CSV, JSON, or DI.'));
     }
@@ -228,22 +278,28 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     /* record count */
     let count = 0;
     while (true) {
-      const countValue = await askQuestion('Specify the number of test data records to generate' + chalk.dim(' (e.g., 5)'),'1');
+      const countValue = await askQuestion(
+        'Specify the number of test data records to generate' + chalk.dim(' (e.g., 5)'),
+        '1'
+      );
       count = parseInt(countValue, 10);
       if (count > 0 && count <= 200 && outputFormat.includes('di') && !isNaN(count)) {
-        break; 
-      } else if( count > 0 && count !== undefined && !isNaN(count) && !outputFormat.includes('di')){
+        break;
+      } else if (count > 0 && count !== undefined && !isNaN(count) && !outputFormat.includes('di')) {
         break;
       }
 
-      if(outputFormat.includes('di')){
+      if (outputFormat.includes('di')) {
         console.log(chalk.yellow('Invalid input. Please enter between 1-200, with DI- direct insertion'));
       } else {
         console.log(chalk.yellow('Invalid input. Please enter valid number'));
       }
     }
 
-    const objectsToConfigureInput = await askQuestion('Provide Objects(API names) for data creation' + chalk.dim(' (comma-separated)'),'Lead');
+    const objectsToConfigureInput = await askQuestion(
+      'Provide Objects(API names) for data creation' + chalk.dim(' (comma-separated)'),
+      'Lead'
+    );
     const tempObjectsToConfigure = objectsToConfigureInput
       .toLowerCase()
       .split(/[\s,]+/)
