@@ -172,6 +172,7 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
           "_comment_importantNote": "We highly recommend removing all the comments for a cleaner exeperience once you are comfortable with this json format",
 
           "_comment_templateFileName": "The filename of the data template.",
+
           "templateFileName": "${path.basename(defaultTemplatePath)}",
           
           "_comment_namespaceToExclude": "Fields from these namespace(s) will be excluded while generating test data",
