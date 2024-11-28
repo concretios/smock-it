@@ -1,35 +1,44 @@
-/* eslint-disable @typescript-eslint/restrict-plus-operands */
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
-/* eslint-disable no-underscore-dangle */
 /* eslint-disable sf-plugin/flag-case */
-/* eslint-disable sf-plugin/command-example */
-/* eslint-disable sf-plugin/command-summary */
-/* eslint-disable no-console */
-/* eslint-disable no-await-in-loop */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/unbound-method */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable eqeqeq */
-/* eslint-disable import/no-extraneous-dependencies */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as dotenv from 'dotenv';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages, Connection, Org } from '@salesforce/core';
 import chalk from 'chalk';
-import { loading } from 'cli-loading-animation';
+import { loading, LoaderActions } from 'cli-loading-animation';
 import Spinner from 'cli-spinners';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker', 'template.validate');
+const messages = Messages.loadMessages('smocker-concretio', 'template.validate');
 
-export type TemplateValidateResult = {
+type TemplateValidateResult = {
   path: string;
+};
+
+type sObjectSchemaType = {
+  fieldsToExclude?: string[];
+  count?: number;
+  language?: string;
+};
+
+type SObjectItem = { [key: string]: sObjectSchemaType };
+
+type templateSchema = {
+  templateFileName: string;
+  namespaceToExclude: string[];
+  outputFormat: string[];
+  language: string;
+  count: number;
+  sObjects: SObjectItem[];
+};
+
+type Field = {
+  fullName: string | null | undefined;
+};
+
+type sObjectMetaType = {
+  nameField?: { label: string; type: string };
+  fields?: Field[];
 };
 
 dotenv.config();
@@ -37,14 +46,14 @@ export async function getConnectionWithSalesforce(): Promise<Connection> {
   let unableToConnect: boolean = false;
   const missingValues: string[] = [];
   for (const envVar of ['SALESFORCE_USERNAME', 'SALESFORCE_PASSWORD', 'SALESFORCE_SECURITY_TOKEN']) {
-    if (process.env[envVar] == undefined || process.env[envVar] == null) {
+    if (process.env[envVar] === undefined || process.env[envVar] == null) {
       missingValues.push(envVar);
       unableToConnect = true;
     }
   }
 
   if (unableToConnect) {
-    throw new Error(chalk.red('You must set environment variable: ') + chalk.white.bold(`${missingValues}`));
+    throw new Error(chalk.red('You must set environment variable: ') + chalk.white.bold(`${missingValues.join(', ')}`));
   }
 
   const username = process.env.SALESFORCE_USERNAME;
@@ -57,44 +66,60 @@ export async function getConnectionWithSalesforce(): Promise<Connection> {
     await conn.login(username!, password! + securityToken!);
     return conn;
   } catch (error) {
-    throw new Error(chalk.red('Failed to establish SF Connection.\n') + error);
+    throw new Error(`${chalk.red('Failed to establish SF Connection.\n')}${String(error)}`);
   }
 }
 
-export const validateConfigJson = async (connection: Connection, configPath: string) => {
+export async function validateConfigJson(connection: Connection, configPath: string): Promise<void> {
   try {
-    const { start, stop } = loading('\nPlease wait!! while we validate Objects and Fields from connected org.', {
+    const actions: LoaderActions = loading('\nPlease wait!! while we validate Objects and Fields from connected org.', {
       clearOnEnd: true,
       spinner: Spinner.bouncingBar,
     });
+
+    const start: () => void = () => actions.start();
+    const stop: () => void = () => actions.stop();
+
     start();
-    const configData = fs.readFileSync(configPath, 'utf8');
-    const config = JSON.parse(configData);
+    const config: templateSchema = JSON.parse(fs.readFileSync(configPath, 'utf8')) as templateSchema;
 
     const invalidObjects: string[] = [];
     const invalidFieldsMap: { [key: string]: string[] } = {};
 
-    const sObjectNames = config.sObjects.map((sObjectEntry: any) => Object.keys(sObjectEntry)[0]);
+    const sObjectNames: string[] = config.sObjects.map(
+      (sObjectEntry: sObjectSchemaType) => Object.keys(sObjectEntry)[0]
+    );
 
     const metadata = await connection.metadata.read('CustomObject', sObjectNames);
     const metadataArray = Array.isArray(metadata) ? metadata : [metadata];
 
     for (const sObjectEntry of config.sObjects) {
-      const [sObjectName, sObjectData] = Object.entries(sObjectEntry)[0] as [string, any];
-      const sObjectMeta = metadataArray.find((meta) => meta.fullName === sObjectName);
+      const [sObjectName, sObjectData] = Object.entries(sObjectEntry)[0] as [string, sObjectSchemaType];
+      const sObjectMeta = metadataArray.find((meta) => meta.fullName === sObjectName) as sObjectMetaType;
 
       if (!sObjectMeta) {
         invalidObjects.push(sObjectName);
         continue;
       }
 
-      const getAllFields = sObjectMeta.fields
-        ? sObjectMeta.fields.map((field: any) => field.fullName.toLowerCase())
+      const getAllFields: string[] = sObjectMeta.fields
+        ? sObjectMeta.fields
+            .filter((field: Field) => field.fullName != null)
+            .map((field: Field) => field.fullName!.toLowerCase())
         : [];
-      const fieldsToExclude = sObjectData['fieldsToExclude'] || [];
+
+      /*
+      handling the name field for the custom object
+      */
+      if (sObjectMeta.nameField) {
+        getAllFields.push('name');
+      }
+
+      const fieldsToExclude = sObjectData['fieldsToExclude'] ?? [];
+
       const invalidFields = fieldsToExclude.filter((field: string) => !getAllFields.includes(field));
       if (invalidFields.length > 0) {
-        invalidFieldsMap[sObjectName] = await invalidFields;
+        invalidFieldsMap[sObjectName] = invalidFields;
       }
     }
     stop();
@@ -127,9 +152,13 @@ export const validateConfigJson = async (connection: Connection, configPath: str
   } catch (err) {
     console.error('Error: While validating config JSON.', err);
   }
-};
+}
 
 export class TemplateValidate extends SfCommand<TemplateValidateResult> {
+  public static readonly summary: string = messages.getMessage('summary');
+
+  public static readonly examples: string[] = [messages.getMessage('Examples')];
+
   public static readonly flags = {
     templateName: Flags.string({
       summary: messages.getMessage('flags.templateName.summary'),
@@ -141,16 +170,18 @@ export class TemplateValidate extends SfCommand<TemplateValidateResult> {
 
   public async run(): Promise<TemplateValidateResult> {
     const { flags } = await this.parse(TemplateValidate);
-    const __cwd = process.cwd();
-    const sanitizeFilename = flags.templateName.endsWith('.json') ? flags.templateName : flags.templateName + '.json';
-    const templateDirPath = path.join(__cwd, `data_gen/templates/${sanitizeFilename}`);
+    const currWorkingDir = process.cwd();
+    const sanitizeFilename = flags['templateName'].endsWith('.json')
+      ? flags['templateName']
+      : flags['templateName'] + '.json';
+    const templateDirPath = path.join(currWorkingDir, `data_gen/templates/${sanitizeFilename}`);
 
     if (fs.existsSync(templateDirPath)) {
       const connection = await getConnectionWithSalesforce();
       console.log(chalk.cyan('Success: SF Connection established.'));
       await validateConfigJson(connection, templateDirPath);
     } else {
-      throw new Error(`File: ${flags.templateName} is not present at this path: ${templateDirPath}`);
+      throw new Error(`File: ${flags['templateName']} is not present at this path: ${templateDirPath}`);
     }
 
     return {

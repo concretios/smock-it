@@ -3,5 +3,8 @@ module.exports = {
   root: true,
   rules: {
     header: 'off',
+    'no-console': 'off',
+    complexity: 'off',
+    'no-await-in-loop': 'off',
   },
 };

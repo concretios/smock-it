@@ -1,3 +1,7 @@
+# summary
+
+This command removes specified values or configurations from the given properties of a data generation template.
+
 # flags.templateName.summary
 
 Specify the data template name.
@@ -8,23 +12,23 @@ Use `--templateName` or `-t` to specify the name of the data template to be util
 
 # flags.count.summary
 
-Specify the number of records to generate.
+Remove the number of records specified for generation at the object level setting.
 
 # flags.count.description
 
-Use `--count` or `-c` to set the number of records to generate. If `--sObject` or `-o` is provided, this will only update or remove the count for that individual object.
+Use --count or -c to remove the record count. This can only be removed at the object level and not at the template level. If --sObject or -o is provided, it will remove the count setting for that specific object.
 
 # flags.namespaceToExclude.summary
 
-Specify namespaces to be excluded during record data generation.
+Remove namespaces to exclude from record data generation.
 
 # flags.namespaceToExclude.description
 
-Use `--namespaceToExclude` or `-x` to exclude specific namespaces from generating record data for namespace fields. Multiple namespaces can be specified, separated by commas. This setting applies only at the template level and cannot be defined for individual objects.
+Use --namespaceToExclude or -x to remove specific namespaces from being excluded during record data generation. Multiple namespaces can be specified, separated by commas. This setting applies only at the template level and cannot be defined for individual objects.
 
 # flags.language.summary
 
-Specify the language to generate records. [supports 'en' or 'jp']
+Remove the specified the language to generate records. [supports 'en' or 'jp']
 
 # flags.language.description
 
@@ -32,28 +36,29 @@ Use `--language` or `-l` to select the language ('en' or 'jp'). When `--sObject`
 
 # flags.outputFormat.summary
 
-Specify the output format(s) for generated data. [supports CSV, JSON, DI (direct insert to connected org)]
+Removes the specified the output format(s) for generated data. [supports CSV, JSON, DI (direct insert to connected org)]
 
 # flags.outputFormat.description
 
-Use `--outputFormat` or `-f` to define the output format(s) for generated data. Multiple formats (CSV, JSON, DI) can be specified, separated by commas, and are compatible with Salesforce data transfer interactions.
+Use --outputFormat or -f to remove the specified output format(s). Multiple formats (CSV, JSON, DI) can be specified, separated by commas. At least one outputFormat must always be specified and cannot be completely removed.
 
 # flags.sObject.summary
 
-Specify the Object API name to override or remove object-level settings.
+Specify the Object API name(s) to remove object-level settings.
 
 # flags.sObject.description
 
-Use `--sObject` or `-o` to target a specific object and override its existing settings. If the specified `--sObject` is not found in the provided data template, an "add object" prompt will appear.
+Use --sObject or -o to target one or more objects and remove their existing settings. Multiple sObjects can be specified, separated by commas.
 
 # flags.fieldsToExclude.summary
 
-Specify object fields to exclude from test data generation.
+Remove fields excluded from test data generation.
 
 # flags.fieldsToExclude.description
 
-Use `--fieldsToExclude` or `-e` to exclude specific fields from test data generation for a given object. This setting applies only at the object level and cannot be defined at template level.
+Use --fieldsToExclude or -e to remove the exclusion of specific fields for a given object.This setting applies only at the object level and cannot be defined at template level.
 
 # Examples
 
-- `<%= config.bin %> <%= command.id %>`
+- `sf template remove -t <template-name> <global flags -f[values],-x[values]>`
+- `sf template remove -t <template-name> -o <object-name> <-e[values],-c,-l>`

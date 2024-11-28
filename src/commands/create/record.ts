@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable sf-plugin/command-summary */
 /* eslint-disable sf-plugin/command-example */
 /* eslint-disable sf-plugin/no-hardcoded-messages-flags */
@@ -32,13 +33,21 @@ import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { Connection } from '@salesforce/core';
 import fetch from 'node-fetch';
-import { templateAddFlags } from '../template/add.js';
+import { templateAddFlags } from '../template/upsert.js';
 const fieldsConfigFile = 'generated_output.json';
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker', 'create.record');
+const messages = Messages.loadMessages('smocker-concretio', 'create.record');
 let depthForRecord = 0;
 // let orgConnection: any;
 export type CreateRecordResult = { path: string };
+type BulkQueryBatchResult = {
+  batchId?: string;
+  id?: string | null;
+  jobId?: string;
+  errors?: string[];
+  success?: boolean;
+};
+
 type TargetData = {
   name: string;
   type: string;
@@ -179,7 +188,11 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
         });
         this.log(`Records inserted for ${object}`);
         if (errorSet.size > 0) {
-          this.log(`\nFailed to insert ${errorSet.size} record(s) for '${object}' object with following error(s):`);
+          this.log(
+            `\nFailed to insert ${
+              insertResult.length - insertedIds.length
+            } record(s) for '${object}' object with following error(s):`
+          );
           errorSet.forEach((error) => this.log(`- ${error}`));
         }
         this.updateCreatedRecordIds(object, insertResult);
@@ -302,27 +315,45 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     }
   }
   /**
-   * Inserts records into a specified Salesforce object using the provided connection and JSON data.
-   * The method uses the Salesforce API to create records and returns the results of the insertion.
+   * Inserts records into a specified Salesforce object using the provided connection and JSON data for first 200 records.
+   * For more than 200 record creation, use The Bulk API to processes records in batches (up to 10,000 per batch).
+   * Each batch counts as a single API call, making it efficient for handling large datasets.
    *
    * @param {Connection} conn - The Salesforce connection instance used to perform the insert operation.
    * @param {string} object - The API name of the Salesforce object where the records will be inserted.
    * @param {GenericRecord[]} jsonData - An array of records to be inserted, formatted as `GenericRecord` objects.
    * @returns {Promise<CreateResult[]>} - A promise that resolves to an array of `CreateResult` objects, each representing the result of an insert operation.
    * @throws {Error} - Throws an error if the insert operation fails or if the response is not as expected.
-   * @author Kunal Vishnani
+   * @author Khushboo Sharma
    */
   private async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
-    const insertResults = await conn.sobject(object).create(jsonData, { allowRecursive: true });
-    const insertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
+    const results: CreateResult[] = [];
+    const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+
+    const initialRecords = dataArray.slice(0, 200);
+    const insertResults = await conn.sobject(object).create(initialRecords);
+    const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
       (result) => ({
         id: result.id ?? '',
         success: result.success,
         errors: result.errors,
       })
     );
-
-    return insertResult;
+    results.push(...initialInsertResult);
+    if (dataArray.length > 200) {
+      const remainingRecords = dataArray.slice(200);
+      const job = conn.bulk.createJob(object, 'insert');
+      const batch = job.createBatch();
+      await batch.execute(remainingRecords);
+      const bulkResults: BulkQueryBatchResult[] = await batch.retrieve();
+      const bulkInsertResult: CreateResult[] = bulkResults.map((result) => ({
+        id: result.id ?? '',
+        success: result.success ?? false,
+        errors: result.errors ?? [],
+      }));
+      results.push(...bulkInsertResult);
+    }
+    return results;
   }
 
   /**

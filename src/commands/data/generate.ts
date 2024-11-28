@@ -32,12 +32,12 @@ import { Flags } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
 import * as fs from 'fs';
 import * as path from 'path';
-import { updateOrInitializeConfig } from '../template/add.js';
+import { updateOrInitializeConfig } from '../template/upsert.js';
 import { getConnectionWithSalesforce } from '../template/validate.js';
 import CreateRecord from '../create/record.js';
 
 Messages.importMessagesDirectory(dirname(fileURLToPath(import.meta.url)));
-const messages = Messages.loadMessages('smocker', 'data.generate');
+const messages = Messages.loadMessages('smocker-concretio', 'data.generate');
 
 export type DataGenerateResult = {
   path: string;
@@ -56,7 +56,7 @@ export default class DataGenerate extends CreateRecord {
   public static readonly flags = {
     ...CreateRecord.flags, // Use spread to include all flags from CreateRecord
     sObject: Flags.string({
-      char: 'o',
+      char: 's',
       summary: messages.getMessage('flags.sObject.summary'),
       required: false,
     }),
@@ -65,9 +65,8 @@ export default class DataGenerate extends CreateRecord {
       summary: messages.getMessage('flags.templateName.summary'),
       description: messages.getMessage('flags.templateName.description'),
       required: true,
-    })
+    }),
   };
-  
 
   private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
     const result = await conn.describe(object);
@@ -75,7 +74,10 @@ export default class DataGenerate extends CreateRecord {
     return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) || [];
   }
 
-  public dependentPicklistResults: Record<string, Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>> = {};
+  public dependentPicklistResults: Record<
+    string,
+    Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>
+  > = {};
   public independentFieldResults: Map<string, string[]> = new Map();
 
   private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string) {
@@ -140,7 +142,10 @@ export default class DataGenerate extends CreateRecord {
     return dependentField.controllerName || null;
   }
 
-  private convertJSON(input: Record<string, Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>>,controllingFieldName: string): any {
+  private convertJSON(
+    input: Record<string, Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>>,
+    controllingFieldName: string
+  ): any {
     const output: any = {};
 
     if (input[controllingFieldName]) {
@@ -234,14 +239,13 @@ export default class DataGenerate extends CreateRecord {
       const configContent = fs.readFileSync(configFilePath, 'utf-8');
       baseConfig = JSON.parse(configContent);
       baseConfig.sObjects = baseConfig.sObjects || [];
-    } 
-    catch (error) {
+    } catch (error) {
       this.error(`Failed to read or parse the base config file at ${configFilePath}`);
     }
 
     let objectsToProcess = baseConfig.sObjects;
 
-    // getting specific object and its configuration if name given 
+    // getting specific object and its configuration if name given
     if (objectName) {
       const existingObjectConfig = baseConfig.sObjects.find((o: any) => {
         const objectKey = Object.keys(o)[0];
@@ -250,12 +254,17 @@ export default class DataGenerate extends CreateRecord {
 
       if (!existingObjectConfig) {
         this.error(`Object ${objectName} not found in base-config.`);
-      } 
-      
+      }
+
       //writing the configuration of object level
       else {
         const objectKey = Object.keys(existingObjectConfig)[0];
-        updateOrInitializeConfig(existingObjectConfig[objectKey], flags, ['language', 'count', 'fieldsToExclude'], this.log.bind(this));
+        updateOrInitializeConfig(
+          existingObjectConfig[objectKey],
+          flags,
+          ['language', 'count', 'fieldsToExclude'],
+          this.log.bind(this)
+        );
         objectsToProcess = [existingObjectConfig];
       }
     }
@@ -371,7 +380,11 @@ export default class DataGenerate extends CreateRecord {
 
     const outputFile = path.resolve('./generated_output.json');
     // const dataToPass = { sObjects: outputData };
-    fs.writeFileSync(outputFile, JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2), 'utf8');
+    fs.writeFileSync(
+      outputFile,
+      JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2),
+      'utf8'
+    );
     this.log(`Generated data written to: ${outputFile}`);
     this.orgConnection = conn;
     await super.run();

@@ -1,7 +1,7 @@
 {
-  "name": "smocker",
+  "name": "smocker-concretio",
   "description": "This SFDX plugin generates relastic data for salesforce using mockaroo API. Easily create customized datasets for any Salesforce object. helping streamline development and testing with accurate, varied data",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "dependencies": {
     "@oclif/core": "^4",
     "@salesforce/core": "^7.4.1",
@@ -9,7 +9,9 @@
     "chalk": "^5.3.0",
     "cli-loading-animation": "^1.0.6",
     "cli-select": "^1.1.2",
+    "cli-spinners": "^3.2.0",
     "dotenv": "^16.4.5",
+    "enquirer": "^2.4.1",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
@@ -61,14 +63,10 @@
     "format": "wireit",
     "link-check": "wireit",
     "lint": "wireit",
-    "postinstall": "yarn husky install",
     "postpack": "sf-clean --ignore-signing-artifacts",
     "prepack": "sf-prepack",
     "version": "oclif readme",
     "semantic-release": "semantic-release"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   },
   "wireit": {
     "build": {
@@ -121,6 +119,5 @@
     }
   },
   "exports": "./lib/index.js",
-  "type": "module",
-  "author": "kunalvishnani"
+  "type": "module"
 }

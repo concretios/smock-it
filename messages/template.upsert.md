@@ -1,3 +1,7 @@
+# summary
+
+Upsert the configurations on global/sobject level values
+
 # flags.templateName.summary
 
 Specify the data template name.
@@ -56,4 +60,5 @@ Use `--fieldsToExclude` or `-e` to exclude specific fields from test data genera
 
 # Examples
 
-- `<%= config.bin %> <%= command.id %>`
+- `sf template add -t <template-name> <global flags with values -f,-x,-c,-l>`
+- `sf template add -t <template-name> -o <object-name> <object flags with values -e,-c,-l>`
