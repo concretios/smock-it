@@ -80,6 +80,11 @@ The ```sf template init``` command generates a data template based on the values
 ```
 ---
 
+## See Smocker in Action!
+Take a look at how Smocker simplifies the complex task of generating Salesforce test data.
+
+[![Smocker Demo Video](https://img.youtube.com/vi/your-video-id/0.jpg)](https://www.youtube.com/watch?v=your-video-id)
+
 ## Commands
 
 1. **Initialize Template**: This command initializes a new data generation template. It sets up the required directory structure, prompts for a valid template file name, and collects configuration details for Salesforce objects (such as fields to exclude and record counts). The configuration is validated against org before it is saved to a JSON file.
