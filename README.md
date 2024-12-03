@@ -1,14 +1,14 @@
 
-# Smocker (v1.0.0)
+# Smock-it (v1.0.0)
 
 **A Salesforce CLI Plugin to Simplify Synthetic Data Generation**
 
 ## Overview
-Smocker is a lightweight yet powerful Salesforce CLI plugin that allows users to generate synthetic data quickly and easily. This tool is specifically designed to streamline the creation of realistic, customizable test data while ensuring compatibility with complex Salesforce schemas and industry-specific requirements.
+Smock-it is a lightweight yet powerful Salesforce CLI plugin that allows users to generate synthetic data quickly and easily. This tool is specifically designed to streamline the creation of realistic, customizable test data while ensuring compatibility with complex Salesforce schemas and industry-specific requirements.
 
 ---
 ## Key Challenges solved
-Smocker addresses critical challenges faced by Saleforce Professionals in managing and generating mock data for their environments. Here are the key pain points Smocker solves:
+Smock-it addresses critical challenges faced by Saleforce Professionals in managing and generating mock data for their environments. Here are the key pain points Smock-it solves:
 
 - **Privacy and Compliance**: Avoids the use of real customer data, ensuring GDPR and CCPA compliance by generating synthetic, privacy-safe test data.
 - **Time-Consuming Data Creation**: Automates the generation of complex, relationship-driven Salesforce data, saving time and reducing manual effort.
@@ -26,7 +26,7 @@ Smocker addresses critical challenges faced by Saleforce Professionals in managi
 #### Commands
 1. **Install**:
    ```bash
-   sf plugins install smocker-concretio
+   sf plugins install smock-it
    ```
 2. **Update**:
    ```bash
@@ -36,7 +36,7 @@ Smocker addresses critical challenges faced by Saleforce Professionals in managi
 ---
 
 ## Directory Structure
-The following directories are created(if doesn't already exist) on current working directory when using Smocker:
+The following directories are created(if doesn't already exist) on current working directory when using Smock-it:
 
 - **data_gen**
   - **templates**: Stores data templates for test data generation.
@@ -44,7 +44,7 @@ The following directories are created(if doesn't already exist) on current worki
 ---
 
 ## Environment Variables
-Smocker relies on these environment variables:
+Smock-it relies on these environment variables:
 
 ```bash
 SALESFORCE_USERNAME="username@domain.com"
