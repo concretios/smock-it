@@ -130,9 +130,9 @@ If the object is not already present, the command will prompt users to add it.
 |----------------------|------------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
 | `--default`          |            | Default Template      | Creates a default template.                                                                                                                 |
 | `--templateName`     | `-t`       | Template Name         | Specify the name of the data template to be utilized. The template must exist in the `data_gen/templates` directory.                        |
-| `--count`            | `-c`       | Count                | Set the number of records to generate. If `--sObject` or `-o` is provided, this will only update or remove the count for that object.       |
+| `--count`            | `-c`       | Count                | Set the number of records to generate. If `--sObject` or `-s` is provided, this will only update or remove the count for that object.       |
 | `--namespaceToExclude` | `-x`    | Namespace to Exclude | Exclude specific namespaces from generating record data for namespace fields. Multiple namespaces can be separated by commas.              |
-| `--language`         | `-l`       | Language             | Select the language (`en` or `jp`). When `--sObject` or `-o` is specified, this updates or removes the language setting for that object.    |
+| `--language`         | `-l`       | Language             | Select the language (`en` or `jp`). When `--sObject` or `-s` is specified, this updates or removes the language setting for that object.    |
 | `--outputFormat`     | `-f`       | Output Format        | Define the output format(s) for generated data (e.g., CSV, JSON, DI). Multiple formats can be specified, separated by commas.               |
 | `--sObject`          | `-s`       | Specific Object      | Target a specific object and override its existing settings. If not found in the template, an "add object" prompt will appear.             |
 | `--fieldsToExclude`  | `-e`       | Fields to Exclude    | Exclude specific fields from test data generation for a given object. Applies only at the object level.                                    |
