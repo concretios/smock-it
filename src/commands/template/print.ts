@@ -6,7 +6,7 @@ import { Messages } from '@salesforce/core';
 import chalk from 'chalk';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.print');
+const messages = Messages.loadMessages('smock-it', 'template.print');
 
 export type TemplatePrintResult = {
   path: string;

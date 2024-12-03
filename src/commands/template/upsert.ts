@@ -12,7 +12,7 @@ import chalk from 'chalk';
 import { askQuestion } from './init.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.upsert');
+const messages = Messages.loadMessages('smock-it', 'template.upsert');
 
 export type TemplateAddResult = {
   path: string;

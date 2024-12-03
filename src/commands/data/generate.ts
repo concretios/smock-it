@@ -37,7 +37,7 @@ import { getConnectionWithSalesforce } from '../template/validate.js';
 import CreateRecord from '../create/record.js';
 
 Messages.importMessagesDirectory(dirname(fileURLToPath(import.meta.url)));
-const messages = Messages.loadMessages('smocker-concretio', 'data.generate');
+const messages = Messages.loadMessages('smock-it', 'data.generate');
 
 export type DataGenerateResult = {
   path: string;

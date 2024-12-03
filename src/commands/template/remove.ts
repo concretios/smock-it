@@ -7,7 +7,7 @@ import { error } from '@oclif/core/errors';
 import chalk from 'chalk';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.remove');
+const messages = Messages.loadMessages('smock-it', 'template.remove');
 
 export type TemplateRemoveResult = {
   path: string;
