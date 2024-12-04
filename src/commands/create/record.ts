@@ -342,14 +342,33 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
       const remainingRecords = dataArray.slice(200);
       const job = conn.bulk.createJob(object, 'insert');
       const batch = job.createBatch();
-      await batch.execute(remainingRecords);
-      const bulkResults: BulkQueryBatchResult[] = await batch.retrieve();
-      const bulkInsertResult: CreateResult[] = bulkResults.map((result) => ({
-        id: result.id ?? '',
-        success: result.success ?? false,
-        errors: result.errors ?? [],
-      }));
-      results.push(...bulkInsertResult);
+      batch.execute(remainingRecords);
+
+      await new Promise<void>((resolve, reject) => {
+        batch.on('queue', () => {
+          batch.poll(1_000 /* interval(ms) */, 30_000 /* timeout(ms) */);
+          resolve();
+        });
+        batch.on('error', (err) => {
+          reject(err);
+        });
+      });
+      const bulkResults: CreateResult[] = await new Promise((resolve, reject) => {
+        batch.on('response', (rets: BulkQueryBatchResult[]) => {
+          const mappedResults: CreateResult[] = rets.map((ret: BulkQueryBatchResult) => ({
+            id: ret.id ?? '',
+            success: ret.success ?? false,
+            errors: ret.errors ?? [],
+          }));
+          resolve(mappedResults);
+        });
+        batch.on('error', (err) => {
+          reject(err);
+        });
+      });
+
+      results.push(...bulkResults);
+      await job.close();
     }
     return results;
   }
