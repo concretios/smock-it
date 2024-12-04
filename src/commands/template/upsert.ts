@@ -65,13 +65,13 @@ export function updateOrInitializeConfig(
             throw new Error(chalk.red('Invalid output format passed. supports `csv`, `json` and `di` only'));
           } else if (
             valuesArray.includes('di') &&
-            (configObject['count'] > 200 ||
+            (configObject['count'] > 1000 ||
               configObject['sObjects'].some(
-                (obj: { [x: string]: { count: number } }) => obj[Object.keys(obj)[0]]?.count > 200
+                (obj: { [x: string]: { count: number } }) => obj[Object.keys(obj)[0]]?.count > 1000
               ))
           ) {
             throw new Error(
-              chalk.red('All count values should be within 1-200 to add DI-Direct Insertion in template')
+              chalk.red('All count values should be within 1-1000 to add DI-Direct Insertion in template')
             );
           }
         }
@@ -94,10 +94,10 @@ export function updateOrInitializeConfig(
 
         if (
           key === 'count' &&
-          ((value as number) < 1 || ((value as number) > 200 && config.outputFormat.includes('di')))
+          ((value as number) < 1 || ((value as number) > 1000 && config.outputFormat.includes('di')))
         ) {
           throw new Error(
-            'Invalid input. Please enter a Value between 1-200 for DI and for CSV and JSON value greater than 0'
+            'Invalid input. Please enter a Value between 1-1000 for DI and for CSV and JSON value greater than 0'
           );
         }
 
