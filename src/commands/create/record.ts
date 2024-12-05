@@ -141,9 +141,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     });
 
     for (const object of sObjectNames) {
-      const url = `https://api.mockaroo.com/api/generate.json?key=${this.getApiKey()}&count=${sObjectCountMap.get(
-        object
-      )}`;
+      const url = `https://api.mockaroo.com/api/generate.json?key=${this.getApiKey()}&count=` + sObjectCountMap.get(object);
       depthForRecord = 0;
       const fields = sObjectFieldsMap.get(object);
       if (!fields) {
@@ -155,10 +153,10 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
 
       if (outputFormat.includes('json') || outputFormat.includes('json')) {
         const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
-        const jsonFilePath = `${process.cwd()}/data_gen/output/${object}_${flags.templateName?.replace(
+        const jsonFilePath = `${process.cwd()}/data_gen/output/${object}_` + flags.templateName?.replace(
           '.json',
           ''
-        )}_${dateTime}.json`;
+        ) + `_${dateTime}.json`;
         fs.writeFileSync(jsonFilePath, JSON.stringify(jsonData, null, 2));
         this.log(`Data for ${object} saved as JSON in ${jsonFilePath}`);
       }
@@ -166,10 +164,10 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
       if (outputFormat.includes('csv') || outputFormat.includes('csv')) {
         const csvData = this.convertJsonToCsv(jsonData);
         const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
-        const csvFilePath = `${process.cwd()}/data_gen/output/${object}_${flags.templateName?.replace(
+        const csvFilePath = `${process.cwd()}/data_gen/output/${object}_` + flags.templateName?.replace(
           '.json',
           ''
-        )}_${dateTime}.csv`;
+        )+ `${dateTime}.csv`;
         fs.writeFileSync(csvFilePath, csvData);
         this.log(`Data for ${object} saved as CSV in ${csvFilePath}`);
       }
@@ -330,22 +328,15 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     const results: CreateResult[] = [];
     const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     const initialRecords = dataArray.slice(0, 200);
-    if (initialRecords.length > 0) {
-      try {
-        const insertResults = await conn.sobject(object).create(initialRecords);
-        const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
-          (result) => ({
-            id: result.id ?? '',
-            success: result.success,
-            errors: result.errors,
-          })
-        );
-        results.push(...initialInsertResult);
-      } catch (error) {
-        console.error('Error during standard API insertion:', error);
-        throw error;
-      }
-    }
+    const insertResults = await conn.sobject(object).create(initialRecords);
+    const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
+      (result) => ({
+        id: result.id ?? '',
+        success: result.success,
+        errors: result.errors,
+      })
+    );
+    results.push(...initialInsertResult);
     if (dataArray.length > 200) {
       const remainingRecords = dataArray.slice(200);
       const job = conn.bulk.createJob(object, 'insert');

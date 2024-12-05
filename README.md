@@ -22,7 +22,6 @@ Smocker addresses critical challenges faced by Saleforce Professionals in managi
 - **Salesforce CLI**
 - **Node.js (v18.0.0 or later)**
 - **Mockaroo API Key**
-
 #### Commands
 1. **Install**:
    ```bash
@@ -46,11 +45,13 @@ The following directories are created(if doesn't already exist) on current worki
 ## Environment Variables
 Smocker relies on these environment variables:
 
+
 ```bash
 SALESFORCE_USERNAME="username@domain.com"
 SALESFORCE_SECURITY_TOKEN="your_security_token"
 SALESFORCE_PASSWORD="your_password"
 MOCKAROO_API_KEY="your_mockaroo_api_key"
+
 ```
 > Obtain your Mockaroo API key from [Mockaroo](https://www.mockaroo.com/sign-up).
 
@@ -79,11 +80,6 @@ The ```sf template init``` command generates a data template based on the values
 }
 ```
 ---
-
-## See Smocker in Action!
-Take a look at how Smocker simplifies the complex task of generating Salesforce test data.
-
-[![Smocker Demo Video](https://img.youtube.com/vi/your-video-id/0.jpg)](https://www.youtube.com/watch?v=your-video-id)
 
 ## Commands
 
