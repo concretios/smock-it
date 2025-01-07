@@ -25,7 +25,7 @@ import { MOCKAROO_API_CALLS_PER_DAY, MOCKAROO_CHUNK_SIZE } from '../../utils/con
 
 const fieldsConfigFile = 'generated_output.json';
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'create.record');
+const messages = Messages.loadMessages('smock-it', 'create.record');
 let depthForRecord = 0;
 export type CreateRecordResult = { path: string };
 

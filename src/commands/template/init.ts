@@ -11,7 +11,7 @@ import { languageChoices, outputChoices } from '../../utils/constants.js';
 // import { promises } from 'node:dns';
 // Import messages from the specified directory
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.init');
+const messages = Messages.loadMessages('smock-it', 'template.init');
 
 /* ------------------- Functions ---------------------- */
 

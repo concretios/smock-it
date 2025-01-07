@@ -13,7 +13,7 @@ import {
   namespaceAndOutputSchema,
 } from '../../utils/types.js';
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.remove');
+const messages = Messages.loadMessages('smock-it', 'template.remove');
 function deleteSObjectField(jsonData: templateSchema, sObjectName: string, fieldName: string): templateSchema {
   const sObject = jsonData.sObjects.find((obj) => Object.prototype.hasOwnProperty.call(obj, sObjectName)) as {
     [key: string]: typeSObjectSettingsMap;

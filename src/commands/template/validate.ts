@@ -13,7 +13,7 @@ import {
   Types,
 } from '../../utils/types.js';
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.validate');
+const messages = Messages.loadMessages('smock-it', 'template.validate');
 dotenv.config();
 export async function connectToSalesforceOrg(userNameorAlias: string): Promise<Connection> {
   try {

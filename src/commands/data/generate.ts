@@ -23,7 +23,7 @@ import CreateRecord from '../create/record.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 
-const messages = Messages.loadMessages('smocker-concretio', 'data.generate');
+const messages = Messages.loadMessages('smock-it', 'data.generate');
 
 export type DataGenerateResult = {
   path: string;

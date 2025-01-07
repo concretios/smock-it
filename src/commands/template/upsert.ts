@@ -23,7 +23,7 @@ import {
 import { askQuestion } from './init.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.upsert');
+const messages = Messages.loadMessages('smock-it', 'template.upsert');
 
 export function handleFieldsToConsider(sObjectConfig: typeSObjectSettingsMap, input: string): typeSObjectSettingsMap {
   if (!sObjectConfig.fieldsToConsider) {
