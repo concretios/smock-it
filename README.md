@@ -13,7 +13,7 @@
 
 
 # Smock-it (v2.0.0)
-**A Salesforce CLI Plugin to simplify synthetic data generation for Salesforce.**
+**A Salesforce CLI Plugin to simplify synthetic data generation for Salesforce Org.**
 
 
 ## Overview
