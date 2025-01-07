@@ -37,8 +37,6 @@ function handleDirStruct(): string {
 }
 let sigintListenerAdded = false;
 
-let sigintListenerAdded = false;
-
 async function runMultiSelectPrompt(): Promise<string[]> {
   try {
     type Answers = {
