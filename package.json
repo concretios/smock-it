@@ -8,29 +8,36 @@
     "@salesforce/sf-plugins-core": "^10.0.0",
     "chalk": "^5.3.0",
     "cli-loading-animation": "^1.0.6",
+    "cli-progress": "^3.12.0",
     "cli-select": "^1.1.2",
-    "cli-spinners": "^3.2.0",
     "cross-spawn": "7.0.5",
     "dotenv": "^16.4.5",
     "enquirer": "^2.4.1",
-    "glob": "^9.x.x",
+    "glob": "^11.0.0",
+    "lru-cache": "^9.0.0",
+    "minimatch": "^5.0.0",
     "node-fetch": "^3.3.2",
+    "rimraf": "^6.0.1",
+    "shell": "^0.12.0",
     "yarn": "^1.22.22"
   },
   "devDependencies": {
     "@oclif/plugin-command-snapshot": "^5.1.9",
     "@salesforce/dev-scripts": "^10.2.11",
+    "@salesforce/kit": "^3.2.3",
     "@semantic-release/commit-analyzer": "13.0.0",
     "@semantic-release/github": "11.0.0",
     "@semantic-release/release-notes-generator": "14.0.1",
+    "@types/cli-progress": "^3.11.6",
     "@types/node": "^22.9.0",
     "@types/node-fetch": "^2.6.11",
     "eslint-plugin-sf-plugin": "^1.18.6",
     "oclif": "^4.14.0",
     "semantic-release": "24.1.3",
+    "shelljs": "^0.8.5",
     "ts-node": "^10.9.2",
     "typedoc": "0.27.2",
-    "typescript": "5.5.4"
+    "typescript": "^5.7.2"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -44,11 +51,22 @@
   "keywords": [
     "force",
     "salesforce",
-    "salesforcedx",
-    "sf",
     "sf-plugin",
-    "sfdx",
-    "sfdx-plugin"
+    "salesforce test data generator",
+    "test data salesforce",
+    "salesforce qa test data",
+    "synthetic test data",
+    "salesforce synthetic test data",
+    "synthetic test data generator",
+    "create test data salesforce",
+    "synthetic data generator for salesforce",
+    "salesforce synthetic test data generator",
+    "smock-it",
+    "mock data",
+    "mock data generation",
+    "test data",
+    "test data automation",
+    "test data library"
   ],
   "license": "MIT",
   "oclif": {
@@ -70,7 +88,8 @@
     "postpack": "sf-clean --ignore-signing-artifacts",
     "prepack": "sf-prepack",
     "version": "oclif readme",
-    "semantic-release": "semantic-release"
+    "semantic-release": "semantic-release",
+    "test": "nyc mocha \"**/*.nut.ts\" --slow 4500 --timeout 600000"
   },
   "wireit": {
     "build": {

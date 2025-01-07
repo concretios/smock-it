@@ -58,6 +58,22 @@ Remove fields excluded from test data generation.
 
 Use --fieldsToExclude or -e to remove the exclusion of specific fields for a given object.This setting applies only at the object level and cannot be defined at template level.
 
+# flags.pickLeftFields.summary
+
+Remove fields excluded from test data generation.
+
+# flags.pickLeftFields.description
+
+Use --pickLeftFields or -p to remove the exclusion of picking remaining fields for a given object.This setting applies only at the object level and cannot be defined at template level.
+
+# flags.fieldsToConsider.summary
+
+Remove fields considered for test data generation.
+
+# flags.fieldsToConsider.description
+
+Use --fieldsToConsider or -y to remove the inclusion of specific fields for a given object.This setting applies only at the object level and cannot be defined at template level.
+
 # Examples
 
 - `sf template remove -t <template-name> <global flags -f[values],-x[values]>`
