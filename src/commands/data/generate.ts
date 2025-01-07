@@ -1,46 +1,48 @@
-/* eslint-disable no-empty */
+/* eslint-disable sf-plugin/only-extend-SfCommand */
 /* eslint-disable @typescript-eslint/no-shadow */
-/* eslint-disable no-underscore-dangle */
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable complexity */
-/* eslint-disable no-await-in-loop */
-/* eslint-disable sf-plugin/get-connection-with-version */
-/* eslint-disable spaced-comment */
-/* eslint-disable no-console */
-/* eslint-disable prefer-const */
 /* eslint-disable object-shorthand */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/array-type */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable class-methods-use-this */
 /* eslint-disable sf-plugin/flag-case */
-/* eslint-disable sf-plugin/no-missing-messages */
 /* eslint-disable @typescript-eslint/member-ordering */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable sf-plugin/esm-message-import */
-/* eslint-disable import/order */
-/* eslint-disable unicorn/prefer-node-protocol */
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
+
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { Flags } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
-import * as fs from 'fs';
-import * as path from 'path';
-import { updateOrInitializeConfig } from '../template/upsert.js';
-import { getConnectionWithSalesforce } from '../template/validate.js';
+import { updateOrInitializeConfig, getTemplateJsonData } from '../template/upsert.js';
+import { connectToSalesforceOrg ,validateConfigJson} from '../template/validate.js';
 import CreateRecord from '../create/record.js';
 
-Messages.importMessagesDirectory(dirname(fileURLToPath(import.meta.url)));
-const messages = Messages.loadMessages('smock-it', 'data.generate');
+Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
+
+const messages = Messages.loadMessages('smocker-concretio', 'data.generate');
 
 export type DataGenerateResult = {
   path: string;
+};
+
+type FieldRecord = {
+  attributes: {
+    type: string;
+    url: string;
+  };
+  QualifiedApiName: string;
+  IsDependentPicklist: boolean;
+  NamespacePrefix: string | null;
+  DataType: string;
+  ReferenceTo: {
+    referenceTo: null | Array<any>;
+  };
+  RelationshipName: string | null;
+  IsNillable: boolean;
 };
 
 type Field = {
@@ -52,7 +54,14 @@ type Field = {
   'child-dependent-field'?: string;
   [key: string]: any;
 };
+
+export let conecteOrgCreds: any;
+
 export default class DataGenerate extends CreateRecord {
+  public static readonly summary: string = messages.getMessage('summary');
+
+  public static readonly examples: string[] = [messages.getMessage('Examples')];
+
   public static readonly flags = {
     ...CreateRecord.flags, // Use spread to include all flags from CreateRecord
     sObject: Flags.string({
@@ -66,12 +75,18 @@ export default class DataGenerate extends CreateRecord {
       description: messages.getMessage('flags.templateName.description'),
       required: true,
     }),
+    alias: Flags.string({
+      char: 'a',
+      summary: messages.getMessage('flags.alias.summary'),
+      description: messages.getMessage('flags.alias.description'),
+      required: true,
+    }),
   };
 
   private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
     const result = await conn.describe(object);
     const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-    return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) || [];
+    return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
   }
 
   public dependentPicklistResults: Record<
@@ -80,7 +95,7 @@ export default class DataGenerate extends CreateRecord {
   > = {};
   public independentFieldResults: Map<string, string[]> = new Map();
 
-  private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string) {
+  private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string, considerMap: Record<string, any> ) {
     const schema = await conn.sobject(objectName).describe();
 
     const dependentFieldResult = schema.fields.find((field) => field.name === dependentFieldApiName);
@@ -93,13 +108,13 @@ export default class DataGenerate extends CreateRecord {
     if (!controllingFieldName) {
       this.independentFieldResults.set(
         dependentFieldApiName,
-        dependentFieldResult.picklistValues?.map((value) => value.value) || []
+        dependentFieldResult.picklistValues?.map((value) => value.value) ?? []
       );
       return;
     }
 
     const controllerFieldResult = schema.fields.find((field) => field.name === controllingFieldName);
-    const controllerValues = controllerFieldResult?.picklistValues || [];
+    const controllerValues = controllerFieldResult?.picklistValues ?? [];
 
     const dependentPicklistValues = new Map<string, string[]>();
 
@@ -136,8 +151,19 @@ export default class DataGenerate extends CreateRecord {
         childValues,
       });
     });
-  }
+    Object.keys(this.dependentPicklistResults).forEach((key) => {
+      if (Object.keys(considerMap).includes(key.toLowerCase()) && considerMap[key.toLowerCase()].length > 0) {
+        const pickListFieldValues = this.dependentPicklistResults[key];
+        const filteredArray = pickListFieldValues.filter(item => item.parentFieldValue === considerMap[key.toLowerCase()][0]);
 
+        if (filteredArray.length > 0) {
+          filteredArray[0].childValues = considerMap[filteredArray[0].childFieldName.toLowerCase()];
+          this.dependentPicklistResults[key] = filteredArray;
+
+        }
+      }
+    });
+  }
   private getControllingFieldName(dependentField: any): string | null {
     return dependentField.controllerName || null;
   }
@@ -210,26 +236,30 @@ export default class DataGenerate extends CreateRecord {
     return output;
   }
 
+  private getRequiredFields(fields: FieldRecord[]): FieldRecord[] {
+    return fields.filter((record) => record.IsNillable === false);
+  }
+
+  private mergeFieldsToPass(fields: FieldRecord[]): FieldRecord[] {
+    return [...new Map(fields.map((field) => [field.QualifiedApiName, field])).values()];
+  }
+  
+
   public async run(): Promise<DataGenerateResult> {
+
     const { flags } = await this.parse(DataGenerate);
+    const aliasOrUsername = flags.alias;
+    const conn = await connectToSalesforceOrg(aliasOrUsername);
 
     const objectName = flags.sObject ? flags.sObject.toLowerCase() : undefined;
-    const templateName = flags.templateName;
-    let adjustedTemplateName = templateName;
-    if (!templateName.includes('.json')) adjustedTemplateName = templateName + '.json';
-    if (!templateName) {
-      this.error('Please provide the path to the base config file using --confDir');
+
+    const configFilePath = getTemplateJsonData(flags.templateName);
+    const isDataValid = await validateConfigJson(conn, configFilePath);
+    if(!isDataValid){
+      throw new Error('Invalid data in the template');
     }
 
-    const __cwd = process.cwd();
-    const dataGenDirPath = path.join(__cwd, 'data_gen');
-    const templateDirPath = path.join(dataGenDirPath, 'templates');
 
-    if (!fs.existsSync(templateDirPath)) {
-      this.error(`Template directory does not exist at ${templateDirPath}. Please initialize the setup first.`);
-    }
-
-    const configFilePath = path.join(templateDirPath, adjustedTemplateName);
     if (!fs.existsSync(configFilePath)) {
       this.error(`Config file not found at ${configFilePath}`);
     }
@@ -256,20 +286,19 @@ export default class DataGenerate extends CreateRecord {
         this.error(`Object ${objectName} not found in base-config.`);
       }
 
-      //writing the configuration of object level
+      // writing the configuration of object level
       else {
         const objectKey = Object.keys(existingObjectConfig)[0];
         updateOrInitializeConfig(
           existingObjectConfig[objectKey],
           flags,
-          ['language', 'count', 'fieldsToExclude'],
+          ['language', 'count', 'fieldsToExclude','pickLeftFields', 'fieldsToConsider'],
           this.log.bind(this)
         );
         objectsToProcess = [existingObjectConfig];
       }
     }
 
-    const conn = await getConnectionWithSalesforce();
 
     const outputData: any[] = [];
 
@@ -278,23 +307,90 @@ export default class DataGenerate extends CreateRecord {
       const objectName = objectKey;
       const configForObject = objectConfig[objectKey];
 
-      const fieldsToExclude =
-        configForObject['fieldsToExclude']?.map((field: string) => `'${field.toLowerCase()}'`).join(', ') || 'NULL';
+      let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) || [];
+      const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
+
+      fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field));
+      fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
+
+      const getPickLeftFields = configForObject.pickLeftFields;
 
       const namespacePrefixToExclude =
         baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
 
+      const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] || {});
+      const considerMap: Record<string, any> = {};
+      for (const key of fieldsToConsiderKeys) {
+        if (key.startsWith('dp-')) {
+            considerMap[key.substring(3)] = configForObject['fieldsToConsider'][key];
+        } else {
+            considerMap[key] = configForObject['fieldsToConsider'][key];
+        }
+    }
+    const fieldsToConsider = Object.keys(considerMap);
       const allFields = await conn.query(
         `SELECT QualifiedApiName, IsDependentPicklist, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
         FROM EntityParticle
         WHERE EntityDefinition.QualifiedApiName = '${objectName}'
-        AND IsCreatable = true 
+        AND IsCreatable = true
         AND NamespacePrefix NOT IN (${namespacePrefixToExclude})`
       );
 
-      const fieldsToPass = allFields.records.filter(
-        (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
-      );
+      let fieldsToPass: FieldRecord[] = [];
+
+      if (configForObject['fieldsToConsider'] === undefined && configForObject['fieldsToExclude'] === undefined && configForObject['pickLeftFields'] === undefined) {
+        fieldsToPass = (allFields.records as FieldRecord[]).filter(
+          (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase()));
+      }
+
+      if (getPickLeftFields === true && fieldsToIgnore.length > 0) {
+
+        if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
+          fieldsToPass = (allFields.records as FieldRecord[]).filter(
+            (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase()));
+        }
+        else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0)  {
+          fieldsToPass = (allFields.records as FieldRecord[]).filter(
+            (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase()));
+        } 
+        else if (fieldsToExclude.length === 0 && fieldsToConsider.length === 0)  {
+          fieldsToPass = (allFields.records as FieldRecord[]).filter(
+            (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase()));
+        }
+      } 
+      else if (getPickLeftFields === false && fieldsToIgnore.length > 0) {
+
+        if(fieldsToExclude.length === 0 && fieldsToConsider.length === 0){
+          this.error('please provide a field or set pick-left field to true')
+        }
+        else if(fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
+          this.error('Please provide fieldsToConsider or set pickLeftFields to true');
+        }
+        else if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
+          fieldsToPass = (allFields.records as FieldRecord[]).filter(
+            (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
+          );
+
+          const requiredFields = this.getRequiredFields(fieldsToPass);
+
+          const consideredFields = fieldsToPass.filter((record) =>
+            fieldsToConsider.includes(record.QualifiedApiName.toLowerCase())
+          );
+          fieldsToPass = this.mergeFieldsToPass([...consideredFields, ...requiredFields]);
+        }
+        else if (fieldsToConsider.length > 0 && fieldsToIgnore.length > 0 && fieldsToExclude.length === 0) {
+          fieldsToPass = (allFields.records as FieldRecord[]).filter(
+            (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
+          );
+          const requiredFields = this.getRequiredFields(fieldsToPass);
+
+          const consideredFields = fieldsToPass.filter((record) =>
+            fieldsToConsider.includes(record.QualifiedApiName.toLowerCase())
+          );
+
+          fieldsToPass = this.mergeFieldsToPass([...consideredFields, ...requiredFields]);
+        }
+      }
 
       const fieldsObject: Record<string, Field> = {};
 
@@ -318,6 +414,10 @@ export default class DataGenerate extends CreateRecord {
             } else {
               fieldConfig = {
                 type: 'text',
+                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
+                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                : []
+                
               };
             }
             break;
@@ -325,7 +425,8 @@ export default class DataGenerate extends CreateRecord {
           case 'reference':
             fieldConfig = {
               type: 'reference',
-              referenceTo: inputObject.ReferenceTo?.referenceTo[0],
+              // referenceTo: inputObject.ReferenceTo?.referenceTo[0],
+              referenceTo: inputObject.ReferenceTo?.referenceTo ? inputObject.ReferenceTo.referenceTo[0] : undefined,
               values: [],
               relationshipType: inputObject.RelationshipName
                 ? inputObject.IsNillable === false
@@ -337,21 +438,33 @@ export default class DataGenerate extends CreateRecord {
 
           case 'picklist':
             if (inputObject.IsDependentPicklist) {
-              await this.depPicklist(conn, objectName, inputObject.QualifiedApiName);
+              await this.depPicklist(conn, objectName, inputObject.QualifiedApiName, considerMap);
             } else {
               const picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName);
               fieldConfig = {
                 type: 'picklist',
-                values: picklistValues,
+                // values: considerMap[inputObject.QualifiedApiName.toLowerCase()] || picklistValues,
+                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
+                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                : picklistValues
               };
             }
             break;
 
           default:
-            fieldConfig = { type: inputObject.DataType };
+            if (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]?.length > 0) {
+              fieldConfig = { 
+                type: inputObject.DataType, 
+                values: considerMap[inputObject.QualifiedApiName.toLowerCase()]
+              };
+            } else {
+              fieldConfig = { 
+                type: inputObject.DataType 
+              };
+            }
+            
             break;
         }
-
         if (!inputObject.IsDependentPicklist) {
           fieldsObject[inputObject.QualifiedApiName] = fieldConfig;
         }
@@ -377,17 +490,15 @@ export default class DataGenerate extends CreateRecord {
 
       outputData.push(configToWrite);
     }
-
     const outputFile = path.resolve('./generated_output.json');
-    // const dataToPass = { sObjects: outputData };
     fs.writeFileSync(
       outputFile,
       JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2),
       'utf8'
     );
-    this.log(`Generated data written to: ${outputFile}`);
     this.orgConnection = conn;
     await super.run();
-    return { path: adjustedTemplateName };
+
+    return { path: configFilePath };
   }
 }

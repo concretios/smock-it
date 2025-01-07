@@ -7,4 +7,9 @@ module.exports = {
     complexity: 'off',
     'no-await-in-loop': 'off',
   },
+  parserOptions: {
+    project: 'tsconfig.json',
+    tsconfigRootDir: __dirname,
+    sourceType: 'module',
+  },
 };
