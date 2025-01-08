@@ -10,6 +10,7 @@
     "cli-loading-animation": "^1.0.6",
     "cli-progress": "^3.12.0",
     "cli-select": "^1.1.2",
+    "console-table-without-index": "^0.1.1",
     "cross-spawn": "7.0.5",
     "dotenv": "^16.4.5",
     "enquirer": "^2.4.1",

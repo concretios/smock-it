@@ -19,7 +19,10 @@ import { Messages } from '@salesforce/core';
 import { Connection } from '@salesforce/core';
 import fetch from 'node-fetch';
 import { Progress }  from '@salesforce/sf-plugins-core';
-import chalk  from 'chalk';
+// import chalk  from 'chalk';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import {table} from 'console-table-without-index';
+
 import { templateAddFlags} from '../template/upsert.js';
 import { MOCKAROO_API_CALLS_PER_DAY, MOCKAROO_CHUNK_SIZE } from '../../utils/constants.js';
 
@@ -88,6 +91,7 @@ const excludeFieldsSet = new Set<string>();
 const createdRecordsIds: Map<string, string[]> = new Map();
 const progressBar = new Progress(true )
 
+
 export default class CreateRecord extends SfCommand<CreateRecordResult> {
   
   public static readonly summary: string = messages.getMessage('summary');
@@ -125,8 +129,11 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     
     const conn = this.orgConnection;
     const configPath = path.join(process.cwd(), fieldsConfigFile);
-    const configData = fs.readFileSync(configPath, 'utf8');    
+    const configData = fs.readFileSync(configPath, 'utf8');
+    // console.log(chalk.green('Config Data: --------------'), configData);
+        
     const jsonDataForObjectNames = JSON.parse(configData);
+    // console.log(chalk.green('jsonDataForObjectNames: '), jsonDataForObjectNames);
 
     const outputFormat = jsonDataForObjectNames.outputFormat;
     const sObjectNames = jsonDataForObjectNames.sObjects.map((sObject: { sObject: string }) => sObject.sObject);
@@ -136,6 +143,8 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     let jsonData: any 
     let fetchedData: Record<string, any > 
     let apiCallout: number = 0
+    const resultTable: Array<any> = []; 
+
     for (const object of sObjectNames) {
 
       depthForRecord = 0;
@@ -184,6 +193,13 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
       }
 
       jsonData = fetchedData
+
+      const resultEntry: any = {
+        SObject: object.toUpperCase().replace(/^'|'$/g,),
+        JSON: '-',
+        CSV: '-',
+        DI: '-',
+      };
       
       if (outputFormat.includes('json') || outputFormat.includes('json')) {
         const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
@@ -192,7 +208,9 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           ''
         ) + `_${dateTime}.json`;
         fs.writeFileSync(jsonFilePath, JSON.stringify(jsonData, null, 2));
-        this.log(chalk.green(`Data for ${object} saved as JSON in `) + jsonFilePath);
+        // this.log(chalk.green(`Data for ${object} saved as JSON in `) + jsonFilePath);
+        resultEntry.CSV = 'YES';
+
       }
 
       if (outputFormat.includes('csv') || outputFormat.includes('csv')) {
@@ -203,7 +221,8 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           ''
         )+ `${dateTime}.csv`;
         fs.writeFileSync(csvFilePath, csvData);
-        this.log(chalk.green(`Data for ${object} saved as CSV in `) + csvFilePath);
+        // this.log(chalk.green(`Data for ${object} saved as CSV in `) + csvFilePath);
+        resultEntry.JSON = 'YES';
       }
 
       if (outputFormat.includes('DI') || outputFormat.includes('di')) {
@@ -229,14 +248,14 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           errorSet.forEach((error) => this.log(`- ${error}`));
         }
         this.updateCreatedRecordIds(object, insertResult);
+        resultEntry.DI = 'YES';
 
         if (flags['include-files'] !== undefined && flags['include-files']?.length > 0) {
           this.insertImage(flags['include-files'], conn, insertedIds);
         }
       }
+      resultTable.push(resultEntry);
     }
-
-
     // Save created record IDs if needed
     if (outputFormat.includes('DI') || outputFormat.includes('di')) {
       this.saveMapToJsonFile(
@@ -247,9 +266,14 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           '.json'
       );
     }
+    console.table(resultTable)
+    console.log(table(resultTable));
+
     return { path: `${process.cwd()}/src/commands/create/record.ts` };
   }
 
+
+  
   private async processObjectFieldsForIntitalJsonFile(
     conn: Connection,
     config: any[],
@@ -367,6 +391,8 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     const ids = results.filter((result) => result.success).map((result) => result.id);
     createdRecordsIds.set(object, ids);
   }
+
+  
 
   private async handleFieldProcessingForIntitalJsonFile(
     conn: Connection,
@@ -777,7 +803,8 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
 
     const outputFile = path.join(outputDir, sanitizedFileName);
     fs.writeFileSync(outputFile, JSON.stringify(resultObject, null, 2), 'utf-8');
-    this.log(`File created at: ${outputFile}`);
+    // this.log(`File created at=============: ${outputFile}`);
+
   }
 
   private convertJsonToCsv(jsonData: any[]): string {
