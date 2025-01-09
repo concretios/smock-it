@@ -14,14 +14,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import chalk from 'chalk';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { Connection } from '@salesforce/core';
 import fetch from 'node-fetch';
 import { Progress }  from '@salesforce/sf-plugins-core';
-// import chalk  from 'chalk';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import {table} from 'console-table-without-index';
+import { Table } from 'console-table-printer';
+
 
 import { templateAddFlags} from '../template/upsert.js';
 import { MOCKAROO_API_CALLS_PER_DAY, MOCKAROO_CHUNK_SIZE } from '../../utils/constants.js';
@@ -129,11 +130,8 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     
     const conn = this.orgConnection;
     const configPath = path.join(process.cwd(), fieldsConfigFile);
-    const configData = fs.readFileSync(configPath, 'utf8');
-    // console.log(chalk.green('Config Data: --------------'), configData);
-        
+    const configData = fs.readFileSync(configPath, 'utf8');        
     const jsonDataForObjectNames = JSON.parse(configData);
-    // console.log(chalk.green('jsonDataForObjectNames: '), jsonDataForObjectNames);
 
     const outputFormat = jsonDataForObjectNames.outputFormat;
     const sObjectNames = jsonDataForObjectNames.sObjects.map((sObject: { sObject: string }) => sObject.sObject);
@@ -143,8 +141,21 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     let jsonData: any 
     let fetchedData: Record<string, any > 
     let apiCallout: number = 0
-    const resultTable: Array<any> = []; 
 
+    const table = new Table({
+      columns: [
+        { name: 'SObject(s)', alignment: 'left',color: 'yellow', title: chalk.blue('SObject(s)')}, 
+        { name: 'JSON', alignment: 'center',color: 'green',title: chalk.blue('JSON')}, 
+        { name: 'CSV', alignment: 'center',color: 'green',title: chalk.blue('CSV') },  
+        { name: 'DI', alignment: 'center',color: 'green',title: chalk.blue('DI') },   
+        { name: 'Failed(DI)', alignment: 'center',title: chalk.red('Failed(DI)') },
+        { name: 'Time', alignment: 'center',title: chalk.blue('Time') } 
+
+      ],
+    });
+
+ 
+    let failedCount = 0;
     for (const object of sObjectNames) {
 
       depthForRecord = 0;
@@ -194,12 +205,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
 
       jsonData = fetchedData
 
-      const resultEntry: any = {
-        SObject: object.toUpperCase().replace(/^'|'$/g,),
-        JSON: '-',
-        CSV: '-',
-        DI: '-',
-      };
+    
       
       if (outputFormat.includes('json') || outputFormat.includes('json')) {
         const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
@@ -208,9 +214,6 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           ''
         ) + `_${dateTime}.json`;
         fs.writeFileSync(jsonFilePath, JSON.stringify(jsonData, null, 2));
-        // this.log(chalk.green(`Data for ${object} saved as JSON in `) + jsonFilePath);
-        resultEntry.CSV = 'YES';
-
       }
 
       if (outputFormat.includes('csv') || outputFormat.includes('csv')) {
@@ -221,8 +224,6 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           ''
         )+ `${dateTime}.csv`;
         fs.writeFileSync(csvFilePath, csvData);
-        // this.log(chalk.green(`Data for ${object} saved as CSV in `) + csvFilePath);
-        resultEntry.JSON = 'YES';
       }
 
       if (outputFormat.includes('DI') || outputFormat.includes('di')) {
@@ -243,18 +244,31 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           }
         });
 
+        failedCount = insertResult.length - insertedIds.length;
+
         if (errorSet.size > 0) {
           this.log(`\nFailed to insert ${insertResult.length - insertedIds.length} record(s) for '${object}' object with following error(s):`);
           errorSet.forEach((error) => this.log(`- ${error}`));
         }
         this.updateCreatedRecordIds(object, insertResult);
-        resultEntry.DI = 'YES';
 
         if (flags['include-files'] !== undefined && flags['include-files']?.length > 0) {
           this.insertImage(flags['include-files'], conn, insertedIds);
         }
       }
-      resultTable.push(resultEntry);
+
+      const resultEntry: any = {
+        'SObject(s)': object.toUpperCase(),
+        JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
+        CSV: outputFormat.includes('csv') || outputFormat.includes('csv') ? '\u2714' : '-',
+        DI: outputFormat.includes('di') || outputFormat.includes('DI') ? (failedCount > 0 ? '-' : '\u2714') : '-',        
+        'Failed(DI)': 0 ,
+        Time: new Date().toLocaleTimeString(),
+      };
+
+      resultEntry['Failed(DI)'] = failedCount;
+      table.addRow(resultEntry);
+
     }
     // Save created record IDs if needed
     if (outputFormat.includes('DI') || outputFormat.includes('di')) {
@@ -266,14 +280,12 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           '.json'
       );
     }
-    console.table(resultTable)
-    console.log(table(resultTable));
+
+    table.printTable();
 
     return { path: `${process.cwd()}/src/commands/create/record.ts` };
   }
 
-
-  
   private async processObjectFieldsForIntitalJsonFile(
     conn: Connection,
     config: any[],
