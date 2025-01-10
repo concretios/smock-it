@@ -20,7 +20,6 @@ import { Messages } from '@salesforce/core';
 import { Connection } from '@salesforce/core';
 import fetch from 'node-fetch';
 import { Progress }  from '@salesforce/sf-plugins-core';
-// eslint-disable-next-line import/no-extraneous-dependencies
 import { Table } from 'console-table-printer';
 
 
@@ -141,21 +140,44 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     let jsonData: any 
     let fetchedData: Record<string, any > 
     let apiCallout: number = 0
+    const outputPathDir = `${path.join(process.cwd())}/data_gen/output/`;
 
     const table = new Table({
       columns: [
         { name: 'SObject(s)', alignment: 'left',color: 'yellow', title: chalk.blue('SObject(s)')}, 
         { name: 'JSON', alignment: 'center',color: 'green',title: chalk.blue('JSON')}, 
         { name: 'CSV', alignment: 'center',color: 'green',title: chalk.blue('CSV') },  
-        { name: 'DI', alignment: 'center',color: 'green',title: chalk.blue('DI') },   
+        { name: 'DI', alignment: 'left',color: 'green',title: chalk.blue('DI') },   
         { name: 'Failed(DI)', alignment: 'center',title: chalk.red('Failed(DI)') },
-        { name: 'Time', alignment: 'center',title: chalk.blue('Time') } 
-
+        
       ],
+
+      style: {
+        headerTop: {
+          left: chalk.green('╔'),
+          mid: chalk.green('╦'),
+          right: chalk.green('╗'),
+          other: chalk.green('═'),
+        },
+        headerBottom: {
+          left: chalk.green('╟'),
+          mid: chalk.green('╬'),
+          right: chalk.green('╢'),
+          other: chalk.green('═'),
+        },
+        tableBottom: {
+          left: chalk.green('╚'),
+          mid: chalk.green('╩'),
+          right: chalk.green('╝'),
+          other: chalk.green('═'),
+        },
+        vertical: chalk.green('║'),
+      },
     });
 
- 
+    
     let failedCount = 0;
+    const startTime = Date.now();
     for (const object of sObjectNames) {
 
       depthForRecord = 0;
@@ -247,7 +269,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
         failedCount = insertResult.length - insertedIds.length;
 
         if (errorSet.size > 0) {
-          this.log(`\nFailed to insert ${insertResult.length - insertedIds.length} record(s) for '${object}' object with following error(s):`);
+          this.log(`\nFailed to insert ${failedCount} record(s) for '${object}' object with following error(s):`);
           errorSet.forEach((error) => this.log(`- ${error}`));
         }
         this.updateCreatedRecordIds(object, insertResult);
@@ -260,16 +282,16 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
       const resultEntry: any = {
         'SObject(s)': object.toUpperCase(),
         JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
-        CSV: outputFormat.includes('csv') || outputFormat.includes('csv') ? '\u2714' : '-',
-        DI: outputFormat.includes('di') || outputFormat.includes('DI') ? (failedCount > 0 ? '-' : '\u2714') : '-',        
+        CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
+        DI: outputFormat.includes('di') || outputFormat.includes('DI') ? (failedCount > 0 ? chalk.red('X') : '\u2714') : '-',        
         'Failed(DI)': 0 ,
-        Time: new Date().toLocaleTimeString(),
       };
 
       resultEntry['Failed(DI)'] = failedCount;
       table.addRow(resultEntry);
 
     }
+
     // Save created record IDs if needed
     if (outputFormat.includes('DI') || outputFormat.includes('di')) {
       this.saveMapToJsonFile(
@@ -280,6 +302,11 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
           '.json'
       );
     }
+    const endTime = Date.now();
+    const totalTime = ((endTime - startTime) / 1000).toFixed(2);
+    // this.log(chalk.blue(`\nOutput: ${totalTime}(s)`)) ;  
+    this.log(chalk.blue.bold(`\nResults: \x1b]8;;${outputPathDir}\x1b\\${totalTime}(s)\x1b]8;;\x1b\\`));
+
 
     table.printTable();
 
