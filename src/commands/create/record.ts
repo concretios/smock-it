@@ -1,9 +1,6 @@
 /* eslint-disable sf-plugin/flag-case */
-/* eslint-disable object-shorthand */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-floating-promises */
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
-/* eslint-disable @typescript-eslint/member-ordering */
 /* eslint-disable no-param-reassign */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable class-methods-use-this */
@@ -65,12 +62,12 @@ type fieldType =
   | 'address';
 
 type Field = {
+  // [key: string]: any; // For dynamic dependent-picklist structures
   type: fieldType;
   values?: string[]; // For picklist or dependent-picklist
   referenceTo?: string; // For reference fields
   relationshipType?: 'lookup' | 'master-detail'; // For reference fields
   'child-dependent-field'?: string; // For dependent picklists
-  [key: string]: any; // For dynamic dependent-picklist structures
 };
 
 type SObjectConfig = {
@@ -91,6 +88,50 @@ const excludeFieldsSet = new Set<string>();
 const createdRecordsIds: Map<string, string[]> = new Map();
 const progressBar = new Progress(true )
 
+/* table creation for output format success */
+function createTable(): Table {
+  return new Table({
+      columns: [
+          { name: 'SObject(s)', alignment: 'left', color: 'yellow', title: chalk.blue('SObject(s)') },
+          { name: 'JSON', alignment: 'center', color: 'green', title: chalk.blue('JSON') },
+          { name: 'CSV', alignment: 'center', color: 'green', title: chalk.blue('CSV') },
+          { name: 'DI', alignment: 'left', color: 'green', title: chalk.blue('DI') },
+          { name: 'Failed(DI)', alignment: 'center', title: chalk.red('Failed(DI)') },
+      ],
+      /* border styles to table */
+      style: {
+          headerTop: {
+              left: chalk.green('╔'),
+              mid: chalk.green('╦'),
+              right: chalk.green('╗'),
+              other: chalk.green('═'),
+          },
+          headerBottom: {
+              left: chalk.green('╟'),
+              mid: chalk.green('╬'),
+              right: chalk.green('╢'),
+              other: chalk.green('═'),
+          },
+          tableBottom: {
+              left: chalk.green('╚'),
+              mid: chalk.green('╩'),
+              right: chalk.green('╝'),
+              other: chalk.green('═'),
+          },
+          vertical: chalk.green('║'),
+      },
+  });
+}
+
+function createResultEntryTable(object: string, outputFormat: string[], failedCount: number): any {
+  return {
+      'SObject(s)': object.toUpperCase(),
+      JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
+      CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
+      DI: outputFormat.includes('di') || outputFormat.includes('DI') ? (failedCount > 0 ? chalk.red('X') : '\u2714') : '-',
+      'Failed(DI)': failedCount,
+  };
+}
 
 export default class CreateRecord extends SfCommand<CreateRecordResult> {
   
@@ -142,39 +183,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     let apiCallout: number = 0
     const outputPathDir = `${path.join(process.cwd())}/data_gen/output/`;
 
-    const table = new Table({
-      columns: [
-        { name: 'SObject(s)', alignment: 'left',color: 'yellow', title: chalk.blue('SObject(s)')}, 
-        { name: 'JSON', alignment: 'center',color: 'green',title: chalk.blue('JSON')}, 
-        { name: 'CSV', alignment: 'center',color: 'green',title: chalk.blue('CSV') },  
-        { name: 'DI', alignment: 'left',color: 'green',title: chalk.blue('DI') },   
-        { name: 'Failed(DI)', alignment: 'center',title: chalk.red('Failed(DI)') },
-        
-      ],
-
-      style: {
-        headerTop: {
-          left: chalk.green('╔'),
-          mid: chalk.green('╦'),
-          right: chalk.green('╗'),
-          other: chalk.green('═'),
-        },
-        headerBottom: {
-          left: chalk.green('╟'),
-          mid: chalk.green('╬'),
-          right: chalk.green('╢'),
-          other: chalk.green('═'),
-        },
-        tableBottom: {
-          left: chalk.green('╚'),
-          mid: chalk.green('╩'),
-          right: chalk.green('╝'),
-          other: chalk.green('═'),
-        },
-        vertical: chalk.green('║'),
-      },
-    });
-
+    const table = createTable();
     
     let failedCount = 0;
     const startTime = Date.now();
@@ -279,15 +288,19 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
         }
       }
 
-      const resultEntry: any = {
-        'SObject(s)': object.toUpperCase(),
-        JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
-        CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
-        DI: outputFormat.includes('di') || outputFormat.includes('DI') ? (failedCount > 0 ? chalk.red('X') : '\u2714') : '-',        
-        'Failed(DI)': 0 ,
-      };
+      // const resultEntry: any = {
+      //   'SObject(s)': object.toUpperCase(),
+      //   JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
+      //   CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
+      //   DI: outputFormat.includes('di') || outputFormat.includes('DI') ? (failedCount > 0 ? chalk.red('X') : '\u2714') : '-',        
+      //   'Failed(DI)': 0 ,
+      // };
 
-      resultEntry['Failed(DI)'] = failedCount;
+
+
+      // resultEntry['Failed(DI)'] = failedCount;
+      const resultEntry = createResultEntryTable(object, outputFormat, failedCount);
+
       table.addRow(resultEntry);
 
     }
@@ -615,7 +628,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     return relatedRecords.records.map((record: any) => record.Id);
   }
 
-  public async getPicklistValuesWithDependentValues(
+  private async getPicklistValuesWithDependentValues(
     conn: Connection,
     object: string,
     field: string,
@@ -797,7 +810,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
   }
 
 
-  private async insertImage(filePaths: string[], conn: Connection, parentIds: string[]) {
+  private async insertImage(filePaths: string[], conn: Connection, parentIds: string[]): Promise<void> {
     try {
       for (const parentId of parentIds) {
         for (const filePath of filePaths) {
@@ -825,7 +838,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     }
   }
 
-  private saveMapToJsonFile(folderName: string, fileName: string) {
+  private saveMapToJsonFile(folderName: string, fileName: string): void {
     const sanitizedFileName = fileName.replace(/[:/\\<>?|*]/g, '_');
     const baseDir = process.cwd();
     const outputDir = path.join(baseDir, folderName, 'output');

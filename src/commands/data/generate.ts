@@ -1,16 +1,10 @@
 /* eslint-disable sf-plugin/only-extend-SfCommand */
-/* eslint-disable @typescript-eslint/no-shadow */
-/* eslint-disable object-shorthand */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
-/* eslint-disable @typescript-eslint/array-type */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable class-methods-use-this */
 /* eslint-disable sf-plugin/flag-case */
-/* eslint-disable @typescript-eslint/member-ordering */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import * as fs from 'node:fs';
@@ -20,6 +14,8 @@ import { Messages, Connection } from '@salesforce/core';
 import { updateOrInitializeConfig, getTemplateJsonData } from '../template/upsert.js';
 import { connectToSalesforceOrg ,validateConfigJson} from '../template/validate.js';
 import CreateRecord from '../create/record.js';
+import {
+  templateSchema,SObjectItem} from '../../utils/types.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 
@@ -39,20 +35,20 @@ type FieldRecord = {
   NamespacePrefix: string | null;
   DataType: string;
   ReferenceTo: {
-    referenceTo: null | Array<any>;
+    referenceTo: null | any[];
   };
   RelationshipName: string | null;
   IsNillable: boolean;
 };
 
 type Field = {
+  // [key: string]: any;
   type: string;
   values?: string[];
   relationshipType?: string;
   referenceTo?: string;
   'max-length'?: number;
   'child-dependent-field'?: string;
-  [key: string]: any;
 };
 
 export let conecteOrgCreds: any;
@@ -83,175 +79,19 @@ export default class DataGenerate extends CreateRecord {
     }),
   };
 
-  private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
-    const result = await conn.describe(object);
-    const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-    return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
-  }
-
   public dependentPicklistResults: Record<
-    string,
-    Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>
-  > = {};
+  string,
+  Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>
+> = {};
   public independentFieldResults: Map<string, string[]> = new Map();
-
-  private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string, considerMap: Record<string, any> ) {
-    const schema = await conn.sobject(objectName).describe();
-
-    const dependentFieldResult = schema.fields.find((field) => field.name === dependentFieldApiName);
-    if (!dependentFieldResult) {
-      this.error(`Dependent field ${dependentFieldApiName} not found.`);
-      return;
-    }
-
-    const controllingFieldName = this.getControllingFieldName(dependentFieldResult);
-    if (!controllingFieldName) {
-      this.independentFieldResults.set(
-        dependentFieldApiName,
-        dependentFieldResult.picklistValues?.map((value) => value.value) ?? []
-      );
-      return;
-    }
-
-    const controllerFieldResult = schema.fields.find((field) => field.name === controllingFieldName);
-    const controllerValues = controllerFieldResult?.picklistValues ?? [];
-
-    const dependentPicklistValues = new Map<string, string[]>();
-
-    dependentFieldResult.picklistValues?.forEach((entry) => {
-      if (entry.validFor) {
-        const base64map = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-        const validForControllerValues = [];
-
-        const base64chars = entry.validFor.split('');
-        for (let i = 0; i < controllerValues.length; i++) {
-          const bitIndex = Math.floor(i / 6);
-          const bitShift = 5 - (i % 6);
-          if ((base64map.indexOf(base64chars[bitIndex]) & (1 << bitShift)) !== 0) {
-            validForControllerValues.push(controllerValues[i].label);
-          }
-        }
-        validForControllerValues.forEach((controllerValue) => {
-          if (!dependentPicklistValues.has(controllerValue)) {
-            dependentPicklistValues.set(controllerValue, []);
-          }
-          dependentPicklistValues.get(controllerValue)?.push(entry.value);
-        });
-      }
-    });
-
-    // Append to dependentPicklistResults
-    dependentPicklistValues.forEach((childValues, parentValue) => {
-      if (!this.dependentPicklistResults[controllingFieldName]) {
-        this.dependentPicklistResults[controllingFieldName] = [];
-      }
-      this.dependentPicklistResults[controllingFieldName].push({
-        parentFieldValue: parentValue,
-        childFieldName: dependentFieldApiName,
-        childValues,
-      });
-    });
-    Object.keys(this.dependentPicklistResults).forEach((key) => {
-      if (Object.keys(considerMap).includes(key.toLowerCase()) && considerMap[key.toLowerCase()].length > 0) {
-        const pickListFieldValues = this.dependentPicklistResults[key];
-        const filteredArray = pickListFieldValues.filter(item => item.parentFieldValue === considerMap[key.toLowerCase()][0]);
-
-        if (filteredArray.length > 0) {
-          filteredArray[0].childValues = considerMap[filteredArray[0].childFieldName.toLowerCase()];
-          this.dependentPicklistResults[key] = filteredArray;
-
-        }
-      }
-    });
-  }
-  private getControllingFieldName(dependentField: any): string | null {
-    return dependentField.controllerName || null;
-  }
-
-  private convertJSON(
-    input: Record<string, Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>>,
-    controllingFieldName: string
-  ): any {
-    const output: any = {};
-
-    if (input[controllingFieldName]) {
-      const entries = input[controllingFieldName];
-      const childFieldName = entries[0]?.childFieldName;
-
-      output[controllingFieldName] = {
-        type: 'dependent-picklist',
-        values: [],
-        'child-dependent-field': childFieldName,
-        [childFieldName]: {},
-      };
-
-      entries.forEach((entry) => {
-        output[controllingFieldName]['values'].push(entry.parentFieldValue);
-        output[controllingFieldName][childFieldName][entry.parentFieldValue] = {
-          values: entry.childValues,
-        };
-
-        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues);
-        if (nestedOutput) {
-          Object.assign(output[controllingFieldName][childFieldName][entry.parentFieldValue], nestedOutput);
-        }
-      });
-    }
-
-    return output;
-  }
-
-  private buildNestedJSON(
-    input: Record<string, Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>>,
-    parentFieldName: string,
-    parentValues: string[]
-  ): any {
-    if (!input[parentFieldName]) {
-      return null;
-    }
-
-    const entries = input[parentFieldName];
-    const childFieldName = entries[0]?.childFieldName;
-
-    const output: any = {
-      'child-dependent-field': childFieldName,
-      [childFieldName]: {},
-    };
-
-    parentValues.forEach((parentValue) => {
-      const matchingEntries = entries.filter((entry) => entry.parentFieldValue === parentValue);
-      matchingEntries.forEach((entry) => {
-        output[childFieldName][parentValue] = {
-          values: entry.childValues,
-        };
-
-        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues);
-
-        if (nestedOutput) {
-          Object.assign(output[childFieldName][parentValue], nestedOutput);
-        }
-      });
-    });
-
-    return output;
-  }
-
-  private getRequiredFields(fields: FieldRecord[]): FieldRecord[] {
-    return fields.filter((record) => record.IsNillable === false);
-  }
-
-  private mergeFieldsToPass(fields: FieldRecord[]): FieldRecord[] {
-    return [...new Map(fields.map((field) => [field.QualifiedApiName, field])).values()];
-  }
   
-
   public async run(): Promise<DataGenerateResult> {
 
     const { flags } = await this.parse(DataGenerate);
     const aliasOrUsername = flags.alias;
     const conn = await connectToSalesforceOrg(aliasOrUsername);
 
-    const objectName = flags.sObject ? flags.sObject.toLowerCase() : undefined;
+    let objectName = flags.sObject ? flags.sObject.toLowerCase() : undefined;
 
     const configFilePath = getTemplateJsonData(flags.templateName);
     const isDataValid = await validateConfigJson(conn, configFilePath);
@@ -259,25 +99,24 @@ export default class DataGenerate extends CreateRecord {
       throw new Error('Invalid data in the template');
     }
 
-
     if (!fs.existsSync(configFilePath)) {
       this.error(`Config file not found at ${configFilePath}`);
     }
 
-    let baseConfig;
+    let baseConfig: templateSchema;
     try {
-      const configContent = fs.readFileSync(configFilePath, 'utf-8');
-      baseConfig = JSON.parse(configContent);
+      baseConfig = JSON.parse(fs.readFileSync(configFilePath,'utf-8')) as templateSchema;
       baseConfig.sObjects = baseConfig.sObjects || [];
     } catch (error) {
       this.error(`Failed to read or parse the base config file at ${configFilePath}`);
     }
-
     let objectsToProcess = baseConfig.sObjects;
 
+    
     // getting specific object and its configuration if name given
     if (objectName) {
-      const existingObjectConfig = baseConfig.sObjects.find((o: any) => {
+
+      const existingObjectConfig = baseConfig.sObjects.find((o: SObjectItem) => {
         const objectKey = Object.keys(o)[0];
         return objectKey.toLowerCase() === objectName;
       });
@@ -295,19 +134,19 @@ export default class DataGenerate extends CreateRecord {
           ['language', 'count', 'fieldsToExclude','pickLeftFields', 'fieldsToConsider'],
           this.log.bind(this)
         );
+
         objectsToProcess = [existingObjectConfig];
       }
     }
-
 
     const outputData: any[] = [];
 
     for (const objectConfig of objectsToProcess) {
       const objectKey = Object.keys(objectConfig)[0];
-      const objectName = objectKey;
+      objectName = objectKey;
       const configForObject = objectConfig[objectKey];
 
-      let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) || [];
+      let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
       const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
 
       fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field));
@@ -318,14 +157,16 @@ export default class DataGenerate extends CreateRecord {
       const namespacePrefixToExclude =
         baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
 
-      const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] || {});
+      const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
       const considerMap: Record<string, any> = {};
       for (const key of fieldsToConsiderKeys) {
+      if (configForObject['fieldsToConsider']) {
         if (key.startsWith('dp-')) {
             considerMap[key.substring(3)] = configForObject['fieldsToConsider'][key];
         } else {
             considerMap[key] = configForObject['fieldsToConsider'][key];
         }
+      }
     }
     const fieldsToConsider = Object.keys(considerMap);
       const allFields = await conn.query(
@@ -480,8 +321,8 @@ export default class DataGenerate extends CreateRecord {
 
       const configToWrite: any = {
         sObject: objectName,
-        language: configForObject.language || baseConfig.language,
-        count: configForObject.count || baseConfig.count,
+        language: configForObject.language ?? baseConfig.language,
+        count: configForObject.count ?? baseConfig.count,
       };
 
       if (Object.keys(fieldsObject).length > 0) {
@@ -500,5 +341,161 @@ export default class DataGenerate extends CreateRecord {
     await super.run();
 
     return { path: configFilePath };
+  }
+
+  private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
+    const result = await conn.describe(object);
+    const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
+    return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
+  }
+
+  private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string, considerMap: Record<string, any> ): Promise<void> {
+    const schema = await conn.sobject(objectName).describe();
+
+    const dependentFieldResult = schema.fields.find((field) => field.name === dependentFieldApiName);
+    if (!dependentFieldResult) {
+      this.error(`Dependent field ${dependentFieldApiName} not found.`);
+      return;
+    }
+
+    const controllingFieldName = this.getControllingFieldName(dependentFieldResult);
+    if (!controllingFieldName) {
+      this.independentFieldResults.set(
+        dependentFieldApiName,
+        dependentFieldResult.picklistValues?.map((value) => value.value) ?? []
+      );
+      return;
+    }
+
+    const controllerFieldResult = schema.fields.find((field) => field.name === controllingFieldName);
+    const controllerValues = controllerFieldResult?.picklistValues ?? [];
+
+    const dependentPicklistValues = new Map<string, string[]>();
+
+    dependentFieldResult.picklistValues?.forEach((entry) => {
+      if (entry.validFor) {
+        const base64map = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+        const validForControllerValues = [];
+
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+        const base64chars = entry.validFor.split('');
+        for (let i = 0; i < controllerValues.length; i++) {
+          const bitIndex = Math.floor(i / 6);
+          const bitShift = 5 - (i % 6);
+          if ((base64map.indexOf(base64chars[bitIndex]) & (1 << bitShift)) !== 0) {
+            validForControllerValues.push(controllerValues[i].label);
+          }
+        }
+        validForControllerValues.forEach((controllerValue) => {
+          if (!dependentPicklistValues.has(controllerValue)) {
+            dependentPicklistValues.set(controllerValue, []);
+          }
+          dependentPicklistValues.get(controllerValue)?.push(entry.value);
+        });
+      }
+    });
+
+    // Append to dependentPicklistResults
+    dependentPicklistValues.forEach((childValues, parentValue) => {
+      if (!this.dependentPicklistResults[controllingFieldName]) {
+        this.dependentPicklistResults[controllingFieldName] = [];
+      }
+      this.dependentPicklistResults[controllingFieldName].push({
+        parentFieldValue: parentValue,
+        childFieldName: dependentFieldApiName,
+        childValues,
+      });
+    });
+    Object.keys(this.dependentPicklistResults).forEach((key) => {
+      if (Object.keys(considerMap).includes(key.toLowerCase()) && considerMap[key.toLowerCase()].length > 0) {
+        const pickListFieldValues = this.dependentPicklistResults[key];
+        const filteredArray = pickListFieldValues.filter(item => item.parentFieldValue === considerMap[key.toLowerCase()][0]);
+
+        if (filteredArray.length > 0) {
+          filteredArray[0].childValues = considerMap[filteredArray[0].childFieldName.toLowerCase()];
+          this.dependentPicklistResults[key] = filteredArray;
+
+        }
+      }
+    });
+  }
+  private getControllingFieldName(dependentField: any): string | null {
+    return dependentField.controllerName || null;
+  }
+
+  private convertJSON(
+    input: Record<string, Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>>,
+    controllingFieldName: string
+  ): any {
+    const output: any = {};
+
+    if (input[controllingFieldName]) {
+      const entries = input[controllingFieldName];
+      const childFieldName = entries[0]?.childFieldName;
+
+      output[controllingFieldName] = {
+        type: 'dependent-picklist',
+        values: [],
+        'child-dependent-field': childFieldName,
+        [childFieldName]: {},
+      };
+
+      entries.forEach((entry) => {
+        (output[controllingFieldName]['values'] as string[]).push(entry.parentFieldValue);
+        output[controllingFieldName][childFieldName][entry.parentFieldValue] = {
+          values: entry.childValues,
+        };
+
+        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues);
+        if (nestedOutput) {
+          Object.assign(output[controllingFieldName][childFieldName][entry.parentFieldValue], nestedOutput);
+        }
+      });
+    }
+
+    return output;
+  }
+
+  private buildNestedJSON(
+    input: Record<string, Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>>,
+    parentFieldName: string,
+    parentValues: string[]
+  ): any {
+    if (!input[parentFieldName]) {
+      return null;
+    }
+
+    const entries = input[parentFieldName];
+    const childFieldName = entries[0]?.childFieldName;
+
+    const output: any = {
+      'child-dependent-field': childFieldName,
+      [childFieldName]: {},
+    };
+
+    parentValues.forEach((parentValue) => {
+      const matchingEntries = entries.filter((entry) => entry.parentFieldValue === parentValue);
+      matchingEntries.forEach((entry) => {
+        output[childFieldName][parentValue] = {
+          values: entry.childValues,
+        };
+
+        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues);
+
+        if (nestedOutput) {
+          Object.assign(output[childFieldName][parentValue], nestedOutput);
+        }
+      });
+    });
+
+    return output;
+  }
+
+  private getRequiredFields(fields: FieldRecord[]): FieldRecord[] {
+    return fields.filter((record) => record.IsNillable === false);
+  }
+
+  private mergeFieldsToPass(fields: FieldRecord[]): FieldRecord[] {
+    return [...new Map(fields.map((field) => [field.QualifiedApiName, field])).values()];
   }
 }
