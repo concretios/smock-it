@@ -304,7 +304,6 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     }
     const endTime = Date.now();
     const totalTime = ((endTime - startTime) / 1000).toFixed(2);
-    // this.log(chalk.blue(`\nOutput: ${totalTime}(s)`)) ;  
     this.log(chalk.blue.bold(`\nResults: \x1b]8;;${outputPathDir}\x1b\\${totalTime}(s)\x1b]8;;\x1b\\`));
 
 
@@ -489,11 +488,11 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
         }
         processedFields.push(details);
       } else if (isPicklist || item.values?.length > 0) {
-        details.type = 'Custom List'; // random value pick krta h
+        details.type = 'Custom List'; // random value pick
         details.values = await this.getPicklistValuesWithDependentValues(conn, object, fieldName, item);
         processedFields.push(details);
       } else {
-         // details ki value contains item .value contain hoti
+         // details value contains item .value
         details.type = this.getFieldType(item, isParentObject);
         if (details.type) processedFields.push(details);
       }

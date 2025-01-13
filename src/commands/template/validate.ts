@@ -136,7 +136,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
 
     if (invalidObjects.length > 0) {
       console.warn(
-        chalk.magenta(`Warning: SObjects do not exist or cannot be accessed:\n -> ${invalidObjects.join(', ')}`)
+        chalk.magenta(`Error: SObjects do not exist or cannot be accessed:\n -> ${invalidObjects.join(', ')}`)
       );
       isDataValid = false;
     }

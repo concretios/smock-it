@@ -6,7 +6,7 @@ export const languageChoices = [
 ];
 
 export const outputChoices = [
-  { name: 'DI', message: 'DI', value: 'di', hint: 'Create records into org (limit- upto 200)' },
+  { name: 'DI', message: 'DI', value: 'di', hint: 'Create records into org' },
   { name: 'JSON', message: 'JSON', value: 'json' },
   { name: 'CSV', message: 'CSV', value: 'csv' },
 ];
