@@ -5,7 +5,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable class-methods-use-this */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/array-type */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -329,7 +328,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     conn: Connection,
     config: any[],
     object: string
-  ): Promise<Partial<TargetData>[]> {
+  ): Promise<Array<Partial<TargetData>>> {
 
     const processedFields = await this.handleFieldProcessingForIntitalJsonFile(conn, object, config);
     return processedFields;
@@ -339,7 +338,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     conn: Connection,
     object: string,
     onlyRequiredFields: boolean
-  ): Promise<Partial<TargetData>[]> {
+  ): Promise<Array<Partial<TargetData>>> {
     const query = this.buildFieldQuery(object, onlyRequiredFields);
 
     const processedFields = await this.handleFieldProcessingForParentObjects(conn, query, object);
@@ -352,12 +351,12 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     return query;
   }
 
-  private async fetchMockarooData(url: string, body: Partial<TargetData>[]): Promise<GenericRecord[]> {
+  private async fetchMockarooData(url: string, body: Array<Partial<TargetData>>): Promise<GenericRecord[]> {
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body as Record<string, unknown>[]),
+        body: JSON.stringify(body as Array<Record<string, unknown>>),
       });
 
       if (!response.ok) {
@@ -449,7 +448,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     conn: Connection,
     object: string,
     file: any[]
-  ): Promise<Partial<TargetData>[]> {
+  ): Promise<Array<Partial<TargetData>>> {
     return this.processFieldsForInitialJsonFile(file, conn, object);
   }
 
@@ -457,7 +456,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     conn: Connection,
     query: string,
     object: string
-  ): Promise<Partial<TargetData>[]> {
+  ): Promise<Array<Partial<TargetData>>> {
     const result = await conn.query(query);
     const nameFieldResult = await conn.query(
       `SELECT QualifiedApiName, DataType, IsNillable, ReferenceTo FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${object}' AND IsCreatable = true AND IsNillable = true  AND IsNameField = true`
@@ -467,12 +466,12 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
   }
  
   private async processFields(
-    records: Record<string, any>[],
+    records: Array<Record<string, any>>,
     conn: Connection,
     object: string,
     isParentObject: boolean = false
-  ): Promise<Partial<TargetData>[]> {
-    const processedFields: Partial<TargetData>[] = [];
+  ): Promise<Array<Partial<TargetData>>> {
+    const processedFields: Array<Partial<TargetData>> = [];
 
     for (const item of records) {
       const fieldName = isParentObject ? item.QualifiedApiName : item.name;
@@ -514,18 +513,18 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
   }
 
   private async processFieldsForInitialJsonFile(
-    records: Record<string, any>[],
+    records: Array<Record<string, any>>,
     conn: Connection,
     object: string
-  ): Promise<Partial<TargetData>[]> {
+  ): Promise<Array<Partial<TargetData>>> {
     return this.processFields(records, conn, object);
   }
 
   private async processFieldsForParentObjects(
-    records: Record<string, any>[],
+    records: Array<Record<string, any>>,
     conn: Connection,
     object: string
-  ): Promise<Partial<TargetData>[]> {
+  ): Promise<Array<Partial<TargetData>>> {
     return this.processFields(records, conn, object, true);
   }
 
