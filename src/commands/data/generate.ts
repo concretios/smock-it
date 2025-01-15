@@ -1,3 +1,4 @@
+/* eslint-disable no-param-reassign */
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -58,7 +59,6 @@ type Fields = {
   'max-length'?: number;
   'child-dependent-field'?: string;
 };
-
 
 /* ------------------------------------------*/
 
@@ -122,8 +122,6 @@ type CreateResult = { id: string; success: boolean; errors: any[] };
 const excludeFieldsSet = new Set<string>();
 const createdRecordsIds: Map<string, string[]> = new Map();
 const progressBar = new Progress(true )
-
-export let conecteOrgCreds: any;
 
 function createTable(): Table {
   return new Table({
@@ -206,50 +204,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     const { flags } = await this.parse(DataGenerate);
     const aliasOrUsername = flags.alias;
     const conn = await connectToSalesforceOrg(aliasOrUsername);
-
     let objectName = flags.sObject ? flags.sObject.toLowerCase() : undefined;
-
     const configFilePath = getTemplateJsonData(flags.templateName);
-    const isDataValid = await validateConfigJson(conn, configFilePath);
-    if(!isDataValid){
-      throw new Error('Invalid data in the template');
-    }
-
-    let baseConfig: templateSchema;
-    try {
-      baseConfig = JSON.parse(fs.readFileSync(configFilePath,'utf-8')) as templateSchema;
-      baseConfig.sObjects = baseConfig.sObjects || [];
-    } catch (error) {
-      this.error(`Failed to read or parse the base config file at ${configFilePath}`);
-    }
-    let objectsToProcess = baseConfig.sObjects;
-
-    
-    // getting specific object and its configuration if name given
-    if (objectName) {
-
-      const existingObjectConfig = baseConfig.sObjects.find((o: SObjectItem) => {
-        const objectKey = Object.keys(o)[0];
-        return objectKey.toLowerCase() === objectName;
-      });
-
-      if (!existingObjectConfig) {
-        this.error(`Object ${objectName} not found in base-config.`);
-      }
-
-      // writing the configuration of object level
-      else {
-        const objectKey = Object.keys(existingObjectConfig)[0];
-        updateOrInitializeConfig(
-          existingObjectConfig[objectKey],
-          flags,
-          ['language', 'count', 'fieldsToExclude','pickLeftFields', 'fieldsToConsider'],
-          this.log.bind(this)
-        );
-
-        objectsToProcess = [existingObjectConfig];
-      }
-    }
+    // Load and validate the configuration
+    const baseConfig = await this.loadAndValidateConfig(configFilePath, conn);
+    // Process specific object configuration
+    const objectsToProcess = this.processObjectConfiguration(baseConfig, objectName, flags);
 
     const outputData: any[] = [];
 
@@ -261,15 +221,15 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
       const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
 
-      fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field));
-      fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
-
       const getPickLeftFields = configForObject.pickLeftFields;
+
+      fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field));
 
       const namespacePrefixToExclude =
         baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
 
       const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
+
       const considerMap: Record<string, any> = {};
       for (const key of fieldsToConsiderKeys) {
       if (configForObject['fieldsToConsider']) {
@@ -280,7 +240,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
         }
       }
     }
-    const fieldsToConsider = Object.keys(considerMap);
+      const fieldsToConsider = Object.keys(considerMap);
       const allFields = await conn.query(
         `SELECT QualifiedApiName, IsDependentPicklist, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
         FROM EntityParticle
@@ -291,145 +251,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
       let fieldsToPass: FieldRecord[] = [];
 
+      fieldsToPass = this.filterFieldsByPickLeftConfig(getPickLeftFields,fieldsToConsider,fieldsToExclude,fieldsToIgnore,allFields);
+
       if (configForObject['fieldsToConsider'] === undefined && configForObject['fieldsToExclude'] === undefined && configForObject['pickLeftFields'] === undefined) {
         fieldsToPass = (allFields.records as FieldRecord[]).filter(
           (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase()));
       }
 
-      if (getPickLeftFields === true && fieldsToIgnore.length > 0) {
-
-        if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
-          fieldsToPass = (allFields.records as FieldRecord[]).filter(
-            (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase()));
-        }
-        else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0)  {
-          fieldsToPass = (allFields.records as FieldRecord[]).filter(
-            (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase()));
-        } 
-        else if (fieldsToExclude.length === 0 && fieldsToConsider.length === 0)  {
-          fieldsToPass = (allFields.records as FieldRecord[]).filter(
-            (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase()));
-        }
-      } 
-      else if (getPickLeftFields === false && fieldsToIgnore.length > 0) {
-
-        if(fieldsToExclude.length === 0 && fieldsToConsider.length === 0){
-          this.error('please provide a field or set pick-left field to true')
-        }
-        else if(fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
-          this.error('Please provide fieldsToConsider or set pickLeftFields to true');
-        }
-        else if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
-          fieldsToPass = (allFields.records as FieldRecord[]).filter(
-            (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
-          );
-
-          const requiredFields = this.getRequiredFields(fieldsToPass);
-
-          const consideredFields = fieldsToPass.filter((record) =>
-            fieldsToConsider.includes(record.QualifiedApiName.toLowerCase())
-          );
-          fieldsToPass = this.mergeFieldsToPass([...consideredFields, ...requiredFields]);
-        }
-        else if (fieldsToConsider.length > 0 && fieldsToIgnore.length > 0 && fieldsToExclude.length === 0) {
-          fieldsToPass = (allFields.records as FieldRecord[]).filter(
-            (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
-          );
-          const requiredFields = this.getRequiredFields(fieldsToPass);
-
-          const consideredFields = fieldsToPass.filter((record) =>
-            fieldsToConsider.includes(record.QualifiedApiName.toLowerCase())
-          );
-
-          fieldsToPass = this.mergeFieldsToPass([...consideredFields, ...requiredFields]);
-        }
-      }
-
-      const fieldsObject: Record<string, Fields> = {};
-
-      // Initialize dependentPicklistResults for each object
-      this.dependentPicklistResults = {};
-
-      for (const inputObject of fieldsToPass) {
-        let fieldConfig: Fields = { type: inputObject.DataType };
-
-        switch (inputObject.DataType) {
-          case 'textarea':
-          case 'string':
-            if (
-              inputObject.QualifiedApiName.match(
-                /^(Billing|Shipping|Other|Mailing)(Street|City|State|PostalCode|Country)$/i
-              )
-            ) {
-              fieldConfig = {
-                type: 'address',
-              };
-            } else {
-              fieldConfig = {
-                type: 'text',
-                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
-                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
-                : []
-                
-              };
-            }
-            break;
-
-          case 'reference':
-            fieldConfig = {
-              type: 'reference',
-              // referenceTo: inputObject.ReferenceTo?.referenceTo[0],
-              referenceTo: inputObject.ReferenceTo?.referenceTo ? inputObject.ReferenceTo.referenceTo[0] : undefined,
-              values: [],
-              relationshipType: inputObject.RelationshipName
-                ? inputObject.IsNillable === false
-                  ? 'master-detail'
-                  : 'lookup'
-                : undefined,
-            };
-            break;
-
-          case 'picklist':
-            if (inputObject.IsDependentPicklist) {
-              await this.depPicklist(conn, objectName, inputObject.QualifiedApiName, considerMap);
-            } else {
-              const picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName);
-              fieldConfig = {
-                type: 'picklist',
-                // values: considerMap[inputObject.QualifiedApiName.toLowerCase()] || picklistValues,
-                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
-                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
-                : picklistValues
-              };
-            }
-            break;
-
-          default:
-            if (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]?.length > 0) {
-              fieldConfig = { 
-                type: inputObject.DataType, 
-                values: considerMap[inputObject.QualifiedApiName.toLowerCase()]
-              };
-            } else {
-              fieldConfig = { 
-                type: inputObject.DataType 
-              };
-            }
-            
-            break;
-        }
-        if (!inputObject.IsDependentPicklist) {
-          fieldsObject[inputObject.QualifiedApiName] = fieldConfig;
-        }
-      }
-
-      if (Object.keys(this.dependentPicklistResults).length > 0) {
-        const topControllingField = Object.keys(this.dependentPicklistResults)[0];
-        const dependentFieldsData = this.convertJSON(this.dependentPicklistResults, topControllingField);
-
-        Object.assign(fieldsObject, dependentFieldsData);
-        this.dependentPicklistResults = {};
-      }
+      const fieldsObject = await this.processFieldsWithFieldsValues(conn, fieldsToPass, objectName, considerMap);
 
       const configToWrite: any = {
         sObject: objectName,
@@ -525,26 +354,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
       jsonData = fetchedData
 
-    
-      
-      if (outputFormat.includes('json') || outputFormat.includes('json')) {
-        const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
-        const jsonFilePath = `${process.cwd()}/data_gen/output/${object}_` + flags.templateName?.replace(
-          '.json',
-          ''
-        ) + `_${dateTime}.json`;
-        fs.writeFileSync(jsonFilePath, JSON.stringify(jsonData, null, 2));
-      }
+      this.saveOutputFileOfJsonAndCsv(jsonData, object, outputFormat, flags.templateName);
 
-      if (outputFormat.includes('csv') || outputFormat.includes('csv')) {
-        const csvData = this.convertJsonToCsv(jsonData);
-        const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
-        const csvFilePath = `${process.cwd()}/data_gen/output/${object}_` + flags.templateName?.replace(
-          '.json',
-          ''
-        )+ `${dateTime}.csv`;
-        fs.writeFileSync(csvFilePath, csvData);
-      }
 
       if (outputFormat.includes('DI') || outputFormat.includes('di')) {
         // Create records in Salesforce and store IDs
@@ -575,7 +386,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       }
 
       const resultEntry = createResultEntryTable(object, outputFormat, failedCount);
-
       table.addRow(resultEntry);
 
     }
@@ -599,6 +409,219 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     return { path: configFilePath };
   }
 
+  /* complexity handling */
+  private async loadAndValidateConfig(configFilePath: string, conn: any): Promise<templateSchema> {
+    const isDataValid = await validateConfigJson(conn, configFilePath);
+    if (!isDataValid) {
+        throw new Error('Invalid data in the template');
+    }
+
+    try {
+        const baseConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf-8')) as templateSchema;
+        baseConfig.sObjects = baseConfig.sObjects || [];
+        return baseConfig;
+    } catch (error) {
+        this.error(`Failed to read or parse the base config file at ${configFilePath}`);
+    }
+}
+
+private processObjectConfiguration(baseConfig: templateSchema, objectName: string | undefined, flags: any): any[] {
+  let objectsToProcess = baseConfig.sObjects;
+
+  if (objectName) {
+      const existingObjectConfig = baseConfig.sObjects.find((o: SObjectItem) => {
+          const objectKey = Object.keys(o)[0];
+          return objectKey.toLowerCase() === objectName;
+      });
+
+      if (!existingObjectConfig) {
+          this.error(`Object ${objectName} not found in base-config.`);
+      } else {
+          const objectKey = Object.keys(existingObjectConfig)[0];
+          updateOrInitializeConfig(
+              existingObjectConfig[objectKey],
+              flags,
+              ['language', 'count', 'fieldsToExclude', 'pickLeftFields', 'fieldsToConsider'],
+              this.log.bind(this)
+          );
+          objectsToProcess = [existingObjectConfig];
+      }
+  }
+
+  return objectsToProcess;
+}
+
+private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined, fieldsToConsider: string[],fieldsToExclude: string[],fieldsToIgnore: string[],allFields: any): FieldRecord[] {
+
+  let fieldsToPass: FieldRecord[] = [];
+
+  fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
+
+  if (getPickLeftFields === true && fieldsToIgnore.length > 0) {
+    if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
+      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+        (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
+      );
+    } else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
+      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+        (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
+      );
+    } else if (fieldsToExclude.length === 0 && fieldsToConsider.length === 0) {
+      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+        (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
+      );
+    }
+  } else if (getPickLeftFields === false && fieldsToIgnore.length > 0) {
+    if (fieldsToExclude.length === 0 && fieldsToConsider.length === 0) {
+      throw new Error('Please provide a field or set pick-left field to true');
+    } else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
+      throw new Error('Please provide fieldsToConsider or set pickLeftFields to true');
+    } else if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
+      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+        (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
+      );
+
+      const requiredFields = this.getRequiredFields(fieldsToPass);
+      const consideredFields = fieldsToPass.filter((record) =>
+        fieldsToConsider.includes(record.QualifiedApiName.toLowerCase())
+      );
+
+      fieldsToPass = this.mergeFieldsToPass([...consideredFields, ...requiredFields]);
+    } else if (fieldsToConsider.length > 0 && fieldsToIgnore.length > 0 && fieldsToExclude.length === 0) {
+      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+        (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
+      );
+
+      const requiredFields = this.getRequiredFields(fieldsToPass);
+      const consideredFields = fieldsToPass.filter((record) =>
+        fieldsToConsider.includes(record.QualifiedApiName.toLowerCase())
+      );
+
+      fieldsToPass = this.mergeFieldsToPass([...consideredFields, ...requiredFields]);
+    }
+  }
+
+  return fieldsToPass;
+}
+
+private async processFieldsWithFieldsValues(conn: any, fieldsToPass: FieldRecord[],objectName: string, considerMap: Record<string, any>): Promise<Record<string, Fields>> {
+
+  const fieldsObject: Record<string, Fields> = {};
+
+ // Initialize dependentPicklistResults for each object
+      this.dependentPicklistResults = {};
+
+      for (const inputObject of fieldsToPass) {
+        let fieldConfig: Fields = { type: inputObject.DataType };
+
+        switch (inputObject.DataType) {
+          case 'textarea':
+          case 'string':
+            if (
+              inputObject.QualifiedApiName.match(
+                /^(Billing|Shipping|Other|Mailing)(Street|City|State|PostalCode|Country)$/i
+              )
+            ) {
+              fieldConfig = {
+                type: 'address',
+              };
+            } else {
+              fieldConfig = {
+                type: 'text',
+                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
+                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                : []
+                
+              };
+            }
+            break;
+
+          case 'reference':
+            fieldConfig = {
+              type: 'reference',
+              // referenceTo: inputObject.ReferenceTo?.referenceTo[0],
+              referenceTo: inputObject.ReferenceTo?.referenceTo ? inputObject.ReferenceTo.referenceTo[0] : undefined,
+              values: [],
+              relationshipType: inputObject.RelationshipName
+                ? inputObject.IsNillable === false
+                  ? 'master-detail'
+                  : 'lookup'
+                : undefined,
+            };
+            break;
+
+          case 'picklist':
+            if (inputObject.IsDependentPicklist) {
+              await this.depPicklist(conn, objectName, inputObject.QualifiedApiName, considerMap);
+            } else {
+              const picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName);
+              fieldConfig = {
+                type: 'picklist',
+                // values: considerMap[inputObject.QualifiedApiName.toLowerCase()] || picklistValues,
+                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
+                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                : picklistValues
+              };
+            }
+            break;
+
+          default:
+            if (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]?.length > 0) {
+              fieldConfig = { 
+                type: inputObject.DataType, 
+                values: considerMap[inputObject.QualifiedApiName.toLowerCase()]
+              };
+            } else {
+              fieldConfig = { 
+                type: inputObject.DataType 
+              };
+            }
+            
+            break;
+        }
+        if (!inputObject.IsDependentPicklist) {
+          fieldsObject[inputObject.QualifiedApiName] = fieldConfig;
+        }
+      }
+
+      if (Object.keys(this.dependentPicklistResults).length > 0) {
+        const topControllingField = Object.keys(this.dependentPicklistResults)[0];
+        const dependentFieldsData = this.convertJSON(this.dependentPicklistResults, topControllingField);
+
+        Object.assign(fieldsObject, dependentFieldsData);
+        this.dependentPicklistResults = {};
+      }      
+
+  return fieldsObject;
+}
+
+// Helper function to save output in different formats (JSON, CSV)
+private saveOutputFileOfJsonAndCsv(jsonData: any, object: string,outputFormat: string,templateName: string): void {
+
+  const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
+
+  // Save JSON output
+  if (outputFormat.includes('json') || outputFormat.includes('json')) {
+    const jsonFilePath = `${process.cwd()}/data_gen/output/${object}_` + templateName?.replace(
+      '.json',
+      ''
+    ) + `_${dateTime}.json`;
+    fs.writeFileSync(jsonFilePath, JSON.stringify(jsonData, null, 2));
+  }
+
+  // Save CSV output
+  if (outputFormat.includes('csv') || outputFormat.includes('csv')) {
+    const csvData = this.convertJsonToCsv(jsonData);
+    const csvFilePath = `${process.cwd()}/data_gen/output/${object}_` + templateName?.replace(
+      '.json',
+      ''
+    )+ `${dateTime}.csv`;
+    fs.writeFileSync(csvFilePath, csvData);
+  }
+}
+
+
+/* --------------------------- */
   private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
     const result = await conn.describe(object);
     const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
@@ -633,7 +656,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
         const base64map = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
         const validForControllerValues = [];
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         const base64chars = entry.validFor.split('');
         for (let i = 0; i < controllerValues.length; i++) {
           const bitIndex = Math.floor(i / 6);
@@ -662,6 +684,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
         childValues,
       });
     });
+    // getting values for the dependent picklist
     Object.keys(this.dependentPicklistResults).forEach((key) => {
       if (Object.keys(considerMap).includes(key.toLowerCase()) && considerMap[key.toLowerCase()].length > 0) {
         const pickListFieldValues = this.dependentPicklistResults[key];
@@ -987,24 +1010,24 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     }
   
     private getStringFieldType(fieldName: string): string {
-      fieldName = fieldName.toLowerCase();
-      if (fieldName.includes('name')) {
-        return this.getNameFieldType(fieldName);
+      const lowerCasefieldName = fieldName.toLowerCase();
+      if (lowerCasefieldName.includes('name')) {
+        return this.getNameFieldType(lowerCasefieldName);
       }
-      if (fieldName.includes('title')) return 'Title';
-      if (fieldName.includes('street')) return 'Street Name';
-      if (fieldName.includes('city')) return 'City';
-      if (fieldName.includes('state')) return 'State';
-      if (fieldName.includes('postalcode') || fieldName.includes('Postal_Code')) return 'Postal Code';
-      if (fieldName.includes('dunsnumber')) return 'Number';
-      if (fieldName.includes('naicscode')) return 'Number';
-      if (fieldName.includes('yearstarted')) return '';
-      if (fieldName.includes('country') && fieldName.includes('code')) return 'Country Code';
-      if (fieldName.includes('country')) return 'Country';
-      if (fieldName.includes('company')) return 'Company Name';
-      if (fieldName.includes('site')) return '';
-      if (fieldName.includes('department')) return 'Department (Corporate)';
-      if (fieldName.includes('language')) return 'Language';
+      if (lowerCasefieldName.includes('title')) return 'Title';
+      if (lowerCasefieldName.includes('street')) return 'Street Name';
+      if (lowerCasefieldName.includes('city')) return 'City';
+      if (lowerCasefieldName.includes('state')) return 'State';
+      if (lowerCasefieldName.includes('postalcode') || lowerCasefieldName.includes('Postal_Code')) return 'Postal Code';
+      if (lowerCasefieldName.includes('dunsnumber')) return 'Number';
+      if (lowerCasefieldName.includes('naicscode')) return 'Number';
+      if (lowerCasefieldName.includes('yearstarted')) return '';
+      if (lowerCasefieldName.includes('country') && lowerCasefieldName.includes('code')) return 'Country Code';
+      if (lowerCasefieldName.includes('country')) return 'Country';
+      if (lowerCasefieldName.includes('company')) return 'Company Name';
+      if (lowerCasefieldName.includes('site')) return '';
+      if (lowerCasefieldName.includes('department')) return 'Department (Corporate)';
+      if (lowerCasefieldName.includes('language')) return 'Language';
       return 'App Name';
     }
   
