@@ -1,4 +1,3 @@
-/* eslint-disable no-param-reassign */
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -62,7 +61,6 @@ type Fields = {
 
 /* ------------------------------------------*/
 
-let depthForRecord = 0;
 
 type BulkQueryBatchResult = {
   batchId?: string;
@@ -119,6 +117,8 @@ type SObjectConfigFile = {
 type GenericRecord = { [key: string]: any };
 type CreateResult = { id: string; success: boolean; errors: any[] };
 
+let depthForRecord = 0;
+
 const excludeFieldsSet = new Set<string>();
 const createdRecordsIds: Map<string, string[]> = new Map();
 const progressBar = new Progress(true )
@@ -166,6 +166,24 @@ function createResultEntryTable(object: string, outputFormat: string[], failedCo
       'Failed(DI)': failedCount,
   };
 }
+
+function processFieldsToConsider(configForObject: any): Record<string, any> {
+  const considerMap: Record<string, any> = {};
+  const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
+
+  for (const key of fieldsToConsiderKeys) {
+    if (configForObject['fieldsToConsider']) {
+      if (key.startsWith('dp-')) {
+        considerMap[key.substring(3)] = configForObject['fieldsToConsider'][key];
+      } else {
+        considerMap[key] = configForObject['fieldsToConsider'][key];
+      }
+    }
+  }
+
+  return considerMap;
+}
+
 
 export default class DataGenerate extends SfCommand<DataGenerateResult>  {
   public static readonly summary: string = messages.getMessage('summary');
@@ -225,22 +243,13 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
       fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field));
 
+      fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
+
       const namespacePrefixToExclude =
         baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
-
-      const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
-
-      const considerMap: Record<string, any> = {};
-      for (const key of fieldsToConsiderKeys) {
-      if (configForObject['fieldsToConsider']) {
-        if (key.startsWith('dp-')) {
-            considerMap[key.substring(3)] = configForObject['fieldsToConsider'][key];
-        } else {
-            considerMap[key] = configForObject['fieldsToConsider'][key];
-        }
-      }
-    }
-      const fieldsToConsider = Object.keys(considerMap);
+    // getting fieldsvalues for fields
+    const considerMap = processFieldsToConsider(configForObject);
+    const fieldsToConsider = Object.keys(considerMap);
       const allFields = await conn.query(
         `SELECT QualifiedApiName, IsDependentPicklist, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
         FROM EntityParticle
@@ -385,21 +394,16 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
       }
 
+      // await this.insertSalesforceRecordsIfNeeded(conn, object, jsonData, outputFormat);
+      // failedCount += failedCountForCurrentObject;
+
       const resultEntry = createResultEntryTable(object, outputFormat, failedCount);
       table.addRow(resultEntry);
 
     }
+    // Save created record IDs
+    this.saveCreatedRecordIds(outputFormat,flags.templateName)
 
-    // Save created record IDs if needed
-    if (outputFormat.includes('DI') || outputFormat.includes('di')) {
-      this.saveMapToJsonFile(
-        'data_gen',
-        flags.templateName?.replace('.json', '') +
-          'createdRecords_' +
-          new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0] +
-          '.json'
-      );
-    }
     const endTime = Date.now();
     const totalTime = ((endTime - startTime) / 1000).toFixed(2);
     this.log(chalk.blue.bold(`\nResults: \x1b]8;;${outputPathDir}\x1b\\${totalTime}(s)\x1b]8;;\x1b\\`));
@@ -410,7 +414,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
   }
 
   /* complexity handling */
-  private async loadAndValidateConfig(configFilePath: string, conn: any): Promise<templateSchema> {
+  private async loadAndValidateConfig(configFilePath: string, conn: Connection): Promise<templateSchema> {
     const isDataValid = await validateConfigJson(conn, configFilePath);
     if (!isDataValid) {
         throw new Error('Invalid data in the template');
@@ -454,8 +458,6 @@ private processObjectConfiguration(baseConfig: templateSchema, objectName: strin
 private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined, fieldsToConsider: string[],fieldsToExclude: string[],fieldsToIgnore: string[],allFields: any): FieldRecord[] {
 
   let fieldsToPass: FieldRecord[] = [];
-
-  fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
 
   if (getPickLeftFields === true && fieldsToIgnore.length > 0) {
     if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
@@ -504,7 +506,7 @@ private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined, fie
   return fieldsToPass;
 }
 
-private async processFieldsWithFieldsValues(conn: any, fieldsToPass: FieldRecord[],objectName: string, considerMap: Record<string, any>): Promise<Record<string, Fields>> {
+private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: FieldRecord[],objectName: string, considerMap: Record<string, any>): Promise<Record<string, Fields>> {
 
   const fieldsObject: Record<string, Fields> = {};
 
@@ -596,7 +598,7 @@ private async processFieldsWithFieldsValues(conn: any, fieldsToPass: FieldRecord
 }
 
 // Helper function to save output in different formats (JSON, CSV)
-private saveOutputFileOfJsonAndCsv(jsonData: any, object: string,outputFormat: string,templateName: string): void {
+private saveOutputFileOfJsonAndCsv(jsonData: GenericRecord[], object: string,outputFormat: string,templateName: string): void {
 
   const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
 
@@ -619,6 +621,44 @@ private saveOutputFileOfJsonAndCsv(jsonData: any, object: string,outputFormat: s
     fs.writeFileSync(csvFilePath, csvData);
   }
 }
+
+private saveCreatedRecordIds(outputFormat: string, templateName: string): void {
+  if (outputFormat.includes('DI') || outputFormat.includes('di')) {
+    const fileName = `${templateName?.replace('.json', '')}_createdRecords_${new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0]}.json`;
+    this.saveMapToJsonFile('data_gen', fileName);
+  }
+}
+
+// private async insertSalesforceRecords(conn: any, object: string, jsonData: any, outputFormat: string): Promise<number> {
+//   if (outputFormat.includes('DI') || outputFormat.includes('di')) {
+//     const errorSet: Set<string> = new Set();
+//     const insertedIds: string[] = [];
+//     const insertResult = await this.insertRecords(conn, object, jsonData);
+
+//     insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }) => {
+//       if (result.success && result.id) {
+//         insertedIds.push(result.id);
+//       } else if (result.errors) {
+//         result.errors.forEach((error) => {
+//           const errorMessage = error?.message || JSON.stringify(error) || 'Unknown error';
+//           errorSet.add(errorMessage);
+//         });
+//       }
+//     });
+
+//     const failedCount = insertResult.length - insertedIds.length;
+
+//     if (errorSet.size > 0) {
+//       this.log(`\nFailed to insert ${failedCount} record(s) for '${object}' object with the following error(s):`);
+//       errorSet.forEach((error) => this.log(`- ${error}`));
+//     }
+
+//     this.updateCreatedRecordIds(object, insertResult);
+    
+//     return failedCount; // Return the failed count
+//   }
+//   return 0; // Return 0 if no records were inserted
+// }
 
 
 /* --------------------------- */
