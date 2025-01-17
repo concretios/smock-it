@@ -1,6 +1,5 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
@@ -18,7 +17,7 @@ import { Flags,Progress,SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
 import { updateOrInitializeConfig, getTemplateJsonData } from '../template/upsert.js';
 import { connectToSalesforceOrg ,validateConfigJson} from '../template/validate.js';
-import {templateSchema,SObjectItem} from '../../utils/types.js';
+import {templateSchema,SObjectItem,sObjectSchemaType,} from '../../utils/types.js';
 
 import { templateAddFlags} from '../template/upsert.js';
 import { MOCKAROO_API_CALLS_PER_DAY, MOCKAROO_CHUNK_SIZE } from '../../utils/constants.js';
@@ -61,7 +60,6 @@ type Fields = {
 
 /* ------------------------------------------*/
 
-
 type BulkQueryBatchResult = {
   batchId?: string;
   id?: string | null;
@@ -95,7 +93,6 @@ type fieldType =
   | 'address';
 
   type Field = {
-    // [key: string]: any; // For dynamic dependent-picklist structures
     type: fieldType;
     values?: string[]; // For picklist or dependent-picklist
     referenceTo?: string; // For reference fields
@@ -113,6 +110,11 @@ type SObjectConfig = {
 type SObjectConfigFile = {
   sObjects: SObjectConfig[];
 };
+
+type jsonConfig = {
+  outputFormat?: string[];
+  sObjects: SObjectConfig[];
+}
 
 type GenericRecord = { [key: string]: any };
 type CreateResult = { id: string; success: boolean; errors: any[] };
@@ -167,24 +169,6 @@ function createResultEntryTable(object: string, outputFormat: string[], failedCo
   };
 }
 
-function processFieldsToConsider(configForObject: any): Record<string, any> {
-  const considerMap: Record<string, any> = {};
-  const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
-
-  for (const key of fieldsToConsiderKeys) {
-    if (configForObject['fieldsToConsider']) {
-      if (key.startsWith('dp-')) {
-        considerMap[key.substring(3)] = configForObject['fieldsToConsider'][key];
-      } else {
-        considerMap[key] = configForObject['fieldsToConsider'][key];
-      }
-    }
-  }
-
-  return considerMap;
-}
-
-
 export default class DataGenerate extends SfCommand<DataGenerateResult>  {
   public static readonly summary: string = messages.getMessage('summary');
 
@@ -234,7 +218,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     for (const objectConfig of objectsToProcess) {
       const objectKey = Object.keys(objectConfig)[0];
       objectName = objectKey;
-      const configForObject = objectConfig[objectKey];
+      const configForObject: sObjectSchemaType = objectConfig[objectKey] as sObjectSchemaType;
 
       let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
       const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
@@ -248,7 +232,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       const namespacePrefixToExclude =
         baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
     // getting fieldsvalues for fields
-    const considerMap = processFieldsToConsider(configForObject);
+    const considerMap = this.processFieldsToConsider(configForObject);
     const fieldsToConsider = Object.keys(considerMap);
       const allFields = await conn.query(
         `SELECT QualifiedApiName, IsDependentPicklist, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
@@ -287,7 +271,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2),
       'utf8'
     );
-    // this.orgConnection = conn;
     /* create */
 
     excludeFieldsSet.clear();
@@ -295,14 +278,13 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     let sObjectFieldsMap: Map<string, any[]> = new Map();
     sObjectFieldsMap = await this.getProcessedFields();
     
-    // conn = this.orgConnection;
     const configPath = path.join(process.cwd(), fieldsConfigFile);
     const configData = fs.readFileSync(configPath, 'utf8');        
-    const jsonDataForObjectNames = JSON.parse(configData);
+    const jsonDataForObjectNames: jsonConfig = JSON.parse(configData) as jsonConfig;
 
-    const outputFormat = jsonDataForObjectNames.outputFormat;
+    const outputFormat = jsonDataForObjectNames.outputFormat ?? [];
     const sObjectNames = jsonDataForObjectNames.sObjects.map((sObject: { sObject: string }) => sObject.sObject);
-    if (sObjectNames.includes(undefined)) {
+    if (!sObjectNames) {
       throw new Error('One or more sObject names are undefined. Please check the configuration file.');
     }
     let jsonData: any 
@@ -320,7 +302,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       const currentSObject = jsonDataForObjectNames.sObjects.find(
         (sObject: { sObject: string }) => sObject.sObject === object
       );
-      let countofRecordsToGenerate = currentSObject.count;
+      if (!currentSObject) {
+        throw new Error(`No configuration found for object: ${object}`);
+      }
+      let countofRecordsToGenerate = currentSObject.count
       const fields = sObjectFieldsMap.get(object);
 
       if (!fields) {
@@ -365,43 +350,16 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
       this.saveOutputFileOfJsonAndCsv(jsonData, object, outputFormat, flags.templateName);
 
-
-      if (outputFormat.includes('DI') || outputFormat.includes('di')) {
-        // Create records in Salesforce and store IDs
-        const errorSet: Set<string> = new Set();
-        const insertedIds: string[] = [];
-        const insertResult = await this.insertRecords(conn, object, jsonData);
-        insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }) => {
-          if (result.success && result.id) {
-            insertedIds.push(result.id);
-          }
-    
-          else if (result.errors) {
-            result.errors.forEach((error) => {
-              const errorMessage = error?.message || JSON.stringify(error) || 'Unknown error';
-              errorSet.add(errorMessage);
-            });
-          }
-        });
-
-        failedCount = insertResult.length - insertedIds.length;
-
-        if (errorSet.size > 0) {
-          this.log(`\nFailed to insert ${failedCount} record(s) for '${object}' object with following error(s):`);
-          errorSet.forEach((error) => this.log(`- ${error}`));
-        }
-        this.updateCreatedRecordIds(object, insertResult);
-
-      }
-
-      // await this.insertSalesforceRecordsIfNeeded(conn, object, jsonData, outputFormat);
-      // failedCount += failedCountForCurrentObject;
-
+      // handling failedCount and insertedRecordIds
+        const { failedCount: failedInsertions } = await this.handleDirectInsert(conn,outputFormat, object, jsonData);
+        failedCount = failedInsertions; // Update the failed count
+      
       const resultEntry = createResultEntryTable(object, outputFormat, failedCount);
+      
       table.addRow(resultEntry);
 
     }
-    // Save created record IDs
+    // Save created record IDs file
     this.saveCreatedRecordIds(outputFormat,flags.templateName)
 
     const endTime = Date.now();
@@ -427,6 +385,24 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     } catch (error) {
         this.error(`Failed to read or parse the base config file at ${configFilePath}`);
     }
+}
+
+// getting the fields values from the config
+private processFieldsToConsider(configForObject: any): Record<string, any> {
+  const considerMap: Record<string, any> = {};
+  const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
+
+  for (const key of fieldsToConsiderKeys) {
+    if (configForObject['fieldsToConsider']) {
+      if (key.startsWith('dp-')) {
+        considerMap[key.substring(3)] = configForObject['fieldsToConsider'][key];
+      } else {
+        considerMap[key] = configForObject['fieldsToConsider'][key];
+      }
+    }
+  }
+
+  return considerMap;
 }
 
 private processObjectConfiguration(baseConfig: templateSchema, objectName: string | undefined, flags: any): any[] {
@@ -597,8 +573,8 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
   return fieldsObject;
 }
 
-// Helper function to save output in different formats (JSON, CSV)
-private saveOutputFileOfJsonAndCsv(jsonData: GenericRecord[], object: string,outputFormat: string,templateName: string): void {
+// save output in different formats file (JSON, CSV)
+private saveOutputFileOfJsonAndCsv(jsonData: GenericRecord[], object: string,outputFormat: string[],templateName: string): void {
 
   const dateTime = new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0];
 
@@ -621,45 +597,50 @@ private saveOutputFileOfJsonAndCsv(jsonData: GenericRecord[], object: string,out
     fs.writeFileSync(csvFilePath, csvData);
   }
 }
-
-private saveCreatedRecordIds(outputFormat: string, templateName: string): void {
+// save output in formats file (DI)
+private saveCreatedRecordIds(outputFormat: string[], templateName: string): void {
   if (outputFormat.includes('DI') || outputFormat.includes('di')) {
     const fileName = `${templateName?.replace('.json', '')}_createdRecords_${new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0]}.json`;
     this.saveMapToJsonFile('data_gen', fileName);
   }
 }
 
-// private async insertSalesforceRecords(conn: any, object: string, jsonData: any, outputFormat: string): Promise<number> {
-//   if (outputFormat.includes('DI') || outputFormat.includes('di')) {
-//     const errorSet: Set<string> = new Set();
-//     const insertedIds: string[] = [];
-//     const insertResult = await this.insertRecords(conn, object, jsonData);
+// handling [DI] failed count and error
+private async handleDirectInsert(conn: Connection,outputFormat: string[],object: string,jsonData: GenericRecord[]): Promise<{ failedCount: number; insertedIds: string[] }> {
 
-//     insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }) => {
-//       if (result.success && result.id) {
-//         insertedIds.push(result.id);
-//       } else if (result.errors) {
-//         result.errors.forEach((error) => {
-//           const errorMessage = error?.message || JSON.stringify(error) || 'Unknown error';
-//           errorSet.add(errorMessage);
-//         });
-//       }
-//     });
+  if (outputFormat.includes('DI') || outputFormat.includes('di')) {
+    const errorSet: Set<string> = new Set();
+    const insertedIds: string[] = [];
+    let failedCount = 0;
 
-//     const failedCount = insertResult.length - insertedIds.length;
+    const insertResult = await this.insertRecords(conn, object, jsonData);
 
-//     if (errorSet.size > 0) {
-//       this.log(`\nFailed to insert ${failedCount} record(s) for '${object}' object with the following error(s):`);
-//       errorSet.forEach((error) => this.log(`- ${error}`));
-//     }
+    insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }) => {
+      if (result.success && result.id) {
+        insertedIds.push(result.id);
+      } else if (result.errors) {
+        result.errors.forEach((error) => {
+          const errorMessage = error?.message || JSON.stringify(error) || 'Unknown error';
+          errorSet.add(errorMessage);
+        });
+      }
+    });
 
-//     this.updateCreatedRecordIds(object, insertResult);
-    
-//     return failedCount; // Return the failed count
-//   }
-//   return 0; // Return 0 if no records were inserted
-// }
+    failedCount = insertResult.length - insertedIds.length;
 
+    if (errorSet.size > 0) {
+      this.log(`\nFailed to insert ${failedCount} record(s) for '${object}' object with the following error(s):`);
+      errorSet.forEach((error) => this.log(`- ${error}`));
+    }
+
+    this.updateCreatedRecordIds(object, insertResult);
+
+    return { failedCount, insertedIds };
+  }
+
+  // Default return if outputFormat does not include 'DI' or 'di'
+  return { failedCount: 0, insertedIds: [] };
+}
 
 /* --------------------------- */
   private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
@@ -696,6 +677,7 @@ private saveCreatedRecordIds(outputFormat: string, templateName: string): void {
         const base64map = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
         const validForControllerValues = [];
 
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
         const base64chars = entry.validFor.split('');
         for (let i = 0; i < controllerValues.length; i++) {
           const bitIndex = Math.floor(i / 6);
