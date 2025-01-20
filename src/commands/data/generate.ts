@@ -1,10 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable sf-plugin/flag-case */
+
 /* eslint-disable @typescript-eslint/no-floating-promises */
+/* eslint-disable class-methods-use-this */
+
+
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable class-methods-use-this */
-/* eslint-disable sf-plugin/flag-case */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import * as fs from 'node:fs';
@@ -47,6 +49,14 @@ type FieldRecord = {
   RelationshipName: string | null;
   IsNillable: boolean;
 };
+
+type RecordId = {
+  Id: string;
+}
+
+type QueryResult = {
+  records: RecordId[];
+}
 
 type Fields = {
   [key: string]: any;
@@ -116,6 +126,15 @@ type jsonConfig = {
   sObjects: SObjectConfig[];
 }
 
+// output format table 
+type ResultEntry = {
+  'SObject(s)': string;
+  JSON: string;
+  CSV: string;
+  DI: string;
+  'Failed(DI)': number;
+};
+
 type GenericRecord = { [key: string]: any };
 type CreateResult = { id: string; success: boolean; errors: any[] };
 
@@ -159,7 +178,7 @@ function createTable(): Table {
   });
 }
 
-function createResultEntryTable(object: string, outputFormat: string[], failedCount: number): any {
+function createResultEntryTable(object: string, outputFormat: string[], failedCount: number): ResultEntry {
   return {
       'SObject(s)': object.toUpperCase(),
       JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
@@ -244,12 +263,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
       let fieldsToPass: FieldRecord[] = [];
 
-      fieldsToPass = this.filterFieldsByPickLeftConfig(getPickLeftFields,fieldsToConsider,fieldsToExclude,fieldsToIgnore,allFields);
-
-      if (configForObject['fieldsToConsider'] === undefined && configForObject['fieldsToExclude'] === undefined && configForObject['pickLeftFields'] === undefined) {
-        fieldsToPass = (allFields.records as FieldRecord[]).filter(
-          (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase()));
-      }
+      fieldsToPass = this.filterFieldsByPickLeftConfig(getPickLeftFields,configForObject,fieldsToConsider,fieldsToExclude,fieldsToIgnore,allFields);
 
       const fieldsObject = await this.processFieldsWithFieldsValues(conn, fieldsToPass, objectName, considerMap);
 
@@ -388,7 +402,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 }
 
 // getting the fields values from the config
-private processFieldsToConsider(configForObject: any): Record<string, any> {
+private processFieldsToConsider(configForObject: sObjectSchemaType): Record<string, any> {
   const considerMap: Record<string, any> = {};
   const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
 
@@ -431,9 +445,23 @@ private processObjectConfiguration(baseConfig: templateSchema, objectName: strin
   return objectsToProcess;
 }
 
-private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined, fieldsToConsider: string[],fieldsToExclude: string[],fieldsToIgnore: string[],allFields: any): FieldRecord[] {
+private getDefaultFieldsToPass(configForObject: sObjectSchemaType, allFields: any , fieldsToIgnore: string[]): FieldRecord[]  {
+  let fieldsToPass: FieldRecord[] = [];
+  
+  // Check if the relevant fields in configForObject are undefined
+  if (configForObject['fieldsToConsider'] === undefined && configForObject['fieldsToExclude'] === undefined && configForObject['pickLeftFields'] === undefined) {
+    fieldsToPass = (allFields.records as FieldRecord[]).filter(
+      (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
+    );
+  }
+  return fieldsToPass;
+}
+
+private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined,configForObject: sObjectSchemaType, fieldsToConsider: string[],fieldsToExclude: string[],fieldsToIgnore: string[],allFields: any): FieldRecord[] {
 
   let fieldsToPass: FieldRecord[] = [];
+// default object fields to pass when undefined
+  fieldsToPass = this.getDefaultFieldsToPass(configForObject,allFields,fieldsToIgnore);
 
   if (getPickLeftFields === true && fieldsToIgnore.length > 0) {
     if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
@@ -643,10 +671,16 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
 }
 
 /* --------------------------- */
+  // private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
+  //   const result = await conn.describe(object);
+  //   const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
+  //   return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
+  // }
+
   private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
     const result = await conn.describe(object);
     const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-    return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
+    return fieldDetails?.picklistValues?.map((pv: { value: string }) => pv.value) ?? [];
   }
 
   private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string, considerMap: Record<string, any> ): Promise<void> {
@@ -662,7 +696,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     if (!controllingFieldName) {
       this.independentFieldResults.set(
         dependentFieldApiName,
-        dependentFieldResult.picklistValues?.map((value) => value.value) ?? []
+        dependentFieldResult.picklistValues?.map((value: { value: string }) => value.value) ?? []
       );
       return;
     }
@@ -721,7 +755,8 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     });
   }
   private getControllingFieldName(dependentField: any): string | null {
-    return dependentField.controllerName || null;
+    const controllerName: string | undefined = dependentField.controllerName;
+    return controllerName ?? null;
   }
 
   private convertJSON(
@@ -1076,8 +1111,9 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         return Array.from(createdRecordsIds.get(referenceTo + '') ?? []);
       }
   
-      const relatedRecords = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
-      return relatedRecords.records.map((record: any) => record.Id);
+      const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
+      return relatedRecords.records.map((record: RecordId) => record.Id);
+
     }
   
     private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
@@ -1085,7 +1121,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         return Array.from(createdRecordsIds.get(referenceTo + '') ?? []);
       }
   
-      const relatedRecords = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
+      const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
   
       if (relatedRecords.records.length === 0) {
         if (depthForRecord === 3) {
@@ -1100,7 +1136,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         this.updateCreatedRecordIds(referenceTo, insertResult);
         return insertResult.map((result) => result.id).filter((id) => id !== '');
       }
-      return relatedRecords.records.map((record: any) => record.Id);
+      return relatedRecords.records.map((record: RecordId) => record.Id);
     }
   
     private async getPicklistValuesWithDependentValues(
@@ -1110,13 +1146,14 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       item: Record<string, any>
     ): Promise<string[]> {
       if (item.values != null && item.values.length > 0) {
-        return item.values;
-      } else if (item.value != null && item.value.length > 0) {
-        return [item.value];
+        return item.values as string[];
+      } 
+      else if (item.value != null && item.value.length > 0) {
+        return [item.value] as string[];
       }
       const result = await conn.describe(object);
       const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-      const picklistValues = fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
+      const picklistValues: string[] = fieldDetails?.picklistValues?.map((pv: { value: string }) => pv.value) ?? [];
       return picklistValues;
     }
   
@@ -1332,7 +1369,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
     }
   
-    private convertJsonToCsv(jsonData: any[]): string {
+    private convertJsonToCsv(jsonData: GenericRecord[]): string {
       let fields;
       let data = jsonData;
       if (Array.isArray(jsonData)) {
@@ -1341,7 +1378,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         fields = Object.keys(jsonData);
         data = [jsonData];
       }
-      const csvRows = data.map((row) => fields.map((field) => row[field]).join(','));
+      const csvRows = data.map((row: Record<string, any>) => fields.map((field: string) => row[field] as string).join(','));
       return [fields.join(','), ...csvRows].join('\n');
     }
 }
