@@ -1,12 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable sf-plugin/flag-case */
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable class-methods-use-this */
 
-
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import * as fs from 'node:fs';
@@ -19,7 +16,7 @@ import { Flags,Progress,SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
 import { updateOrInitializeConfig, getTemplateJsonData } from '../template/upsert.js';
 import { connectToSalesforceOrg ,validateConfigJson} from '../template/validate.js';
-import {templateSchema,SObjectItem,sObjectSchemaType,} from '../../utils/types.js';
+import {templateSchema,SObjectItem,sObjectSchemaType, tempAddFlags,} from '../../utils/types.js';
 
 import { templateAddFlags} from '../template/upsert.js';
 import { MOCKAROO_API_CALLS_PER_DAY, MOCKAROO_CHUNK_SIZE } from '../../utils/constants.js';
@@ -235,9 +232,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     const outputData: any[] = [];
 
     for (const objectConfig of objectsToProcess) {
-      const objectKey = Object.keys(objectConfig)[0];
+      const objectKey = Object.keys(objectConfig as Record<string, any>)[0];
       objectName = objectKey;
-      const configForObject: sObjectSchemaType = objectConfig[objectKey] as sObjectSchemaType;
+      const configForObject: sObjectSchemaType = (objectConfig as Record<string, any>)[objectKey] as sObjectSchemaType;
 
       let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
       const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
@@ -274,7 +271,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       };
 
       if (Object.keys(fieldsObject).length > 0) {
-        configToWrite.fields = fieldsObject;
+        (configToWrite as { fields?: Record<string, Fields> }).fields = fieldsObject;
       }
 
       outputData.push(configToWrite);
@@ -326,7 +323,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
         this.log(`No fields found for object: ${object}`);
         continue;
       }
-      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
+      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields as Array<Record<string, any>>, object);
 
       if (countofRecordsToGenerate === undefined) {
         throw new Error(`Count for object "${object}" is undefined.`);
@@ -362,10 +359,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
       jsonData = fetchedData
 
-      this.saveOutputFileOfJsonAndCsv(jsonData, object, outputFormat, flags.templateName);
+      this.saveOutputFileOfJsonAndCsv(jsonData as GenericRecord[], object, outputFormat, flags.templateName);
 
       // handling failedCount and insertedRecordIds
-        const { failedCount: failedInsertions } = await this.handleDirectInsert(conn,outputFormat, object, jsonData);
+        const { failedCount: failedInsertions } = await this.handleDirectInsert(conn,outputFormat, object, jsonData as GenericRecord[]);
         failedCount = failedInsertions; // Update the failed count
       
       const resultEntry = createResultEntryTable(object, outputFormat, failedCount);
@@ -402,7 +399,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 }
 
 // getting the fields values from the config
-private processFieldsToConsider(configForObject: sObjectSchemaType): Record<string, any> {
+private processFieldsToConsider(configForObject: sObjectSchemaType): Record<string, string[]> {
   const considerMap: Record<string, any> = {};
   const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
 
@@ -419,7 +416,7 @@ private processFieldsToConsider(configForObject: sObjectSchemaType): Record<stri
   return considerMap;
 }
 
-private processObjectConfiguration(baseConfig: templateSchema, objectName: string | undefined, flags: any): any[] {
+private processObjectConfiguration(baseConfig: templateSchema, objectName: string | undefined, flags: tempAddFlags): any[] {
   let objectsToProcess = baseConfig.sObjects;
 
   if (objectName) {
@@ -433,8 +430,7 @@ private processObjectConfiguration(baseConfig: templateSchema, objectName: strin
       } else {
           const objectKey = Object.keys(existingObjectConfig)[0];
           updateOrInitializeConfig(
-              existingObjectConfig[objectKey],
-              flags,
+              existingObjectConfig[objectKey],flags,
               ['language', 'count', 'fieldsToExclude', 'pickLeftFields', 'fieldsToConsider'],
               this.log.bind(this)
           );
@@ -450,7 +446,7 @@ private getDefaultFieldsToPass(configForObject: sObjectSchemaType, allFields: an
   
   // Check if the relevant fields in configForObject are undefined
   if (configForObject['fieldsToConsider'] === undefined && configForObject['fieldsToExclude'] === undefined && configForObject['pickLeftFields'] === undefined) {
-    fieldsToPass = (allFields.records as FieldRecord[]).filter(
+    fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
       (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
     );
   }
@@ -465,15 +461,15 @@ private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined,conf
 
   if (getPickLeftFields === true && fieldsToIgnore.length > 0) {
     if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
-      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
         (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
       );
     } else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
-      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
         (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
       );
     } else if (fieldsToExclude.length === 0 && fieldsToConsider.length === 0) {
-      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
         (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
       );
     }
@@ -483,7 +479,7 @@ private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined,conf
     } else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
       throw new Error('Please provide fieldsToConsider or set pickLeftFields to true');
     } else if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
-      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
         (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
       );
 
@@ -494,7 +490,7 @@ private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined,conf
 
       fieldsToPass = this.mergeFieldsToPass([...consideredFields, ...requiredFields]);
     } else if (fieldsToConsider.length > 0 && fieldsToIgnore.length > 0 && fieldsToExclude.length === 0) {
-      fieldsToPass = (allFields.records as FieldRecord[]).filter(
+      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
         (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
       );
 
@@ -510,7 +506,7 @@ private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined,conf
   return fieldsToPass;
 }
 
-private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: FieldRecord[],objectName: string, considerMap: Record<string, any>): Promise<Record<string, Fields>> {
+private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: FieldRecord[],objectName: string, considerMap: Record<string, string[]>): Promise<Record<string, Fields>> {
 
   const fieldsObject: Record<string, Fields> = {};
 
@@ -534,8 +530,8 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
             } else {
               fieldConfig = {
                 type: 'text',
-                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
-                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]) 
+                ? (considerMap[inputObject.QualifiedApiName.toLowerCase()]) 
                 : []
                 
               };
@@ -546,7 +542,7 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
             fieldConfig = {
               type: 'reference',
               // referenceTo: inputObject.ReferenceTo?.referenceTo[0],
-              referenceTo: inputObject.ReferenceTo?.referenceTo ? inputObject.ReferenceTo.referenceTo[0] : undefined,
+              referenceTo: inputObject.ReferenceTo?.referenceTo ? (inputObject.ReferenceTo.referenceTo[0] as string) : undefined,
               values: [],
               relationshipType: inputObject.RelationshipName
                 ? inputObject.IsNillable === false
@@ -564,8 +560,8 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
               fieldConfig = {
                 type: 'picklist',
                 // values: considerMap[inputObject.QualifiedApiName.toLowerCase()] || picklistValues,
-                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
-                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]) 
+                ? (considerMap[inputObject.QualifiedApiName.toLowerCase()]) 
                 : picklistValues
               };
             }
@@ -592,7 +588,7 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
 
       if (Object.keys(this.dependentPicklistResults).length > 0) {
         const topControllingField = Object.keys(this.dependentPicklistResults)[0];
-        const dependentFieldsData = this.convertJSON(this.dependentPicklistResults, topControllingField);
+        const dependentFieldsData = this.convertJSON(this.dependentPicklistResults, topControllingField) as Record<string, Fields>;
 
         Object.assign(fieldsObject, dependentFieldsData);
         this.dependentPicklistResults = {};
@@ -648,7 +644,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         insertedIds.push(result.id);
       } else if (result.errors) {
         result.errors.forEach((error) => {
-          const errorMessage = error?.message || JSON.stringify(error) || 'Unknown error';
+          const errorMessage = ((error as { message?: string })?.message ?? JSON.stringify(error)) || 'Unknown error';
           errorSet.add(errorMessage);
         });
       }
@@ -683,7 +679,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     return fieldDetails?.picklistValues?.map((pv: { value: string }) => pv.value) ?? [];
   }
 
-  private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string, considerMap: Record<string, any> ): Promise<void> {
+  private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string, considerMap: Record<string, string[]> ): Promise<void> {
     const schema = await conn.sobject(objectName).describe();
 
     const dependentFieldResult = schema.fields.find((field) => field.name === dependentFieldApiName);
@@ -707,12 +703,11 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     const dependentPicklistValues = new Map<string, string[]>();
 
     dependentFieldResult.picklistValues?.forEach((entry) => {
-      if (entry.validFor) {
+      if (entry && typeof entry === 'object' && 'validFor' in entry) {
         const base64map = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
         const validForControllerValues = [];
 
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        const base64chars = entry.validFor.split('');
+        const base64chars: string[] = (entry.validFor as string).split('');
         for (let i = 0; i < controllerValues.length; i++) {
           const bitIndex = Math.floor(i / 6);
           const bitShift = 5 - (i % 6);
@@ -721,10 +716,10 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           }
         }
         validForControllerValues.forEach((controllerValue) => {
-          if (!dependentPicklistValues.has(controllerValue)) {
+          if (typeof controllerValue === 'string' && !dependentPicklistValues.has(controllerValue)) {
             dependentPicklistValues.set(controllerValue, []);
           }
-          dependentPicklistValues.get(controllerValue)?.push(entry.value);
+          dependentPicklistValues.get(controllerValue as string)?.push(entry.value as string);
         });
       }
     });
@@ -747,7 +742,10 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         const filteredArray = pickListFieldValues.filter(item => item.parentFieldValue === considerMap[key.toLowerCase()][0]);
 
         if (filteredArray.length > 0) {
-          filteredArray[0].childValues = considerMap[filteredArray[0].childFieldName.toLowerCase()];
+          const childValues = considerMap[filteredArray[0].childFieldName.toLowerCase()];
+          if (Array.isArray(childValues)) {
+            filteredArray[0].childValues = childValues;
+          }
           this.dependentPicklistResults[key] = filteredArray;
 
         }
@@ -755,7 +753,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     });
   }
   private getControllingFieldName(dependentField: any): string | null {
-    const controllerName: string | undefined = dependentField.controllerName;
+    const controllerName: string | undefined = dependentField.controllerName as string | undefined;
     return controllerName ?? null;
   }
 
@@ -782,7 +780,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           values: entry.childValues,
         };
 
-        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues);
+        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues) as Record<string, Fields>;
         if (nestedOutput) {
           Object.assign(output[controllingFieldName][childFieldName][entry.parentFieldValue], nestedOutput);
         }
@@ -816,7 +814,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           values: entry.childValues,
         };
 
-        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues);
+        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues) as Record<string, Fields> | null;
 
         if (nestedOutput) {
           Object.assign(output[childFieldName][parentValue], nestedOutput);
@@ -839,7 +837,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
 
     private async processObjectFieldsForIntitalJsonFile(
       conn: Connection,
-      config: any[],
+      config: Array<Record<string, any>>,
       object: string
     ): Promise<Array<Partial<TargetData>>> {
   
@@ -958,8 +956,9 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     private async handleFieldProcessingForIntitalJsonFile(
       conn: Connection,
       object: string,
-      file: any[]
+      file: Array<Record<string, any>>
     ): Promise<Array<Partial<TargetData>>> {
+  
       return this.processFieldsForInitialJsonFile(file, conn, object);
     }
   
@@ -985,8 +984,8 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       const processedFields: Array<Partial<TargetData>> = [];
   
       for (const item of records) {
-        const fieldName = isParentObject ? item.QualifiedApiName : item.name;
-        const dataType = isParentObject ? item.DataType : item.type;
+        const fieldName = isParentObject ? (item.QualifiedApiName as string) : (item.name as string);
+        const dataType: string = isParentObject ? (item.DataType as string) : (item.type as string);
         const isReference = dataType === 'reference';
         const isPicklist = dataType === 'picklist' || dataType === 'multipicklist';
   
@@ -999,11 +998,11 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
   
           if (item.values?.length) {
-            details.values = item.values;
+            details.values = item.values as string[];
           } else {
             details.values = isMasterDetail
-              ? await this.fetchRelatedMasterRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo)
-              : await this.fetchRelatedRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo);
+              ? await this.fetchRelatedMasterRecordIds(conn, String(item.referenceTo || item.ReferenceTo?.referenceTo))
+              : await this.fetchRelatedRecordIds(conn, String(item.referenceTo || item.ReferenceTo?.referenceTo));
           }
   
           if (isMasterDetail) {
@@ -1040,8 +1039,8 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     }
   
     private getFieldType(item: Record<string, any>, isParentObject: boolean = false): string {
-      const fieldName = isParentObject ? item.QualifiedApiName : (item.name as string);
-      const itemType = isParentObject ? item.DataType : item.type;
+      const fieldName = isParentObject ? (item.QualifiedApiName as string) : (item.name as string);
+      const itemType = isParentObject ? (item.DataType as string) : (item.type as string);
       switch (itemType) {
         case 'string':
         case 'address':
@@ -1208,7 +1207,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
             } else {
               fieldObject = {
                 name: fieldName,
-                type: this.mapFieldType(fieldDetails.type),
+                type: this.mapFieldType(fieldDetails.type as fieldType),
               };
             }
             fieldsArray.push(fieldObject);
@@ -1252,7 +1251,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
       const fieldObjectDepParent: any = {
         name: parentField,
-        type: this.mapFieldType(fieldDetails.type),
+        type: this.mapFieldType(fieldDetails.type as fieldType),
       };
   
       const fieldObjectChildParent: any = {
@@ -1297,9 +1296,9 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
               // Check for further dependencies on the selected child value
               if (childDependentField) {
-                const childFieldDetails = fieldDetails[childField][randomParentValue];
+                const childFieldDetails = fieldDetails[childField][randomParentValue] as Record<string, Field>;
                 if (childFieldDetails?.[childDependentField]) {
-                  const grandChildFieldDetails = childFieldDetails[childDependentField][randomChildValue];
+                  const grandChildFieldDetails = (childFieldDetails[childDependentField] as Record<string, any>)[randomChildValue] as Record<string, Field>;
   
                   // Updated: handle nested values inside the `values` key
                   if (grandChildFieldDetails?.['values']) {
@@ -1308,7 +1307,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
                       const grandChildFieldObject: any = {
                         name: childDependentField,
                         type: 'picklist',
-                        value: this.getRandomElement(grandChildValues),
+                        value: Array.isArray(grandChildValues) ? this.getRandomElement(grandChildValues) as string : undefined,
                       };
                       fieldsArray.push(grandChildFieldObject);
                     }
