@@ -254,7 +254,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
 
       let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
-      const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
+      const fieldsToIgnore = ['jigsaw', 'cleanstatus', 'mailinglatitude', 'mailinglongitude','otherlatitude', 'otherlongitude','shippinglatitude','shippinglongitude','billinglatitude','billinglongitude','latitude','longitude'];
       fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field) && !requiredFieldNames.includes(field.toLowerCase()));
       fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
 
@@ -544,18 +544,17 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
             break;
 
           case 'reference':
-            fieldConfig = {
-              type: 'reference',
-              // referenceTo: inputObject.ReferenceTo?.referenceTo[0],
-              referenceTo: inputObject.ReferenceTo?.referenceTo ? (inputObject.ReferenceTo.referenceTo[0] as string) : undefined,
-              values: [],
-              relationshipType: inputObject.RelationshipName
-                ? inputObject.IsNillable === false
-                  ? 'master-detail'
-                  : 'lookup'
-                : undefined,
-            };
-            break;
+              fieldConfig = {
+                type: 'reference',
+                // referenceTo: inputObject.ReferenceTo?.referenceTo[0],
+                referenceTo: inputObject.ReferenceTo?.referenceTo ? (inputObject.ReferenceTo.referenceTo[0] as string) : undefined,
+
+                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
+                  ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                  : [],
+                relationshipType: inputObject.RelationshipName ? 'master-detail' : 'lookup',
+              };
+              break;
 
           case 'picklist':
             if (inputObject.IsDependentPicklist) {
