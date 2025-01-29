@@ -236,20 +236,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       objectName = objectKey;
       const configForObject: sObjectSchemaType = (objectConfig as Record<string, any>)[objectKey] as sObjectSchemaType;
 
-      let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
-      const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
-
-      const getPickLeftFields = configForObject.pickLeftFields;
-
-      fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field));
-
-      fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
-
       const namespacePrefixToExclude =
-        baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
-    // getting fieldsvalues for fields
-    const considerMap = this.processFieldsToConsider(configForObject);
-    const fieldsToConsider = Object.keys(considerMap);
+      baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
+
       const allFields = await conn.query(
         `SELECT QualifiedApiName, IsDependentPicklist, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
         FROM EntityParticle
@@ -258,7 +247,23 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
         AND NamespacePrefix NOT IN (${namespacePrefixToExclude})`
       );
 
+      const requiredFields = this.getRequiredFields(allFields.records as FieldRecord[]);
+        const requiredFieldNames = requiredFields.map(field => field.QualifiedApiName.toLowerCase());  
+
       let fieldsToPass: FieldRecord[] = [];
+
+
+      let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
+      const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
+      fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field) && !requiredFieldNames.includes(field.toLowerCase()));
+      fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
+
+      const getPickLeftFields = configForObject.pickLeftFields;
+
+    // getting fieldsvalues for fields
+      const considerMap = this.processFieldsToConsider(configForObject);
+
+      const fieldsToConsider = Object.keys(considerMap);
 
       fieldsToPass = this.filterFieldsByPickLeftConfig(getPickLeftFields,configForObject,fieldsToConsider,fieldsToExclude,fieldsToIgnore,allFields);
 
@@ -556,7 +561,7 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
             if (inputObject.IsDependentPicklist) {
               await this.depPicklist(conn, objectName, inputObject.QualifiedApiName, considerMap);
             } else {
-              const picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName);
+              const picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName,considerMap);
               fieldConfig = {
                 type: 'picklist',
                 // values: considerMap[inputObject.QualifiedApiName.toLowerCase()] || picklistValues,
@@ -673,10 +678,35 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   //   return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
   // }
 
-  private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
+  private async getPicklistValues(
+    conn: Connection,
+    object: string,
+    field: string,
+    considerMap: Record<string, any>
+  ): Promise<string[]> {
     const result = await conn.describe(object);
     const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-    return fieldDetails?.picklistValues?.map((pv: { value: string }) => pv.value) ?? [];
+    const pickListValues: string[] = fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value as string) ?? [];
+
+    Object.keys(considerMap).forEach((key) => {
+      if (
+        Object.keys(considerMap).includes(key.toLowerCase()) &&
+        considerMap[key.toLowerCase()].length > 0 &&
+        key.toLowerCase() === field.toLowerCase()
+      ) {
+        const fieldConsiderationValues: string[] = considerMap[field.toLowerCase()] as string[]
+        const pickListSet = new Set(pickListValues);
+        const missingValues = fieldConsiderationValues?.filter((value: string) => !pickListSet.has(value));
+
+        if (missingValues && missingValues.length > 0) {
+          throw new Error(
+            `Value(s) '${missingValues.join(', ')}' not found in the picklist value set for '${field}' field.`
+          );
+        }
+      }
+    });
+
+    return pickListValues;
   }
 
   private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string, considerMap: Record<string, string[]> ): Promise<void> {
@@ -826,11 +856,13 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   }
 
   private getRequiredFields(fields: FieldRecord[]): FieldRecord[] {
-    return fields.filter((record) => record.IsNillable === false);
+    const requiredFields = fields.filter((record) => record.IsNillable === false);
+    return requiredFields;
   }
 
   private mergeFieldsToPass(fields: FieldRecord[]): FieldRecord[] {
-    return [...new Map(fields.map((field) => [field.QualifiedApiName, field])).values()];
+    const mergedFields = [...new Map(fields.map((field) => [field.QualifiedApiName, field])).values()];
+    return mergedFields;
   }
 
   /* createRecord*/
@@ -1014,7 +1046,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           details.values = await this.getPicklistValuesWithDependentValues(conn, object, fieldName, item);
           processedFields.push(details);
         } else {
-           // details value contains item .value
+           // details value contains item.value
           details.type = this.getFieldType(item, isParentObject);
           if (details.type) processedFields.push(details);
         }
@@ -1059,6 +1091,8 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         case 'double':
           return this.getDoubleFieldType(fieldName);
         case 'currency':
+          return 'Number';
+        case 'number':
           return 'Number';
         default:
           return '';
@@ -1183,33 +1217,30 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       config.sObjects.forEach((sObject) => {
         if (sObject.fields) {
           
-          const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObject
+          const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObjec
           for (const [fieldName, fieldDetails] of Object.entries(sObject.fields)) {
             if (fieldDetails.type === 'dependent-picklist') {
               this.processDependentPicklists(fieldName, fieldDetails, fieldsArray);
               continue;
             }
-            let fieldObject: any = {};
+            let fieldObject: any = {
+              name: fieldName,
+              type: this.mapFieldType(fieldDetails.type),
+            };
+  
+            if (fieldDetails.values?.length && fieldDetails.values?.length > 0) {
+                  fieldObject = {
+                    name: fieldName,
+                    values: fieldDetails.values,
+                  };
+            } 
   
             if (fieldDetails.type === 'picklist' || fieldDetails.type === 'reference') {
-              fieldObject.name = fieldName;
               fieldObject.values = fieldDetails.values ?? [];
               fieldObject.referenceTo = fieldDetails.referenceTo;
               fieldObject.relationshipType = fieldDetails.relationshipType;
-              fieldsArray.push(fieldObject);
-              continue;
             }
-            if (fieldDetails.values?.length && fieldDetails.values?.length > 0) {
-              fieldObject = {
-                name: fieldName,
-                values: fieldDetails.values,
-              };
-            } else {
-              fieldObject = {
-                name: fieldName,
-                type: this.mapFieldType(fieldDetails.type as fieldType),
-              };
-            }
+  
             fieldsArray.push(fieldObject);
           }
   
