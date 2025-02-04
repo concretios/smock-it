@@ -10,7 +10,7 @@ This guide explains the questions prompted by the init command in Smock-It, help
 
 ## General Questions On Schema
 
-The questions in the below schema serve as the blueprint for how Smock-It creates test records. Go through these questions to better understand various use cases discussed in UseCase.MD (link).
+The questions in the below schema serve as the blueprint for how Smock-It creates test records. Go through these questions to better understand various use cases discussed in [UseCase.MD](https://github.com/concretios/smock-it/blob/main/USECASE.md).
 
 ### 1\. Provide a template name (e.g., account\_creation): account\_data\_template
 
@@ -214,9 +214,8 @@ This template is automatically generated based on the above selections. It can b
 
 ## Smock-It Use Case Documentation 
 
-In addition to the default use case, which provides a detailed walkthrough of the `init` questionnaire, we have 11 well-documented use cases available in `UseCases.md` (link).
+In addition to the default use case, which provides a detailed walkthrough of the `init` questionnaire, we have 11 well-documented use cases available in [UseCases.md] (https://github.com/concretios/smock-it/blob/main/USECASE.md).
 
 📌 Refer to Smock-It Use Case Documentation for a deeper understanding of Smock-It CLI and its capabilities. 
 
-Need help? Write to us at support@smock-It
-
+Need help? Write to us at smock-it@concret.io

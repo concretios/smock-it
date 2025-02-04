@@ -136,6 +136,8 @@ When using Smock-It, the following directories are automatically created in your
 ## Template structure
 
 The ```sf template init``` command generates a data template based on the values provided in the questionnaire.
+> Please refer [INIT_QUESTIONNAIRE_GUIDE.MD](https://github.com/concretios/smock-it/blob/main/INIT_QUESTIONNAIRE.MD) for more detail.
+
 ```json
 {
   "templateFileName": "default_data_template.json",
@@ -163,7 +165,7 @@ The ```sf template init``` command generates a data template based on the values
   ]
 }
 ```
-> For more on Template Use Cases, Please refer - **[SAMPLES.md](SAMPLES.md)**
+> For more on Template Use Cases, Please refer - **[USECASE.md](https://github.com/concretios/smock-it/blob/main/USECASE.md)**
 
 ### Field Instructions (for Template)
 
