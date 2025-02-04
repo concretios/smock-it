@@ -1,4 +1,4 @@
-name: Release SMOCKER plugin version
+name: Release smock-it plugin version
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
       - name: setup node environment
         uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version: 18
           cache: npm
           
       - name: install dependencies

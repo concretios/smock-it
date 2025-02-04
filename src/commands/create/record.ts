@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable sf-plugin/flag-case */
 /* eslint-disable object-shorthand */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
@@ -29,13 +30,6 @@ const messages = Messages.loadMessages('smock-it', 'create.record');
 let depthForRecord = 0;
 export type CreateRecordResult = { path: string };
 
-type BulkQueryBatchResult = {
-  batchId?: string;
-  id?: string | null;
-  jobId?: string;
-  errors?: string[];
-  success?: boolean;
-};
 
 type TargetData = {
   name: string;
@@ -84,6 +78,7 @@ type SObjectConfigFile = {
 type GenericRecord = { [key: string]: any };
 type CreateResult = { id: string; success: boolean; errors: any[] };
 
+
 const excludeFieldsSet = new Set<string>();
 const createdRecordsIds: Map<string, string[]> = new Map();
 const progressBar = new Progress(true )
@@ -93,6 +88,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
   public static readonly summary: string = messages.getMessage('summary');
 
   public static readonly examples: string[] = [messages.getMessage('Examples')];
+  
 
   public static readonly flags = {
     ...templateAddFlags,
@@ -266,7 +262,6 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     onlyRequiredFields: boolean
   ): Promise<Partial<TargetData>[]> {
     const query = this.buildFieldQuery(object, onlyRequiredFields);
-
     const processedFields = await this.handleFieldProcessingForParentObjects(conn, query, object);
     return processedFields;
   }
@@ -296,76 +291,99 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
   }
 
   private async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
-    const   results: CreateResult[] = [];
+    const results: CreateResult[] = [];
     const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
-
-    const initialRecords = dataArray.slice(0, 200);
-    const insertResults = await conn.sobject(object).create(initialRecords);
-    const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
-      (result) => ({
-        id: result.id ?? '',
-        success: result.success,
-        errors: result.errors,
-      })
-    );
-    results.push(...initialInsertResult);
-    if (dataArray.length > 200) {
-      progressBar.start(100, { title: 'Test' } ); 
-      const remainingRecords = dataArray.slice(200);
-      const remainingTotal = remainingRecords.length
-      const job = conn.bulk.createJob(object, 'insert');
-      const batch = job.createBatch();
-       batch.execute(remainingRecords);
-      await new Promise<void>((resolve, reject) => {
-        batch.on('queue', () => {
-          batch.poll(500 /* interval(ms) */, 600_000 /* timeout(ms) */);
-          const pollInterval = setInterval(() => {
-            batch
-              .check()
-              .then((batchStatus) => {
-                const  recordsProcessed: number  = Number(batchStatus.numberRecordsProcessed) || 0;
-                const   percentage: number  = Math.ceil((recordsProcessed / remainingTotal) * 100); // Percentage calculation for remaining records
-                progressBar.update(percentage);
-                if (batchStatus.state === 'Completed' || batchStatus.state === 'Failed') {
-                  clearInterval(pollInterval);
-                  if (batchStatus.state === 'Failed') {
-                    console.error('Batch failed.');
-                    reject(new Error('Batch processing failed.'));
-                  }
-                }
-              })
-              .catch((err) => {
-                clearInterval(pollInterval);
-                console.error('Error while checking batch status:', err);
-                reject(err);
-              });
-          }, 1000);
-        });
-        batch.on('response', (rets: BulkQueryBatchResult[]) => {
-          const mappedResults: CreateResult[] = rets.map((ret: BulkQueryBatchResult) => ({
-            id: ret.id ?? '',
-            success: ret.success ?? false,
-            errors: ret.errors ?? [],
-          }));
     
-          results.push(...mappedResults); // Push the bulk results to the main results array
-          progressBar.update(100);
-          progressBar.finish();
-          resolve();
-        });
-        batch.on('error', (err) => {
-          reject(err);
-        });
-      });
+
+    if (dataArray.length <= 200) {
+        try {
+            const insertResults = await conn.sobject(object).create(jsonData);
+            const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
+                (result) => ({
+                    id: result.id ?? '',
+                    success: result.success,
+                    errors: result.errors,
+                })
+            );
+            results.push(...initialInsertResult);
+
+        } catch (error) {
+            console.error("Error inserting records:", error);
+        }
+    } else {
+      const storeHere = dataArray.splice(0, 200);
+      const insertResults = await conn.sobject(object).create(storeHere);
+            const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
+                (result) => ({
+                    id: result.id ?? '',
+                    success: result.success,
+                    errors: result.errors,
+                })
+            );
+      results.push(...initialInsertResult);
       
-      await job.close();
+
+      progressBar.start(100, { title: 'Test' } ); 
+        const totalRecords = dataArray.length;
+        let processedRecords = 0;
+
+        try {
+            const job = conn.bulk.createJob(object, 'insert');
+            const batchSize = 200;
+
+            for (let i = 0; i < dataArray.length; i += batchSize) {
+                const batchData = dataArray.slice(i, i + batchSize);
+                const batch = job.createBatch();
+                batch.execute(batchData);
+
+                await new Promise<void>((resolve, reject) => {
+                    batch.on('queue', () => {
+                      batch.poll(500 /* interval(ms) */, 600_000 /* timeout(ms) */);
+                    });
+
+                    batch.on('response', (rets: any[]) => {
+                        const mappedResults: CreateResult[] = rets.map((ret: any) => ({
+                            id: ret.id ?? '',
+                            success: ret.success ?? false,
+                            errors: ret.errors ?? [],
+                        }));
+
+                        results.push(...mappedResults);
+                        processedRecords += batchData.length;
+                        const percentage = Math.ceil((processedRecords / totalRecords) * 100);
+                        progressBar.update(percentage);
+
+                        if (processedRecords >= totalRecords) {
+                            progressBar.update(100);
+                            progressBar.finish();
+                        }
+
+                        resolve();
+                    });
+
+                    batch.on('error', (err) => {
+                        console.error("Batch Error:", err);
+                        reject(err);
+                    });
+                });
+            }
+
+            await job.close();
+        } catch (error) {
+            console.error("Error during bulk processing:", error);
+            progressBar.stop();
+            throw error;
+        }
     }
+
     return results;
-  }
- 
+}
+
+
+
   private updateCreatedRecordIds(object: string, results: CreateResult[]): void {
     const ids = results.filter((result) => result.success).map((result) => result.id);
-    createdRecordsIds.set(object, ids);
+    createdRecordsIds.set(object,ids);
   }
 
   private async handleFieldProcessingForIntitalJsonFile(
@@ -473,6 +491,8 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
       case 'double':
         return this.getDoubleFieldType(fieldName);
       case 'currency':
+        return 'Number';
+      case 'number':
         return 'Number';
       default:
         return '';
@@ -595,33 +615,30 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
     config.sObjects.forEach((sObject) => {
       if (sObject.fields) {
         
-        const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObject
+        const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObjec
         for (const [fieldName, fieldDetails] of Object.entries(sObject.fields)) {
           if (fieldDetails.type === 'dependent-picklist') {
             this.processDependentPicklists(fieldName, fieldDetails, fieldsArray);
             continue;
           }
-          let fieldObject: any = {};
+          let fieldObject: any = {
+            name: fieldName,
+            type: this.mapFieldType(fieldDetails.type),
+          };
+
+          if (fieldDetails.values?.length && fieldDetails.values?.length > 0) {
+                fieldObject = {
+                  name: fieldName,
+                  values: fieldDetails.values,
+                };
+          } 
 
           if (fieldDetails.type === 'picklist' || fieldDetails.type === 'reference') {
-            fieldObject.name = fieldName;
             fieldObject.values = fieldDetails.values ?? [];
             fieldObject.referenceTo = fieldDetails.referenceTo;
             fieldObject.relationshipType = fieldDetails.relationshipType;
-            fieldsArray.push(fieldObject);
-            continue;
           }
-          if (fieldDetails.values?.length && fieldDetails.values?.length > 0) {
-            fieldObject = {
-              name: fieldName,
-              values: fieldDetails.values,
-            };
-          } else {
-            fieldObject = {
-              name: fieldName,
-              type: this.mapFieldType(fieldDetails.type),
-            };
-          }
+
           fieldsArray.push(fieldObject);
         }
 

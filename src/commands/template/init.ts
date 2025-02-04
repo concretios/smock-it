@@ -1,4 +1,4 @@
-import * as readline from 'node:readline';
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
@@ -8,7 +8,6 @@ import Enquirer from 'enquirer';
 import { connectToSalesforceOrg, validateConfigJson } from '../template/validate.js';
 import { SetupInitResult, typeSObjectSettingsMap, flagsForInit, fieldsToConsiderMap } from '../../utils/types.js';
 import { languageChoices, outputChoices } from '../../utils/constants.js';
-// import { promises } from 'node:dns';
 // Import messages from the specified directory
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('smock-it', 'template.init');
@@ -35,8 +34,8 @@ function handleDirStruct(): string {
     throw new Error(`Failed to create 'data_gen' directory structure on path ${cwd}`);
   }
 }
-let sigintListenerAdded = false;
 
+let sigintListenerAdded = false;
 async function runMultiSelectPrompt(): Promise<string[]> {
   try {
     type Answers = {
@@ -53,7 +52,7 @@ async function runMultiSelectPrompt(): Promise<string[]> {
     const answers = await Enquirer.prompt<Answers>({
       type: 'multiselect',
       name: 'choices',
-      message: 'Provide output format for generated records [CSV, JSON, and DI-Direct Insertion Supported]',
+        message: `Select output format [CSV, JSON, DI] ${chalk.dim(`(use ${chalk.cyanBright('<space>')} to select, ${chalk.cyanBright('↑')} ${chalk.cyanBright('↓')} to navigate)`)}:`,
       choices: outputChoices,
     });
 
@@ -125,8 +124,8 @@ async function validateTemplateName(fileNameParam: string, templatePath: string)
     if (fileNameExists.toLowerCase() === 'yes' || fileNameExists.toLowerCase() === 'y') {
       return fileName;
     } else {
-      const newFileName = await askQuestion('Enter new template file name');
-      return validateTemplateName(newFileName, templatePath);
+      const newFileName = await askQuestion('Enter new template file name', `one_${fileName}`);
+return validateTemplateName(newFileName, templatePath);
     }
   }
 }
@@ -141,48 +140,57 @@ function createDefaultTemplate(flags: flagsForInit, templatePath: string): void 
     }
 
     const defaultTemplate = `
-      {
-        "_comment_importantNote": "We highly recommend removing all the comments for a cleaner exeperience once you are comfortable with this json format",
+    {
+      "_comment_importantNote": "We highly recommend removing all the comments for a cleaner exeperience once you are comfortable with this json format",
 
-        "_comment_templateFileName": "The filename of the data template.",
+      "_comment_templateFileName": "The filename of the data template.",
 
-        "templateFileName": "${path.basename(defaultTemplatePath)}",
-        
-        "_comment_namespaceToExclude": "Fields from these namespace(s) will be excluded while generating test data",
-        "_example_namespaceToExclude": "namespaceToExclude:['namespace1','namespace2']",
-        "namespaceToExclude": [],
-        
-        "_comment_outputFormat": "Desired output format(s) for the storing the generated test data; Only 3 values are valid- csv,json and di(i.e. for direct insertion of upto 200 records into the connected org)",
-        "_example_outputFormat": "outputFormat:['csv','json','di']",
-        "outputFormat": ["csv"],
-        
-        "_comment_language": "Specifies the default language for data generation; applies to all sObjects unless overridden (e.g., 'en' for English).",
-        "language": "en",
-        
-        "_comment_count": "Specifies the default count for data generation; applies to all sObjects unless overridden",
-        "count": 1,
-        
-        "_comment_sObjects": "Lists Salesforce objects (API names) to generate test data for.",
-        "sObjects": [
-          {"account": {}},
-          {"contact": {}},
-          {
-            "lead": {
-              "_comment_sobjectLevel": "These settings are object specific, so here these are set for lead object only",
-              "_comment_fieldsToExclude": "Lists fields to exclude from generating test data for the Lead object.",
-              "fieldsToExclude": ["fax", "website"],
+      "templateFileName": "${path.basename(defaultTemplatePath)}",
+      
+      "_comment_namespaceToExclude": "Fields from these namespace(s) will be excluded while generating test data",
+      "_example_namespaceToExclude": "namespaceToExclude:['namespace1','namespace2']",
+      "namespaceToExclude": [],
+      
+      "_comment_outputFormat": "Desired output format(s) for the storing the generated test data; Only 3 values are valid- csv,json and di(i.e. for direct insertion of upto 200 records into the connected org)",
+      "_example_outputFormat": "outputFormat:['csv','json','di']",
+      "outputFormat": ["csv"],
+      
+      "_comment_language": "Specifies the default language for data generation; applies to all sObjects unless overridden (e.g., 'en' for English).",
+      "language": "en",
+      
+      "_comment_count": "Specifies the default count for data generation; applies to all sObjects unless overridden",
+      "count": 1,
+      
+      "_comment_sObjects": "Lists Salesforce objects (API names) to generate test data for.",
+      "sObjects": [
+        {"account": {}},
+        {"contact": {}},
+        {
+          "lead": {
+            "_comment_sobjectLevel": "These settings are object specific, so here these are set for lead object only",
+            "_comment_count": "Specifies count for generating test data for the Lead object.",
+            "count": 5,
 
-              "_comment_language": "Specifies language for generating test data for the Lead object.",
-              "language": "en",
+            "_comment_language": "Specifies language for generating test data for the Lead object.",
+            "language": "en",
 
-              "_comment_count": "Specifies count for generating test data for the Lead object.",
-              "count": 5
-            }
+            "_comment_fieldsToExclude": "Lists fields to exclude from generating test data for the Lead object.",
+            "fieldsToExclude": ["fax", "website"],
+
+            "_comment_fieldsToConsider": "Fields and values to consider for generating test data for the Lead object.",
+            "fieldsToConsider": {
+              "email": ["smockit@gmail.com"],
+              "phone": ["9090909090","6788899990"]
+            },
+
+            "_comment_pickLeftFields": "Include all remaining fields for generating test data for the Lead object.",
+            "pickLeftFields": true
+          
           }
-        ]
-      }
-      `;
-
+        }
+      ]
+    }
+    `;
     // Write the JSON object to the file with custom formatting
     fs.writeFileSync(defaultTemplatePath, defaultTemplate, 'utf8');
     console.log(chalk.green(`Success: default data template created at ${defaultTemplatePath}`));
@@ -190,7 +198,8 @@ function createDefaultTemplate(flags: flagsForInit, templatePath: string): void 
 }
 async function getJSONFileName(templatePath: string): Promise<string> {
   const temporaryFileName: string = await askQuestion(
-    'Provide descriptive name for the template data file' + chalk.dim(' (e.g., validate_Account_creation)')
+    'Provide a template name' ,
+    'account_creation_data_template'
   );
   if (temporaryFileName == null || temporaryFileName === undefined || temporaryFileName === '')
     throw new Error('Please provide template data file name.');
@@ -199,8 +208,8 @@ async function getJSONFileName(templatePath: string): Promise<string> {
 }
 async function getNamespaceToExclude(): Promise<string[]> {
   const namespaceExcludeValue = await askQuestion(
-    'Enter namespace(s) to exclude' +
-      chalk.dim(' [Fields from these namespace(s) will be ignored. (comma-separated: "mynamespaceA", "mynamespaceB")]'),
+    'Exclude namespace(s)' +
+      chalk.dim('(comma-separated)'),
     ''
   );
   const namespaceToExclude = namespaceExcludeValue
@@ -259,7 +268,7 @@ async function handleSObjectSettingsMap(
   let overrideCount = null;
   while (overrideCount === null) {
     const customCountInput = await askQuestion(
-      chalk.white.bold(`[${sObjectName} - Count]`) + ' Count for generating records'
+      chalk.white.bold(`[${sObjectName} - Count]`) + ' Set number of records' , '1'
     );
     if (!customCountInput) {
       break;
@@ -291,12 +300,12 @@ async function showConditionalCommand(
     }));
 
     const sObjectName = await runSelectPrompt(
-      'Which Object(API name) would you like to override the global settings for?',
+      'Override the global settings for Object',
       objInTemplateChoices
     );
     if (!sObjectName) {
       overWriteGlobalSettings = await askQuestion(
-        'Would you like to customize settings for individual SObjects? (Y/n)',
+        'Would you like to customize settings for individual SObject? (Y/n)',
         'n'
       );
       if (overWriteGlobalSettings.toLowerCase() !== 'yes' || overWriteGlobalSettings.toLowerCase() !== 'y') {
@@ -318,7 +327,7 @@ async function showConditionalCommand(
       } else {
         console.log(chalk.red(`Discarded: '${sObjectName}'`));
         overWriteGlobalSettings = await askQuestion(
-          'Would you like to customize settings for individual SObjects? (Y/n)',
+          'Customize settings for individual SObjects? (Y/n)',
           'n'
         );
         continue;
@@ -329,7 +338,7 @@ async function showConditionalCommand(
 
     // Note:languageChoices is defined above already
     const ovrrideSelectedLangVal = await runSelectPrompt(
-      `[${sObjectName} - Language] Language in which test data should be generated`,
+      `[${sObjectName} - Language] Specify language`,
       languageChoices
     );
     if (ovrrideSelectedLangVal) {
@@ -340,7 +349,7 @@ async function showConditionalCommand(
 
     const fieldsToExcludeInput = await askQuestion(
       chalk.white.bold(`[${sObjectName} - fieldsToExclude]`) +
-        ' Provide fields(API names) to exclude ' +
+        ' List fields (API names) to exclude' +
         chalk.dim('(comma-separated)'),
       ''
     );
@@ -357,13 +366,13 @@ async function showConditionalCommand(
 
     console.log(
       chalk.blue.bold(
-        'Note: In case of dependent picklist fields, value should be defined in order.(Eg: dp-Year: [2024], dp-Month: [2])'
+        'Note: For dependent picklists, define values in order (e.g., dp-Country: [India], dp-State: [Goa]).'
       )
     );
 
     const fieldsToConsiderInput = await askQuestion(
       chalk.white.bold(`[${sObjectName} - fieldsToConsider]`) +
-        ' Provide field(API names) to be considered for generating data. (E.g. Phone: [909090, 6788489], Fax )',
+        ' List fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
       ''
     );
 
@@ -398,8 +407,8 @@ async function showConditionalCommand(
 
     if (Object.keys(fieldsToConsider).length === 0 && pickLeftFieldsInput === 'false') {
       console.log(
-        chalk.yellow.bold(
-          "No fields are found to generate data. Make sure to set 'pick-left-fields' to true or add fields to 'fields-to-consider'"
+        chalk.red.bold(
+         "No fields found to generate data. Set 'pick-left-fields' to true or add fields to 'fields-to-consider'."
         )
       );
       continue;
@@ -407,7 +416,7 @@ async function showConditionalCommand(
     /* -------------------------------------------- */
 
     overWriteGlobalSettings = await askQuestion(
-      'Do you wish to overwrite global settings for another Object(API name)? (Y/n)',
+      'Override global settings for another Object(API name)? (Y/n)',
       'n'
     );
   }
@@ -416,19 +425,16 @@ async function showConditionalCommand(
 /*
  Ask question on the CLI
 */
-export const askQuestion = (query: string, defaultValue?: string): Promise<string> => {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
+export const askQuestion = async (query: string, defaultValue?: string): Promise<string> => {
+  const response = await Enquirer.prompt({
+    type: 'input',
+    name: 'answer',
+    message: query,
+    initial: defaultValue, 
+    result: (value) => value ?? defaultValue ?? '',
   });
 
-  return new Promise((resolve) => {
-    const promptQuery = defaultValue ? `${query} (default: ${defaultValue}): ` : `${query}: `;
-    rl.question(promptQuery, (answer) => {
-      rl.close();
-      resolve(answer ?? defaultValue ?? '');
-    });
-  });
+  return (response as unknown as { answer: string }).answer;
 };
 
 export default class SetupInit extends SfCommand<SetupInitResult> {
@@ -458,14 +464,14 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     const filePath = path.join(templatePath, templateFileName);
     const namespaceToExclude = await getNamespaceToExclude();
     const outputFormat = await getOutputFormat();
-    const language = await runSelectPrompt('In which language would you like to generate test data?', languageChoices);
+    const language = await runSelectPrompt('Choose a language for test data', languageChoices);
 
     /* record count */
 
     let count = 0;
     while (count === 0) {
       const preSanitizedCount = parseInt(
-        await askQuestion('Specify the number of test data records to generate' + chalk.dim(' (e.g., 5)'), '1'),
+        await askQuestion('Specify test data count', '1'),
         10
       );
       if (preSanitizedCount > 0 && !isNaN(preSanitizedCount)) {
@@ -480,7 +486,7 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     }
 
     const objectsToConfigureInput = await askQuestion(
-      'Provide Objects(API names) for data creation' + chalk.dim(' (comma-separated)'),
+      'List Objects(API names) for data creation' + chalk.dim(' (comma-separated)'),
       'Lead'
     );
     const tempObjectsToConfigure = objectsToConfigureInput
@@ -498,7 +504,7 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     }
 
     const overWriteGlobalSettings = await askQuestion(
-      'Would you like to customize settings for individual SObjects? (Y/n)',
+      'Customize settings for individual SObjects? (Y/n)',
       'n'
     );
     const sObjectSettingsMap: { [key: string]: typeSObjectSettingsMap } = {};
@@ -524,7 +530,7 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     // Write the values of the config to the file template
     fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf8');
     const wantToValidate = await askQuestion(
-      chalk.bold('Do you want to validate the added sObjects and their fields from your org?(Y/n)'),
+      chalk.bold('Validate the added sObjects and their fields from your org?(Y/n)'),
       'n'
     );
     if (wantToValidate.toLowerCase() === 'yes' || wantToValidate.toLowerCase() === 'y') {
@@ -533,8 +539,8 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
       );
       const conn = await connectToSalesforceOrg(userAliasorUsernName);
       await validateConfigJson(conn, filePath);
-    }
-
+  }
+    
     console.log(chalk.green(`Success: ${templateFileName} created at ${filePath}`));
     return config;
   }

@@ -1,7 +1,7 @@
 {
   "name": "smock-it",
   "description": "This SFDX plugin generates relastic data for salesforce using mockaroo API. Easily create customized datasets for any Salesforce object. helping streamline development and testing with accurate, varied data",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "dependencies": {
     "@oclif/core": "^4",
     "@salesforce/core": "^7.4.1",

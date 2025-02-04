@@ -83,10 +83,35 @@ export default class DataGenerate extends CreateRecord {
     }),
   };
 
-  private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
+  private async getPicklistValues(
+    conn: Connection,
+    object: string,
+    field: string,
+    considerMap: Record<string, any>
+  ): Promise<string[]> {
     const result = await conn.describe(object);
     const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-    return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
+    const pickListValues = fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
+
+    Object.keys(considerMap).forEach((key) => {
+      if (
+        Object.keys(considerMap).includes(key.toLowerCase()) &&
+        considerMap[key.toLowerCase()].length > 0 &&
+        key.toLowerCase() === field.toLowerCase()
+      ) {
+        const fieldConsiderationValues = considerMap[field.toLowerCase()];
+        const pickListSet = new Set(pickListValues);
+        const missingValues = fieldConsiderationValues?.filter((value: string) => !pickListSet.has(value));
+
+        if (missingValues && missingValues.length > 0) {
+          throw new Error(
+            `Value(s) '${missingValues.join(', ')}' not found in the picklist value set for '${field}' field.`
+          );
+        }
+      }
+    });
+
+    return pickListValues;
   }
 
   public dependentPicklistResults: Record<
@@ -154,6 +179,9 @@ export default class DataGenerate extends CreateRecord {
     Object.keys(this.dependentPicklistResults).forEach((key) => {
       if (Object.keys(considerMap).includes(key.toLowerCase()) && considerMap[key.toLowerCase()].length > 0) {
         const pickListFieldValues = this.dependentPicklistResults[key];
+        if (!pickListFieldValues.some(item => item.parentFieldValue === considerMap[key.toLowerCase()][0])) {
+          throw new Error(`Parent value '${considerMap[key.toLowerCase()][0]}' not found in the picklist values for '${key}'`);
+        }
         const filteredArray = pickListFieldValues.filter(item => item.parentFieldValue === considerMap[key.toLowerCase()][0]);
 
         if (filteredArray.length > 0) {
@@ -237,13 +265,14 @@ export default class DataGenerate extends CreateRecord {
   }
 
   private getRequiredFields(fields: FieldRecord[]): FieldRecord[] {
-    return fields.filter((record) => record.IsNillable === false);
+    const requiredFields = fields.filter((record) => record.IsNillable === false);
+    return requiredFields;
   }
 
   private mergeFieldsToPass(fields: FieldRecord[]): FieldRecord[] {
-    return [...new Map(fields.map((field) => [field.QualifiedApiName, field])).values()];
+    const mergedFields = [...new Map(fields.map((field) => [field.QualifiedApiName, field])).values()];
+    return mergedFields;
   }
-  
 
   public async run(): Promise<DataGenerateResult> {
 
@@ -299,7 +328,6 @@ export default class DataGenerate extends CreateRecord {
       }
     }
 
-
     const outputData: any[] = [];
 
     for (const objectConfig of objectsToProcess) {
@@ -307,16 +335,30 @@ export default class DataGenerate extends CreateRecord {
       const objectName = objectKey;
       const configForObject = objectConfig[objectKey];
 
-      let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) || [];
-      const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
-
-      fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field));
-      fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
-
-      const getPickLeftFields = configForObject.pickLeftFields;
-
       const namespacePrefixToExclude =
         baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
+
+        const allFields = await conn.query(
+          `SELECT QualifiedApiName, IsDependentPicklist, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
+          FROM EntityParticle
+          WHERE EntityDefinition.QualifiedApiName = '${objectName}'
+          AND IsCreatable = true
+          AND NamespacePrefix NOT IN (${namespacePrefixToExclude})`
+        );
+
+        let fieldsToPass: FieldRecord[] = [];
+
+        const requiredFields = this.getRequiredFields(allFields.records as FieldRecord[]);
+        const requiredFieldNames = requiredFields.map(field => field.QualifiedApiName.toLowerCase());        
+
+        let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) || [];
+        const fieldsToIgnore = ['jigsaw', 'cleanstatus', 'mailinglatitude', 'mailinglongitude','otherlatitude', 'otherlongitude','shippinglatitude','shippinglongitude','billinglatitude','billinglongitude','latitude','longitude'];
+        // fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field));
+        fieldsToExclude = fieldsToExclude.filter((field: string) => !fieldsToIgnore.includes(field) && !requiredFieldNames.includes(field.toLowerCase()));
+        
+        fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
+
+        const getPickLeftFields = configForObject.pickLeftFields;
 
       const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] || {});
       const considerMap: Record<string, any> = {};
@@ -327,17 +369,8 @@ export default class DataGenerate extends CreateRecord {
             considerMap[key] = configForObject['fieldsToConsider'][key];
         }
     }
-    const fieldsToConsider = Object.keys(considerMap);
-      const allFields = await conn.query(
-        `SELECT QualifiedApiName, IsDependentPicklist, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
-        FROM EntityParticle
-        WHERE EntityDefinition.QualifiedApiName = '${objectName}'
-        AND IsCreatable = true
-        AND NamespacePrefix NOT IN (${namespacePrefixToExclude})`
-      );
-
-      let fieldsToPass: FieldRecord[] = [];
-
+      const fieldsToConsider = Object.keys(considerMap);
+    
       if (configForObject['fieldsToConsider'] === undefined && configForObject['fieldsToExclude'] === undefined && configForObject['pickLeftFields'] === undefined) {
         fieldsToPass = (allFields.records as FieldRecord[]).filter(
           (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase()));
@@ -410,6 +443,9 @@ export default class DataGenerate extends CreateRecord {
             ) {
               fieldConfig = {
                 type: 'address',
+                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
+                ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                : []
               };
             } else {
               fieldConfig = {
@@ -422,25 +458,23 @@ export default class DataGenerate extends CreateRecord {
             }
             break;
 
-          case 'reference':
-            fieldConfig = {
-              type: 'reference',
-              // referenceTo: inputObject.ReferenceTo?.referenceTo[0],
-              referenceTo: inputObject.ReferenceTo?.referenceTo ? inputObject.ReferenceTo.referenceTo[0] : undefined,
-              values: [],
-              relationshipType: inputObject.RelationshipName
-                ? inputObject.IsNillable === false
-                  ? 'master-detail'
-                  : 'lookup'
-                : undefined,
-            };
-            break;
-
+            case 'reference':
+              fieldConfig = {
+                type: 'reference',
+                // referenceTo: inputObject.ReferenceTo?.referenceTo[0],
+                referenceTo: inputObject.ReferenceTo?.referenceTo ? inputObject.ReferenceTo.referenceTo[0] : undefined,
+                // values: [],
+                values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()] 
+                  ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
+                  : [],
+                relationshipType: inputObject.RelationshipName ? 'master-detail' : 'lookup',
+              };
+              break;
           case 'picklist':
             if (inputObject.IsDependentPicklist) {
               await this.depPicklist(conn, objectName, inputObject.QualifiedApiName, considerMap);
             } else {
-              const picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName);
+              const picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName,considerMap);
               fieldConfig = {
                 type: 'picklist',
                 // values: considerMap[inputObject.QualifiedApiName.toLowerCase()] || picklistValues,
