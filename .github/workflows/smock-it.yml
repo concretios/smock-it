@@ -1,0 +1,39 @@
+name: Smock-it Data Generation (Skeleton)
+
+on:
+  workflow_dispatch:
+    inputs:
+      templates:
+        description: "Provide comma-separated templates"
+        required: true
+        type: string
+      org-alias:
+        description: "set alias for org"
+        required: true
+        type: string
+        default: "smockit"
+
+jobs:
+  generate-data:
+    runs-on: ubuntu-latest
+  
+  steps:
+    - name: checkout repo
+      uses: actions/checkout@v4
+    - name: setup node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+    - name: install SF CLI
+      run: |
+        npm install -g @salesforce/cli
+        echo "SF CLI Installed."
+    - name: connect org and set alias
+      run: |
+        sf auth login -u "username" -p "password" --alias ${{ inputs.org-alias }}
+    - name: generate data using smock-it
+      uses: ./github/actions/smock-it/
+      with:
+        templates: ${{ inputs.templates }}
+        org-alias: ${{ inputs.org-alias }}
+        mockaroo-api-key: "MockarooKey"
