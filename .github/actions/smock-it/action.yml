@@ -45,7 +45,7 @@ runs:
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
           echo "Validating template: $TEMPLATE"
           echo "$DATA_GEN_PATH/templates/$TEMPLATE"
-          sf template validate -a ${{ inputs.org-alias }} -t $DATA_GEN_PATH/templates/$TEMPLATE
+          sf template validate -a ${{ inputs.org-alias }} -t $TEMPLATE
           # VALIDATION_EXIT_CODE=$?
           # echo "$VALIDATION_OUTPUT"
           # if [[ $VALIDATION_EXIT_CODE -ne 0 ]]; then
@@ -58,7 +58,7 @@ runs:
       run: |
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
           echo "Generating data for template: $TEMPLATE"
-          sf data generate -a org-alias -t $DATA_GEN_PATH/templates/$TEMPLATE
+          sf data generate -a org-alias -t $TEMPLATE
         done
       shell: bash
     - name: list output files
