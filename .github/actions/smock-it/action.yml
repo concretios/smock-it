@@ -39,31 +39,17 @@ runs:
       env:
         MOCKAROO_API_KEY: ${{ inputs.mockaroo-api-key }}
       shell: bash
-    - name: validate & Generate data
-      run: |
-        IFS=',' read -ra TEMPLATE_LIST <<< "${{ inputs.templates }}"
-        for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
-          echo "Validating template: $TEMPLATE"
-          echo "$DATA_GEN_PATH/templates/$TEMPLATE"
-          sf template validate -a ${{ inputs.org-alias }} -t $TEMPLATE
-          # sf data generate -a org-alias -t $TEMPLATE
-          # VALIDATION_EXIT_CODE=$?
-          # echo "$VALIDATION_OUTPUT"
-          # if [[ $VALIDATION_EXIT_CODE -ne 0 ]]; then
-          #   echo "Validation failed for template: $TEMPLATE"
-          #   exit $VALIDATION_EXIT_CODE
-          # fi
-        done
-      shell: bash
     - name: generate synthetic data
       run: |
-        echo "I am here... : $TEMPLATE_LIST "
+        export MOCKAROO_API_KEY="${{ inputs.mockaroo-api-key }}"
         IFS=',' read -ra TEMPLATE_LIST <<< "${{ inputs.templates }}"
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
-          echo "Generating data for template: $TEMPLATE"
+          echo "Validating & Generating synthetic data for : $TEMPLATE"
           sf data generate -a ${{ inputs.org-alias }} -t $TEMPLATE
         done
       shell: bash
+      env:
+        MOCKAROO_API_KEY: ${{ inputs.mockaroo-api-key }}
     - name: list output files
       run: ls -a $DATA_GEN_PATH/output
       shell: bash
