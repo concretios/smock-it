@@ -53,3 +53,9 @@ runs:
     - name: list output files
       run: ls -a $DATA_GEN_PATH/output
       shell: bash
+    - name: upload artifact
+      uses: actions/upload-artifact@v4
+      with: 
+        path: $DATA_GEN_PATH/output/
+        retention: 15
+        if-no-files-found: ignore
