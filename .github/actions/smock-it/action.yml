@@ -22,6 +22,7 @@ runs:
         DATA_GEN_PATH="data_gen"
         if [[ -z "$DATA_GEN_PATH" ]]; then
           DATA_GEN_PATH="data_gen"
+          echo "Path is validated Successfully"
         fi
         if [[ ! -d "$DATA_GEN_PATH" || ! -d "$DATA_GEN_PATH/templates" || ! -d "$DATA_GEN_PATH/output" ]]; then
           echo "Error: Required directories ($DATA_GEN_PATH, templates, output) not found."
@@ -35,13 +36,15 @@ runs:
         export MOCKAROO_API_KEY="${{ inputs.mockaroo-api-key }}"
         echo "y" | sf plugins install smock-it@latest
         echo "smock-it SF plugin installed."
+      env:
+        MOCKAROO_API_KEY: ${{ inputs.mockaroo-api-key }}
       shell: bash
     - name: validate templates
       run: |
         IFS=',' read -ra TEMPLATE_LIST <<< "${{ inputs.templates }}"
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
           echo "Validating template: $TEMPLATE"
-          VALIDATION_OUTPUT=$(sf template validate -a ${{ inputs.org-alias }} -t TEMPLATE 2>&1)
+          VALIDATION_OUTPUT=$(sf template validate -a ${{ inputs.org-alias }} -t $DATA_GEN_PATH/templates/$TEMPLATE 2>&1)
           VALIDATION_EXIT_CODE=$?
           echo "$VALIDATION_OUTPUT"
           if [[ $VALIDATION_EXIT_CODE -ne 0 ]]; then
@@ -54,7 +57,7 @@ runs:
       run: |
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
           echo "Generating data for template: $TEMPLATE"
-          sf data generate -a org-alias -t $TEMPLATE
+          sf data generate -a org-alias -t $DATA_GEN_PATH/templates/$TEMPLATE
         done
       shell: bash
     - name: list output files
