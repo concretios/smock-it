@@ -39,13 +39,14 @@ runs:
       env:
         MOCKAROO_API_KEY: ${{ inputs.mockaroo-api-key }}
       shell: bash
-    - name: validate templates
+    - name: validate & Generate data
       run: |
         IFS=',' read -ra TEMPLATE_LIST <<< "${{ inputs.templates }}"
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
           echo "Validating template: $TEMPLATE"
           echo "$DATA_GEN_PATH/templates/$TEMPLATE"
           sf template validate -a ${{ inputs.org-alias }} -t $TEMPLATE
+          sf data generate -a org-alias -t $TEMPLATE
           # VALIDATION_EXIT_CODE=$?
           # echo "$VALIDATION_OUTPUT"
           # if [[ $VALIDATION_EXIT_CODE -ne 0 ]]; then
@@ -56,9 +57,10 @@ runs:
       shell: bash
     - name: generate synthetic data
       run: |
+        echo "I am here... : $TEMPLATE_LIST "
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
           echo "Generating data for template: $TEMPLATE"
-          sf data generate -a org-alias -t $TEMPLATE
+          sf data generate -a ${{ inputs.org-alias }} -t $TEMPLATE
         done
       shell: bash
     - name: list output files
