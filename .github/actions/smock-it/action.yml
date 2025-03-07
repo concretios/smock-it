@@ -58,6 +58,7 @@ runs:
     - name: generate synthetic data
       run: |
         echo "I am here... : $TEMPLATE_LIST "
+        IFS=',' read -ra TEMPLATE_LIST <<< "${{ inputs.templates }}"
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
           echo "Generating data for template: $TEMPLATE"
           sf data generate -a ${{ inputs.org-alias }} -t $TEMPLATE
