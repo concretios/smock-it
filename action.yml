@@ -4,13 +4,13 @@ author: "Divy Muni"
 
 inputs:
   templates:
-    description: "Comma separated list of Template(s) name (e.g. lead_creation.json, account_update.json)"
+    description: "Provide comma-separated list of Template(s) name (e.g. lead_creation.json, account_update.json)"
     required: true
   mockaroo-api-key:
     description: "Provide Mockaroo API key for test data generation"
     required: true
   org-alias:
-    description: "Salesforce Org Alias"
+    description: "Provide alias of connected salesforce org"
     required: true
 
 runs:
