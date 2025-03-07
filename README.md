@@ -70,7 +70,7 @@ We've made it simple to get started! A GitHub Actions has been created to integr
 >Demonstration below on how to call smock-it in any project.
   
 ```yml
-name: Smock-it - synthetic Data Generation
+name: Smock-it - Salesforce Test Data Generation
 
 on:
   workflow_dispatch:
