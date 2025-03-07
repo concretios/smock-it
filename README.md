@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.1.0-brightgreen" />
+  <img src="https://img.shields.io/badge/version-v2.2.0-brightgreen" />
   <img src="https://img.shields.io/badge/mock--data-brightgreen" />
   <img src="https://img.shields.io/badge/SF--Plugin--Test%20Data%20Generator-blue" />
 </p>
@@ -12,7 +12,7 @@
 
 
 
-# Smock-it (v2.1.0)
+# Smock-it (v2.2.0)
 
 A Salesforce CLI Plugin to simplify synthetic data generation for Salesforce.
 
@@ -20,9 +20,9 @@ Smock-It is a fast, lightweight SF CLI plugin that simplifies Salesforce test da
 
 Whether you`re a developer, QA engineer, or admin, Smock-It adapts to your unique testing requirements, ensuring efficiency, compliance, and scalability. With its ability to generate accurate, diverse test data in less time, you can focus on what truly matters—building, testing, and delivering great solutions.
 
-## **What`s New in v2.1.0?** 
+## **What`s New in v2.2.0?** 
 
-Smock-It v2.1.0 brings smarter, faster test data generation for Salesforce, with:
+Smock-It v2.2.0 brings smarter, faster test data generation for Salesforce, with:
 
 ### **1\. More Customization, Less Effort**
 
@@ -39,18 +39,6 @@ Say goodbye to the 1,000-record cap\! Now, you can generate significantly larger
 ### **4\. Automatic Field Inclusion**
 
 No more missing fields\! Smock-It now automatically detects and includes required fields, ensuring that every dataset is complete, compliant, and ready for testing—without manual intervention.
-
- ## **Important Fixes in Smock-It V 2.1.0 ⚠️** 
-
-**Dependent picklist and picklist value check**: Smock-It now verifies that predefined values exist in the org. If no predefined value matches in the org, Smock-It will not generate any data.
-
-**Required Fields Fix for Data Generation**: Smock-It now automatically handles required fields to ensure smooth and accurate test data generation.
-
-**Relationship Handling up to Two Levels**: With Smock-It users can
-
-- Handle parent-child relationships.
-- Handle child-parent-grandparent relationships, with the grandparent field being mandatory.
-
 
 ## **Key Challenges Solved**
 
@@ -76,6 +64,66 @@ Smock-It lets you complete control over your test data with features like:
 * fieldsToExclude – Remove unnecessary fields for cleaner, more focused datasets.  
 * pickLeftFields – Set to true to generate all fields except the excluded ones, or false to generate only the selected ones.
 
+## How to Use Smock-it in GitHub Actions⚡
+We've made it simple to get started! A GitHub Actions has been created to integrate Smock-it effortlessly into your workflows.
+
+>Demonstration below on how to call smock-it in any project.
+  
+```yml
+name: Smock-it - synthetic Data Generation
+
+on:
+  workflow_dispatch:
+    inputs:
+      templates:
+        description: "Provide comma-separated templates name (e.g lead_creation.json, account_creation.json)"
+        required: true
+        type: string
+      org-alias:
+        description: "Provide alias for authorizing salesforce org"
+        required: true
+        type: string
+        default: "smockit"
+
+jobs:
+  generate-test-data:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout repository
+      uses: actions/checkout@v4
+    - name: setup node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+    - name: install Salesforce CLI
+      run: |
+        npm install -g @salesforce/cli
+        echo "SF CLI Installed."
+    - name: create server-key file from stored secrets
+      run: |
+        echo "${{ secrets.JWT_TOKEN }}" > server.key 
+    - name: connect your org using jwt
+      run: |
+        sf org login jwt --client-id ${{ secrets.CLIENT_ID }} --jwt-key-file server.key --username ${{ secrets.username }} -r instance_url --alias ${{ inputs.org-alias }}
+    - name: generate data using smock-it
+      uses: concretios/smock-it@main
+      with:
+        templates: ${{ inputs.templates }}
+        org-alias: ${{ inputs.org-alias }}
+        mockaroo-api-key: ${{ secrets.MOCKAROO_API_KEY }}
+    - name: upload artifacts
+      uses: actions/upload-artifact@v4
+      with: 
+        name: SmockItOutputFiles
+        path: data_gen/output/
+        retention-days: 15
+        if-no-files-found: warn 
+
+# Important: 
+# You must have `data_gen` directory present on your repo with subdirectories - templates, output.
+# You must have template present on your repository/ branch to generate test data.
+```
+  
 ## Installation
 
 ### Prerequisites
