@@ -44,13 +44,14 @@ runs:
         IFS=',' read -ra TEMPLATE_LIST <<< "${{ inputs.templates }}"
         for TEMPLATE in "${TEMPLATE_LIST[@]}"; do
           echo "Validating template: $TEMPLATE"
-          VALIDATION_OUTPUT=$(sf template validate -a ${{ inputs.org-alias }} -t $DATA_GEN_PATH/templates/$TEMPLATE 2>&1)
-          VALIDATION_EXIT_CODE=$?
-          echo "$VALIDATION_OUTPUT"
-          if [[ $VALIDATION_EXIT_CODE -ne 0 ]]; then
-            echo "Validation failed for template: $TEMPLATE"
-            exit $VALIDATION_EXIT_CODE
-          fi
+          echo "$DATA_GEN_PATH/templates/$TEMPLATE"
+          sf template validate -a ${{ inputs.org-alias }} -t $DATA_GEN_PATH/templates/$TEMPLATE
+          # VALIDATION_EXIT_CODE=$?
+          # echo "$VALIDATION_OUTPUT"
+          # if [[ $VALIDATION_EXIT_CODE -ne 0 ]]; then
+          #   echo "Validation failed for template: $TEMPLATE"
+          #   exit $VALIDATION_EXIT_CODE
+          # fi
         done
       shell: bash
     - name: generate synthetic data
