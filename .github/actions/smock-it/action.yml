@@ -46,7 +46,7 @@ runs:
           echo "Validating template: $TEMPLATE"
           echo "$DATA_GEN_PATH/templates/$TEMPLATE"
           sf template validate -a ${{ inputs.org-alias }} -t $TEMPLATE
-          sf data generate -a org-alias -t $TEMPLATE
+          # sf data generate -a org-alias -t $TEMPLATE
           # VALIDATION_EXIT_CODE=$?
           # echo "$VALIDATION_OUTPUT"
           # if [[ $VALIDATION_EXIT_CODE -ne 0 ]]; then
