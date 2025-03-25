@@ -10,6 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
 import fetch from 'node-fetch';
+import main from 'sf-mock-data';
 import { Table } from 'console-table-printer';
 
 import { Flags,Progress,SfCommand } from '@salesforce/sf-plugins-core';
@@ -20,6 +21,8 @@ import {templateSchema,SObjectItem,sObjectSchemaType, tempAddFlags,} from '../..
 
 import { templateAddFlags} from '../template/upsert.js';
 import { MOCKAROO_API_CALLS_PER_DAY, MOCKAROO_CHUNK_SIZE } from '../../utils/constants.js';
+
+
 
 const fieldsConfigFile = 'generated_output.json';
 
@@ -32,6 +35,7 @@ export type DataGenerateResult = {
 };
 
 type FieldRecord = {
+  Label: string;
   attributes: {
     type: string;
     url: string;
@@ -100,6 +104,7 @@ type fieldType =
   | 'address';
 
   type Field = {
+    label?: string;
     type: fieldType;
     values?: string[]; // For picklist or dependent-picklist
     referenceTo?: string; // For reference fields
@@ -221,6 +226,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
     const { flags } = await this.parse(DataGenerate);
     const aliasOrUsername = flags.alias;
+   
     const conn = await connectToSalesforceOrg(aliasOrUsername);
     let objectName = flags.sObject ? flags.sObject.toLowerCase() : undefined;
     const configFilePath = getTemplateJsonData(flags.templateName);
@@ -240,7 +246,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
 
       const allFields = await conn.query(
-        `SELECT QualifiedApiName, IsDependentPicklist, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
+        `SELECT QualifiedApiName, IsDependentPicklist,Label, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
         FROM EntityParticle
         WHERE EntityDefinition.QualifiedApiName = '${objectName}'
         AND IsCreatable = true
@@ -287,6 +293,15 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2),
       'utf8'
     );
+
+    main.main(fieldsConfigFile)
+    .then(data => {
+        console.log('------------>GeneratedData', data);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+    
     /* create */
 
     excludeFieldsSet.clear();
@@ -537,7 +552,9 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
                 type: 'text',
                 values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]) 
                 ? (considerMap[inputObject.QualifiedApiName.toLowerCase()]) 
-                : []
+                : [],
+                label : inputObject.Label
+
                 
               };
             }
@@ -553,6 +570,7 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
                   ? considerMap[inputObject.QualifiedApiName.toLowerCase()] 
                   : [],
                 relationshipType: inputObject.RelationshipName ? 'master-detail' : 'lookup',
+                label : inputObject.Label
               };
               break;
 
@@ -566,7 +584,8 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
                 // values: considerMap[inputObject.QualifiedApiName.toLowerCase()] || picklistValues,
                 values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]) 
                 ? (considerMap[inputObject.QualifiedApiName.toLowerCase()]) 
-                : picklistValues
+                : picklistValues,
+                label : inputObject.Label
               };
             }
             break;
@@ -575,11 +594,13 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
             if (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]?.length > 0) {
               fieldConfig = { 
                 type: inputObject.DataType, 
-                values: considerMap[inputObject.QualifiedApiName.toLowerCase()]
+                values: considerMap[inputObject.QualifiedApiName.toLowerCase()],
+                label : inputObject.Label
               };
             } else {
               fieldConfig = { 
-                type: inputObject.DataType 
+                type: inputObject.DataType ,
+                label : inputObject.Label
               };
             }
             

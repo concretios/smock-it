@@ -1,0 +1,262 @@
+{
+  "outputFormat": [
+    "json"
+  ],
+  "sObjects": [
+    {
+      "sObject": "lead",
+      "language": "en",
+      "count": 10,
+      "fields": {
+        "LastName": {
+          "type": "text",
+          "values": [],
+          "label": "Last Name"
+        },
+        "FirstName": {
+          "type": "text",
+          "values": [],
+          "label": "First Name"
+        },
+        "Salutation": {
+          "type": "picklist",
+          "values": [
+            "Mr.",
+            "Ms.",
+            "Mrs.",
+            "Dr.",
+            "Prof.",
+            "Mx."
+          ],
+          "label": "Salutation"
+        },
+        "Title": {
+          "type": "text",
+          "values": [],
+          "label": "Title"
+        },
+        "Company": {
+          "type": "text",
+          "values": [],
+          "label": "Company"
+        },
+        "Street": {
+          "type": "text",
+          "values": [],
+          "label": "Street"
+        },
+        "City": {
+          "type": "text",
+          "values": [],
+          "label": "City"
+        },
+        "State": {
+          "type": "text",
+          "values": [],
+          "label": "State/Province"
+        },
+        "PostalCode": {
+          "type": "text",
+          "values": [],
+          "label": "Zip/Postal Code"
+        },
+        "Country": {
+          "type": "text",
+          "values": [],
+          "label": "Country"
+        },
+        "GeocodeAccuracy": {
+          "type": "picklist",
+          "values": [
+            "Address",
+            "NearAddress",
+            "Block",
+            "Street",
+            "ExtendedZip",
+            "Zip",
+            "Neighborhood",
+            "City",
+            "County",
+            "State",
+            "Unknown"
+          ],
+          "label": "Geocode Accuracy"
+        },
+        "Phone": {
+          "type": "phone",
+          "label": "Phone"
+        },
+        "MobilePhone": {
+          "type": "phone",
+          "label": "Mobile Phone"
+        },
+        "Fax": {
+          "type": "phone",
+          "label": "Fax"
+        },
+        "Email": {
+          "type": "email",
+          "label": "Email"
+        },
+        "Website": {
+          "type": "url",
+          "label": "Website"
+        },
+        "Description": {
+          "type": "text",
+          "values": [],
+          "label": "Description"
+        },
+        "LeadSource": {
+          "type": "picklist",
+          "values": [
+            "Web",
+            "Phone Inquiry",
+            "Partner Referral",
+            "Purchased List",
+            "Other"
+          ],
+          "label": "Lead Source"
+        },
+        "Status": {
+          "type": "picklist",
+          "values": [
+            "Open - Not Contacted",
+            "Working - Contacted",
+            "Closed - Converted",
+            "Closed - Not Converted"
+          ],
+          "label": "Status"
+        },
+        "Industry": {
+          "type": "picklist",
+          "values": [
+            "Agriculture",
+            "Apparel",
+            "Banking",
+            "Biotechnology",
+            "Chemicals",
+            "Communications",
+            "Construction",
+            "Consulting",
+            "Education",
+            "Electronics",
+            "Energy",
+            "Engineering",
+            "Entertainment",
+            "Environmental",
+            "Finance",
+            "Food & Beverage",
+            "Government",
+            "Healthcare",
+            "Hospitality",
+            "Insurance",
+            "Machinery",
+            "Manufacturing",
+            "Media",
+            "Not For Profit",
+            "Recreation",
+            "Retail",
+            "Shipping",
+            "Technology",
+            "Telecommunications",
+            "Transportation",
+            "Utilities",
+            "Other"
+          ],
+          "label": "Industry"
+        },
+        "Rating": {
+          "type": "picklist",
+          "values": [
+            "Hot",
+            "Warm",
+            "Cold"
+          ],
+          "label": "Rating"
+        },
+        "AnnualRevenue": {
+          "type": "currency",
+          "label": "Annual Revenue"
+        },
+        "NumberOfEmployees": {
+          "type": "integer",
+          "label": "Employees"
+        },
+        "OwnerId": {
+          "type": "reference",
+          "referenceTo": "Group",
+          "values": [],
+          "relationshipType": "master-detail",
+          "label": "Owner ID"
+        },
+        "IsConverted": {
+          "type": "boolean",
+          "label": "Converted"
+        },
+        "IsUnreadByOwner": {
+          "type": "boolean",
+          "label": "Unread By Owner"
+        },
+        "CompanyDunsNumber": {
+          "type": "text",
+          "values": [],
+          "label": "Company D-U-N-S Number"
+        },
+        "DandbCompanyId": {
+          "type": "reference",
+          "referenceTo": "DandBCompany",
+          "values": [],
+          "relationshipType": "master-detail",
+          "label": "D&B Company ID"
+        },
+        "IndividualId": {
+          "type": "reference",
+          "referenceTo": "Individual",
+          "values": [],
+          "relationshipType": "master-detail",
+          "label": "Individual ID"
+        },
+        "SICCode__c": {
+          "type": "text",
+          "values": [],
+          "label": "SIC Code"
+        },
+        "ProductInterest__c": {
+          "type": "picklist",
+          "values": [
+            "GC1000 series",
+            "GC5000 series",
+            "GC3000 series"
+          ],
+          "label": "Product Interest"
+        },
+        "Primary__c": {
+          "type": "picklist",
+          "values": [
+            "No",
+            "Yes"
+          ],
+          "label": "Primary"
+        },
+        "CurrentGenerators__c": {
+          "type": "text",
+          "values": [],
+          "label": "Current Generator(s)"
+        },
+        "NumberofLocations__c": {
+          "type": "double",
+          "label": "Number of Locations"
+        },
+        "myemail__c": {
+          "type": "email",
+          "label": "My Email"
+        },
+        "Lead_Currency__c": {
+          "type": "currency",
+          "label": "Lead Currency"
+        }
+      }
+    }
+  ]
+}
