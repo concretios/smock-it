@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable sf-plugin/flag-case */
 
@@ -9,7 +10,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import fetch from 'node-fetch';
+// eslint-disable-next-line import/no-extraneous-dependencies
 import main from 'sf-mock-data';
 import { Table } from 'console-table-printer';
 
@@ -20,7 +21,6 @@ import { connectToSalesforceOrg ,validateConfigJson} from '../template/validate.
 import {templateSchema,SObjectItem,sObjectSchemaType, tempAddFlags,} from '../../utils/types.js';
 
 import { templateAddFlags} from '../template/upsert.js';
-import { MOCKAROO_API_CALLS_PER_DAY, MOCKAROO_CHUNK_SIZE } from '../../utils/constants.js';
 
 
 
@@ -70,14 +70,6 @@ type Fields = {
 };
 
 /* ------------------------------------------*/
-
-type BulkQueryBatchResult = {
-  batchId?: string;
-  id?: string | null;
-  jobId?: string;
-  errors?: string[];
-  success?: boolean;
-};
 
 type TargetData = {
   name: string;
@@ -294,13 +286,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       'utf8'
     );
 
-    main.main(fieldsConfigFile)
-    .then(data => {
-        console.log('------------>GeneratedData', data);
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
+
+    // const jsonDataLib = await main.main(fieldsConfigFile);
+    // console.log('------------>GeneratedData', jsonDataLib);
     
     /* create */
 
@@ -318,9 +306,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     if (!sObjectNames) {
       throw new Error('One or more sObject names are undefined. Please check the configuration file.');
     }
-    let jsonData: any 
-    let fetchedData: Record<string, any > 
-    let apiCallout: number = 0
+    // let fetchedData: Record<string, any > 
     const outputPathDir = `${path.join(process.cwd())}/data_gen/output/`;
 
     const table = createTable();
@@ -336,48 +322,24 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       if (!currentSObject) {
         throw new Error(`No configuration found for object: ${object}`);
       }
-      let countofRecordsToGenerate = currentSObject.count
+      const countofRecordsToGenerate = currentSObject.count
       const fields = sObjectFieldsMap.get(object);
 
       if (!fields) {
         this.log(`No fields found for object: ${object}`);
         continue;
       }
-      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields as Array<Record<string, any>>, object);
 
       if (countofRecordsToGenerate === undefined) {
         throw new Error(`Count for object "${object}" is undefined.`);
       }
-
-      if (countofRecordsToGenerate > 1000) { 
- 
-        const numberOfChunks = Math.ceil(countofRecordsToGenerate / MOCKAROO_CHUNK_SIZE); 
-        let allData: any[] = []; 
-
-        for (let i = 0; i < numberOfChunks; i++) {
-          
-          if (apiCallout >= MOCKAROO_API_CALLS_PER_DAY) {
-                this.log('API LIMIT EXCEEDED FOR THE DAY')
-                throw new Error('API call limit exceeded for the day.');
-            }
-          const currentChunkSize = countofRecordsToGenerate > MOCKAROO_CHUNK_SIZE ? MOCKAROO_CHUNK_SIZE : countofRecordsToGenerate; 
-
-          const urlTopass = `https://api.mockaroo.com/api/generate.json?key=${this.getApiKey()}&count=${currentChunkSize}`;
-          const chunkData = await this.fetchMockarooData(urlTopass, processedFields);
-                    
-          apiCallout++;
-          allData = allData.concat(chunkData) 
-          countofRecordsToGenerate -= currentChunkSize; 
-
-        }
-        fetchedData = allData;
-      }
-      else {
-        const url = `https://api.mockaroo.com/api/generate.json?key=${this.getApiKey()}&count=${countofRecordsToGenerate}`;
-        fetchedData = await this.fetchMockarooData(url, processedFields);
+      let jsonData = await main.main(fieldsConfigFile);
+      
+      while (jsonData.length < countofRecordsToGenerate) {
+        jsonData = jsonData.concat(await main.main(fieldsConfigFile));
       }
 
-      jsonData = fetchedData
+      jsonData = jsonData.slice(0, countofRecordsToGenerate);
 
       this.saveOutputFileOfJsonAndCsv(jsonData as GenericRecord[], object, outputFormat, flags.templateName);
 
@@ -546,6 +508,8 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
             ) {
               fieldConfig = {
                 type: 'address',
+                label : inputObject.Label
+
               };
             } else {
               fieldConfig = {
@@ -691,12 +655,6 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   return { failedCount: 0, insertedIds: [] };
 }
 
-/* --------------------------- */
-  // private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
-  //   const result = await conn.describe(object);
-  //   const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-  //   return fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value) ?? [];
-  // }
 
   private async getPicklistValues(
     conn: Connection,
@@ -789,6 +747,9 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     Object.keys(this.dependentPicklistResults).forEach((key) => {
       if (Object.keys(considerMap).includes(key.toLowerCase()) && considerMap[key.toLowerCase()].length > 0) {
         const pickListFieldValues = this.dependentPicklistResults[key];
+        if (!pickListFieldValues.some(item => item.parentFieldValue === considerMap[key.toLowerCase()][0])) {
+          throw new Error(`Parent value '${considerMap[key.toLowerCase()][0]}' not found in the picklist values for '${key}'`);
+        }
         const filteredArray = pickListFieldValues.filter(item => item.parentFieldValue === considerMap[key.toLowerCase()][0]);
 
         if (filteredArray.length > 0) {
@@ -886,16 +847,6 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   }
 
   /* createRecord*/
-
-    private async processObjectFieldsForIntitalJsonFile(
-      conn: Connection,
-      config: Array<Record<string, any>>,
-      object: string
-    ): Promise<Array<Partial<TargetData>>> {
-  
-      const processedFields = await this.handleFieldProcessingForIntitalJsonFile(conn, object, config);
-      return processedFields;
-    }
   
     private async processObjectFieldsForParentObjects(
       conn: Connection,
@@ -914,104 +865,100 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       return query;
     }
   
-    private async fetchMockarooData(url: string, body: Array<Partial<TargetData>>): Promise<GenericRecord[]> {
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body as Array<Record<string, unknown>>),
-        });
-  
-        if (!response.ok) {
-          throw new Error(`Error fetching data from Mockaroo : ${await response.text()}`);
-        }
-        return (await response.json()) as GenericRecord[];
-      } catch (error) {
-        this.error(`Error fetching data from Mockaroo : ${error instanceof Error ? error.message : String(error)}`);
-        throw error;
-      }
-    }
   
     private async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
-      const   results: CreateResult[] = [];
+      const results: CreateResult[] = [];
       const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
-  
-      const initialRecords = dataArray.slice(0, 200);
-      const insertResults = await conn.sobject(object).create(initialRecords);
-      const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
-        (result) => ({
-          id: result.id ?? '',
-          success: result.success,
-          errors: result.errors,
-        })
-      );
-      results.push(...initialInsertResult);
-      if (dataArray.length > 200) {
-        progressBar.start(100, { title: 'Test' } ); 
-        const remainingRecords = dataArray.slice(200);
-        const remainingTotal = remainingRecords.length
-        const job = conn.bulk.createJob(object, 'insert');
-        const batch = job.createBatch();
-         batch.execute(remainingRecords);
-        await new Promise<void>((resolve, reject) => {
-          batch.on('queue', () => {
-            batch.poll(500 /* interval(ms) */, 600_000 /* timeout(ms) */);
-            const pollInterval = setInterval(() => {
-              batch
-                .check()
-                .then((batchStatus) => {
-                  const  recordsProcessed: number  = Number(batchStatus.numberRecordsProcessed) || 0;
-                  const   percentage: number  = Math.ceil((recordsProcessed / remainingTotal) * 100); // Percentage calculation for remaining records
-                  progressBar.update(percentage);
-                  if (batchStatus.state === 'Completed' || batchStatus.state === 'Failed') {
-                    clearInterval(pollInterval);
-                    if (batchStatus.state === 'Failed') {
-                      console.error('Batch failed.');
-                      reject(new Error('Batch processing failed.'));
-                    }
-                  }
-                })
-                .catch((err) => {
-                  clearInterval(pollInterval);
-                  console.error('Error while checking batch status:', err);
-                  reject(err);
-                });
-            }, 1000);
-          });
-          batch.on('response', (rets: BulkQueryBatchResult[]) => {
-            const mappedResults: CreateResult[] = rets.map((ret: BulkQueryBatchResult) => ({
-              id: ret.id ?? '',
-              success: ret.success ?? false,
-              errors: ret.errors ?? [],
-            }));
       
-            results.push(...mappedResults); // Push the bulk results to the main results array
-            progressBar.update(100);
-            progressBar.finish();
-            resolve();
-          });
-          batch.on('error', (err) => {
-            reject(err);
-          });
-        });
+  
+      if (dataArray.length <= 200) {
+          try {
+              const insertResults = await conn.sobject(object).create(jsonData);
+              const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
+                  (result) => ({
+                      id: result.id ?? '',
+                      success: result.success,
+                      errors: result.errors,
+                  })
+              );
+              results.push(...initialInsertResult);
+  
+          } catch (error) {
+              console.error('Error inserting records:', error);
+          }
+      } else {
+        const storeHere = dataArray.splice(0, 200);
+        const insertResults = await conn.sobject(object).create(storeHere);
+              const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
+                  (result) => ({
+                      id: result.id ?? '',
+                      success: result.success,
+                      errors: result.errors,
+                  })
+              );
+        results.push(...initialInsertResult);
         
-        await job.close();
+  
+        progressBar.start(100, { title: 'Test' } ); 
+          const totalRecords = dataArray.length;
+          let processedRecords = 0;
+  
+          try {
+              const job = conn.bulk.createJob(object, 'insert');
+              const batchSize = 200;
+  
+              for (let i = 0; i < dataArray.length; i += batchSize) {
+                  const batchData = dataArray.slice(i, i + batchSize);
+                  const batch = job.createBatch();
+                  batch.execute(batchData);
+  
+                  await new Promise<void>((resolve, reject) => {
+                      batch.on('queue', () => {
+                        batch.poll(500 /* interval(ms) */, 600_000 /* timeout(ms) */);
+                      });
+  
+                      batch.on('response', (rets: any[]) => {
+                          const mappedResults: CreateResult[] = rets.map((ret: any) => ({
+                              id: ret.id ?? '',
+                              success: ret.success ?? false,
+                              errors: ret.errors ?? [],
+                          }));
+  
+                          results.push(...mappedResults);
+                          processedRecords += batchData.length;
+                          const percentage = Math.ceil((processedRecords / totalRecords) * 100);
+                          progressBar.update(percentage);
+  
+                          if (processedRecords >= totalRecords) {
+                              progressBar.update(100);
+                              progressBar.finish();
+                          }
+  
+                          resolve();
+                      });
+  
+                      batch.on('error', (err) => {
+                          console.error('Batch Error:', err);
+                          reject(err);
+                      });
+                  });
+              }
+  
+              await job.close();
+          } catch (error) {
+              console.error('Error during bulk processing:', error);
+              progressBar.stop();
+              throw error;
+          }
       }
+  
       return results;
-    }
+  }
+  
    
     private updateCreatedRecordIds(object: string, results: CreateResult[]): void {
       const ids = results.filter((result) => result.success).map((result) => result.id);
       createdRecordsIds.set(object, ids);
-    }
-  
-    private async handleFieldProcessingForIntitalJsonFile(
-      conn: Connection,
-      object: string,
-      file: Array<Record<string, any>>
-    ): Promise<Array<Partial<TargetData>>> {
-  
-      return this.processFieldsForInitialJsonFile(file, conn, object);
     }
   
     private async handleFieldProcessingForParentObjects(
@@ -1065,21 +1012,16 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           details.type = 'Custom List'; // random value pick
           details.values = await this.getPicklistValuesWithDependentValues(conn, object, fieldName, item);
           processedFields.push(details);
-        } else {
-           // details value contains item.value
-          details.type = this.getFieldType(item, isParentObject);
-          if (details.type) processedFields.push(details);
-        }
+        } 
+        // else {
+        //    // details value contains item.value
+        //   details.type = this.getFieldType(item, isParentObject);
+        //   if (details.type) processedFields.push(details);
+        // }
       }
+
+      console.log('processedFields', processedFields);
       return processedFields;
-    }
-  
-    private async processFieldsForInitialJsonFile(
-      records: Array<Record<string, any>>,
-      conn: Connection,
-      object: string
-    ): Promise<Array<Partial<TargetData>>> {
-      return this.processFields(records, conn, object);
     }
   
     private async processFieldsForParentObjects(
@@ -1089,76 +1031,10 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     ): Promise<Array<Partial<TargetData>>> {
       return this.processFields(records, conn, object, true);
     }
+
   
-    private getFieldType(item: Record<string, any>, isParentObject: boolean = false): string {
-      const fieldName = isParentObject ? (item.QualifiedApiName as string) : (item.name as string);
-      const itemType = isParentObject ? (item.DataType as string) : (item.type as string);
-      switch (itemType) {
-        case 'string':
-        case 'address':
-          return this.getStringFieldType(fieldName);
-        case 'boolean':
-          return 'Boolean';
-        case 'email':
-          return 'Email Address';
-        case 'phone':
-          return 'Phone';
-        case 'date':
-        case 'datetime':
-          return 'Datetime';
-        case 'textarea':
-          return this.getTextareaFieldType(fieldName);
-        case 'double':
-          return this.getDoubleFieldType(fieldName);
-        case 'currency':
-          return 'Number';
-        case 'number':
-          return 'Number';
-        default:
-          return '';
-      }
-    }
   
-    private getStringFieldType(fieldName: string): string {
-      const lowerCasefieldName = fieldName.toLowerCase();
-      if (lowerCasefieldName.includes('name')) {
-        return this.getNameFieldType(lowerCasefieldName);
-      }
-      if (lowerCasefieldName.includes('title')) return 'Title';
-      if (lowerCasefieldName.includes('street')) return 'Street Name';
-      if (lowerCasefieldName.includes('city')) return 'City';
-      if (lowerCasefieldName.includes('state')) return 'State';
-      if (lowerCasefieldName.includes('postalcode') || lowerCasefieldName.includes('Postal_Code')) return 'Postal Code';
-      if (lowerCasefieldName.includes('dunsnumber')) return 'Number';
-      if (lowerCasefieldName.includes('naicscode')) return 'Number';
-      if (lowerCasefieldName.includes('yearstarted')) return '';
-      if (lowerCasefieldName.includes('country') && lowerCasefieldName.includes('code')) return 'Country Code';
-      if (lowerCasefieldName.includes('country')) return 'Country';
-      if (lowerCasefieldName.includes('company')) return 'Company Name';
-      if (lowerCasefieldName.includes('site')) return '';
-      if (lowerCasefieldName.includes('department')) return 'Department (Corporate)';
-      if (lowerCasefieldName.includes('language')) return 'Language';
-      return 'App Name';
-    }
-  
-    private getNameFieldType(fieldName: string): string {
-      if (fieldName.includes('last')) return 'Last Name';
-      if (fieldName.includes('first')) return 'First Name';
-      if (fieldName.includes('middle')) return 'Word';
-      if (fieldName.includes('salutation')) return 'Prefix';
-      return 'Full Name';
-    }
-  
-    private getDoubleFieldType(fieldName: string): string {
-      if (fieldName.includes('latitude')) return 'Latitude';
-      return 'Number';
-    }
-  
-    private getTextareaFieldType(fieldName: string): string {
-      if (fieldName.includes('street')) return 'Street Name';
-      return '';
-    }
-  
+
     private async fetchRelatedRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
       if (createdRecordsIds.has(referenceTo + '')) {
         return Array.from(createdRecordsIds.get(referenceTo + '') ?? []);
@@ -1180,12 +1056,11 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         if (depthForRecord === 3) {
           this.error('Max Depth Reach Please Create ' + referenceTo + ' Records First');
         }
-        const processedFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
-        const jsonData = await this.fetchMockarooData(
-          `https://api.mockaroo.com/api/generate.json?key=${this.getApiKey()}&count=1`,
-          processedFields
-        );
-        const insertResult = await this.insertRecords(conn, referenceTo, jsonData);
+        await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
+        const jsonData = await main.main(fieldsConfigFile)
+        const limitedData = jsonData.slice(0, 1); // Limit to 1 record for creation
+
+        const insertResult = await this.insertRecords(conn, referenceTo, limitedData);
         this.updateCreatedRecordIds(referenceTo, insertResult);
         return insertResult.map((result) => result.id).filter((id) => id !== '');
       }
@@ -1210,20 +1085,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       return picklistValues;
     }
   
-    private getApiKey(): string {
-      try {
-        const apiKey = process.env.MOCKAROO_API_KEY;
-        if (!apiKey) {
-          throw new Error(
-            'API key missing: Please add your Mockaroo API key to Environment Variable "MOCKAROO_API_KEY".'
-          );
-        }
-  
-        return apiKey;
-      } catch (error) {
-        this.error(`Failed to read Mockaroo API key: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
+   
   
     private async readSObjectConfigFile(): Promise<SObjectConfigFile> {
       const configPath = path.resolve(process.cwd(), fieldsConfigFile);
@@ -1237,7 +1099,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       config.sObjects.forEach((sObject) => {
         if (sObject.fields) {
           
-          const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObjec
+          const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObject
           for (const [fieldName, fieldDetails] of Object.entries(sObject.fields)) {
             if (fieldDetails.type === 'dependent-picklist') {
               this.processDependentPicklists(fieldName, fieldDetails, fieldsArray);
@@ -1274,19 +1136,19 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
     private mapFieldType(fieldType: fieldType): string {
       const typeMapping: { [key in fieldType]: string } = {
-        text: 'string',
-        boolean: 'checkbox',
+        text: 'text',
+        boolean: 'boolean',
         phone: 'phone',
         currency: 'currency',
-        double: 'number',
-        email: 'email',
+        double: 'double',
         date: 'date',
-        time: 'Time',
+        time: 'time',
         datetime: 'datetime',
         picklist: 'picklist',
         reference: 'reference',
-        address: 'address',
         'dependent-picklist': 'picklist',
+        email: 'email',
+        address: 'address',
       };
   
       return typeMapping[fieldType] || 'Unknown';
@@ -1371,33 +1233,6 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       }
     }
   
-    // private async insertImage(filePaths: string[], conn: Connection, parentIds: string[]): Promise<void> {
-    //   try {
-    //     for (const parentId of parentIds) {
-    //       for (const filePath of filePaths) {
-    //         const fileContent = fs.readFileSync(filePath);
-    //         const base64Image = fileContent.toString('base64');
-  
-    //         const contentVersion = {
-    //           Title: path.basename(filePath), // Set file name as the title
-    //           PathOnClient: filePath, // Path on the local machine
-    //           VersionData: base64Image, // Base64-encoded file content
-    //           FirstPublishLocationId: parentId, // The parent record ID (like an Account or Opportunity)
-    //         };
-  
-    //         const result = await conn.sobject('ContentVersion').create(contentVersion);
-  
-    //         if (result.success) {
-    //           this.log('Image inserted successfully with ContentVersion ID:', result.id);
-    //         } else {
-    //           this.error('Failed to insert image:');
-    //         }
-    //       }
-    //     }
-    //   } catch (error) {
-    //     this.error('Error inserting random image:');
-    //   }
-    // }
   
     private saveMapToJsonFile(folderName: string, fileName: string): void {
       const sanitizedFileName = fileName.replace(/[:/\\<>?|*]/g, '_');
@@ -1415,7 +1250,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
       const outputFile = path.join(outputDir, sanitizedFileName);
       fs.writeFileSync(outputFile, JSON.stringify(resultObject, null, 2), 'utf-8');
-      // this.log(`File created at=============: ${outputFile}`);
+      this.log(`File created at=============: ${outputFile}`);
   
     }
   
