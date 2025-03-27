@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable sf-plugin/flag-case */
@@ -81,19 +84,10 @@ type TargetData = {
 };
 
 type fieldType =
-  | 'text'
-  | 'boolean'
-  | 'phone'
-  | 'currency'
-  | 'double'
-  | 'date'
-  | 'time'
-  | 'datetime'
   | 'picklist'
   | 'reference'
   | 'dependent-picklist'
-  | 'email'
-  | 'address';
+
 
   type Field = {
     label?: string;
@@ -329,17 +323,18 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
         this.log(`No fields found for object: ${object}`);
         continue;
       }
+      // const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
 
+      // console.log('processedFields', processedFields);
       if (countofRecordsToGenerate === undefined) {
         throw new Error(`Count for object "${object}" is undefined.`);
       }
-      let jsonData = await main.main(fieldsConfigFile);
-      
-      while (jsonData.length < countofRecordsToGenerate) {
-        jsonData = jsonData.concat(await main.main(fieldsConfigFile));
-      }
-
-      jsonData = jsonData.slice(0, countofRecordsToGenerate);
+      // const jsonData = await main.main(fieldsConfigFile);
+      const basicJsonData = await main.main(configPath,object);
+      console.log('basicJsonData', basicJsonData);
+      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
+      console.log('processedFields', processedFields);
+      const jsonData = this.enhanceDataWithSpecialFields(basicJsonData, processedFields, countofRecordsToGenerate);
 
       this.saveOutputFileOfJsonAndCsv(jsonData as GenericRecord[], object, outputFormat, flags.templateName);
 
@@ -848,6 +843,16 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
 
   /* createRecord*/
   
+   private async processObjectFieldsForIntitalJsonFile(
+      conn: Connection,
+      config: any[],
+      object: string
+    ): Promise<Array<Partial<TargetData>>> {
+  
+      const processedFields = await this.handleFieldProcessingForIntitalJsonFile(conn, object, config);
+      return processedFields;
+    }
+
     private async processObjectFieldsForParentObjects(
       conn: Connection,
       object: string,
@@ -961,6 +966,13 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       createdRecordsIds.set(object, ids);
     }
   
+     private async handleFieldProcessingForIntitalJsonFile(
+        conn: Connection,
+        object: string,
+        file: any[]
+      ): Promise<Array<Partial<TargetData>>> {
+        return this.processFieldsForInitialJsonFile(file, conn, object);
+  }
     private async handleFieldProcessingForParentObjects(
       conn: Connection,
       query: string,
@@ -1020,10 +1032,16 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         // }
       }
 
-      console.log('processedFields', processedFields);
       return processedFields;
     }
   
+      private async processFieldsForInitialJsonFile(
+        records: Array<Record<string, any>>,
+        conn: Connection,
+        object: string
+      ): Promise<Array<Partial<TargetData>>> {
+        return this.processFields(records, conn, object);
+      }
     private async processFieldsForParentObjects(
       records: Array<Record<string, any>>,
       conn: Connection,
@@ -1031,9 +1049,6 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     ): Promise<Array<Partial<TargetData>>> {
       return this.processFields(records, conn, object, true);
     }
-
-  
-  
 
     private async fetchRelatedRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
       if (createdRecordsIds.has(referenceTo + '')) {
@@ -1057,7 +1072,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           this.error('Max Depth Reach Please Create ' + referenceTo + ' Records First');
         }
         await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
-        const jsonData = await main.main(fieldsConfigFile)
+        const jsonData = await main.main(fieldsConfigFile,referenceTo)
         const limitedData = jsonData.slice(0, 1); // Limit to 1 record for creation
 
         const insertResult = await this.insertRecords(conn, referenceTo, limitedData);
@@ -1136,19 +1151,9 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
     private mapFieldType(fieldType: fieldType): string {
       const typeMapping: { [key in fieldType]: string } = {
-        text: 'text',
-        boolean: 'boolean',
-        phone: 'phone',
-        currency: 'currency',
-        double: 'double',
-        date: 'date',
-        time: 'time',
-        datetime: 'datetime',
         picklist: 'picklist',
         reference: 'reference',
         'dependent-picklist': 'picklist',
-        email: 'email',
-        address: 'address',
       };
   
       return typeMapping[fieldType] || 'Unknown';
@@ -1250,9 +1255,55 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
       const outputFile = path.join(outputDir, sanitizedFileName);
       fs.writeFileSync(outputFile, JSON.stringify(resultObject, null, 2), 'utf-8');
-      this.log(`File created at=============: ${outputFile}`);
+      // this.log(`File created at=============: ${outputFile}`);
   
     }
+
+    private enhanceDataWithSpecialFields(basicData: any[], processedFields: Array<Partial<TargetData>>, count: number): any[] {
+      const enhancedData = basicData.map(item => ({ ...item }));
+       this.getRandomElement = <T>(array: T[]): T | undefined => {
+        const element = array[Math.floor(Math.random() * array.length)];
+        return Array.isArray(element) ? element[0] : element; 
+      };
+      for (const field of processedFields) {
+        if (field.type === 'Custom List' && field.values) {
+          const values = Array.from({ length: count }, () => this.getRandomElement(field.values ?? []));
+          values.forEach((value, index) => {
+            if (field.name) {
+                enhancedData[index][field.name] = value;
+            }
+          });
+        }
+      }
+  
+      return enhancedData;
+    }
+
+    // private enhanceDataWithSpecialFields(basicData: any[], processedFields: Array<Partial<TargetData>>, count: number): any[] {
+    //   const enhancedData = basicData.map(item => ({ ...item }));
+      
+    //   for (const field of processedFields) {
+    //     if (field.type === 'Custom List' && field.values) {
+    //       // Flatten nested arrays in field.values
+    //       const flatValues = Array.isArray(field.values) ? field.values.flat() : [];
+    //       // Ensure we have a valid array of strings
+    //       const validValues = flatValues.length > 0 ? flatValues : [];
+          
+    //       if (validValues.length > 0) {
+    //         const values = Array.from({ length: count }, () => this.getRandomElement(validValues));
+    //         values.forEach((value, index) => {
+    //           if (field.name) {
+    //             enhancedData[index][field.name] = value;
+    //           }
+    //         });
+    //       } else {
+    //         console.warn('No valid values for field', field.name);
+    //       }
+    //     }
+    //   }
+    
+    //   return enhancedData;
+    // }
   
     private convertJsonToCsv(jsonData: GenericRecord[]): string {
       let fields;

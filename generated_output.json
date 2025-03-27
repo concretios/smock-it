@@ -1,13 +1,14 @@
 {
   "outputFormat": [
     "json",
-    "csv"
+    "csv",
+    "di"
   ],
   "sObjects": [
     {
       "sObject": "contact",
       "language": "en",
-      "count": 100,
+      "count": 3,
       "fields": {
         "AccountId": {
           "type": "reference",
@@ -145,6 +146,9 @@
         },
         "Email": {
           "type": "email",
+          "values": [
+            "smck@gmail.com"
+          ],
           "label": "Email"
         },
         "Title": {
@@ -397,6 +401,325 @@
         "My_number__c": {
           "type": "double",
           "label": "My number"
+        }
+      }
+    },
+    {
+      "sObject": "account",
+      "language": "en",
+      "count": 3,
+      "fields": {
+        "Name": {
+          "type": "text",
+          "values": [],
+          "label": "Account Name"
+        },
+        "Type": {
+          "type": "picklist",
+          "values": [
+            "Prospect",
+            "Customer - Direct",
+            "Customer - Channel",
+            "Channel Partner / Reseller",
+            "Installation Partner",
+            "Technology Partner",
+            "Other"
+          ],
+          "label": "Account Type"
+        },
+        "ParentId": {
+          "type": "reference",
+          "referenceTo": "Account",
+          "values": [],
+          "relationshipType": "master-detail",
+          "label": "Parent Account ID"
+        },
+        "BillingStreet": {
+          "type": "address",
+          "label": "Billing Street"
+        },
+        "BillingCity": {
+          "type": "address",
+          "label": "Billing City"
+        },
+        "BillingState": {
+          "type": "address",
+          "label": "Billing State/Province"
+        },
+        "BillingPostalCode": {
+          "type": "address",
+          "label": "Billing Zip/Postal Code"
+        },
+        "BillingCountry": {
+          "type": "address",
+          "label": "Billing Country"
+        },
+        "BillingGeocodeAccuracy": {
+          "type": "picklist",
+          "values": [
+            "Address",
+            "NearAddress",
+            "Block",
+            "Street",
+            "ExtendedZip",
+            "Zip",
+            "Neighborhood",
+            "City",
+            "County",
+            "State",
+            "Unknown"
+          ],
+          "label": "Billing Geocode Accuracy"
+        },
+        "ShippingStreet": {
+          "type": "address",
+          "label": "Shipping Street"
+        },
+        "ShippingCity": {
+          "type": "address",
+          "label": "Shipping City"
+        },
+        "ShippingState": {
+          "type": "address",
+          "label": "Shipping State/Province"
+        },
+        "ShippingPostalCode": {
+          "type": "address",
+          "label": "Shipping Zip/Postal Code"
+        },
+        "ShippingCountry": {
+          "type": "address",
+          "label": "Shipping Country"
+        },
+        "ShippingGeocodeAccuracy": {
+          "type": "picklist",
+          "values": [
+            "Address",
+            "NearAddress",
+            "Block",
+            "Street",
+            "ExtendedZip",
+            "Zip",
+            "Neighborhood",
+            "City",
+            "County",
+            "State",
+            "Unknown"
+          ],
+          "label": "Shipping Geocode Accuracy"
+        },
+        "Phone": {
+          "type": "phone",
+          "label": "Account Phone"
+        },
+        "Fax": {
+          "type": "phone",
+          "label": "Account Fax"
+        },
+        "AccountNumber": {
+          "type": "text",
+          "values": [],
+          "label": "Account Number"
+        },
+        "Website": {
+          "type": "url",
+          "label": "Website"
+        },
+        "Sic": {
+          "type": "text",
+          "values": [],
+          "label": "SIC Code"
+        },
+        "Industry": {
+          "type": "picklist",
+          "values": [
+            "Agriculture",
+            "Apparel",
+            "Banking",
+            "Biotechnology",
+            "Chemicals",
+            "Communications",
+            "Construction",
+            "Consulting",
+            "Education",
+            "Electronics",
+            "Energy",
+            "Engineering",
+            "Entertainment",
+            "Environmental",
+            "Finance",
+            "Food & Beverage",
+            "Government",
+            "Healthcare",
+            "Hospitality",
+            "Insurance",
+            "Machinery",
+            "Manufacturing",
+            "Media",
+            "Not For Profit",
+            "Recreation",
+            "Retail",
+            "Shipping",
+            "Technology",
+            "Telecommunications",
+            "Transportation",
+            "Utilities",
+            "Other"
+          ],
+          "label": "Industry"
+        },
+        "AnnualRevenue": {
+          "type": "currency",
+          "label": "Annual Revenue"
+        },
+        "NumberOfEmployees": {
+          "type": "integer",
+          "label": "Employees"
+        },
+        "Ownership": {
+          "type": "picklist",
+          "values": [
+            "Public",
+            "Private",
+            "Subsidiary",
+            "Other"
+          ],
+          "label": "Ownership"
+        },
+        "TickerSymbol": {
+          "type": "text",
+          "values": [],
+          "label": "Ticker Symbol"
+        },
+        "Description": {
+          "type": "text",
+          "values": [],
+          "label": "Account Description"
+        },
+        "Rating": {
+          "type": "picklist",
+          "values": [
+            "Hot",
+            "Warm",
+            "Cold"
+          ],
+          "label": "Account Rating"
+        },
+        "Site": {
+          "type": "text",
+          "values": [],
+          "label": "Account Site"
+        },
+        "OwnerId": {
+          "type": "reference",
+          "referenceTo": "User",
+          "values": [],
+          "relationshipType": "master-detail",
+          "label": "Owner ID"
+        },
+        "AccountSource": {
+          "type": "picklist",
+          "values": [
+            "Web",
+            "Phone Inquiry",
+            "Partner Referral",
+            "Purchased List",
+            "Other"
+          ],
+          "label": "Account Source"
+        },
+        "DunsNumber": {
+          "type": "text",
+          "values": [],
+          "label": "D-U-N-S Number"
+        },
+        "Tradestyle": {
+          "type": "text",
+          "values": [],
+          "label": "Tradestyle"
+        },
+        "NaicsCode": {
+          "type": "text",
+          "values": [],
+          "label": "NAICS Code"
+        },
+        "NaicsDesc": {
+          "type": "text",
+          "values": [],
+          "label": "NAICS Description"
+        },
+        "YearStarted": {
+          "type": "text",
+          "values": [],
+          "label": "Year Started"
+        },
+        "SicDesc": {
+          "type": "text",
+          "values": [],
+          "label": "SIC Description"
+        },
+        "DandbCompanyId": {
+          "type": "reference",
+          "referenceTo": "DandBCompany",
+          "values": [],
+          "relationshipType": "master-detail",
+          "label": "D&B Company ID"
+        },
+        "OperatingHoursId": {
+          "type": "reference",
+          "referenceTo": "OperatingHours",
+          "values": [],
+          "relationshipType": "master-detail",
+          "label": "Operating Hour ID"
+        },
+        "CustomerPriority__c": {
+          "type": "picklist",
+          "values": [
+            "High",
+            "Low",
+            "Medium"
+          ],
+          "label": "Customer Priority"
+        },
+        "SLA__c": {
+          "type": "picklist",
+          "values": [
+            "Gold",
+            "Silver",
+            "Platinum",
+            "Bronze"
+          ],
+          "label": "SLA"
+        },
+        "Active__c": {
+          "type": "picklist",
+          "values": [
+            "No",
+            "Yes"
+          ],
+          "label": "Active"
+        },
+        "NumberofLocations__c": {
+          "type": "double",
+          "label": "Number of Locations"
+        },
+        "UpsellOpportunity__c": {
+          "type": "picklist",
+          "values": [
+            "Maybe",
+            "No",
+            "Yes"
+          ],
+          "label": "Upsell Opportunity"
+        },
+        "SLASerialNumber__c": {
+          "type": "text",
+          "values": [],
+          "label": "SLA Serial Number"
+        },
+        "SLAExpirationDate__c": {
+          "type": "date",
+          "label": "SLA Expiration Date"
         }
       }
     }

@@ -282,19 +282,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
         }
         this.updateCreatedRecordIds(object, insertResult);
 
-        if (flags['include-files'] !== undefined && flags['include-files']?.length > 0) {
-          this.insertImage(flags['include-files'], conn, insertedIds);
-        }
       }
-
-      // const resultEntry: any = {
-      //   'SObject(s)': object.toUpperCase(),
-      //   JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
-      //   CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
-      //   DI: outputFormat.includes('di') || outputFormat.includes('DI') ? (failedCount > 0 ? chalk.red('X') : '\u2714') : '-',        
-      //   'Failed(DI)': 0 ,
-      // };
-
 
 
       // resultEntry['Failed(DI)'] = failedCount;
@@ -809,33 +797,7 @@ export default class CreateRecord extends SfCommand<CreateRecordResult> {
   }
 
 
-  private async insertImage(filePaths: string[], conn: Connection, parentIds: string[]): Promise<void> {
-    try {
-      for (const parentId of parentIds) {
-        for (const filePath of filePaths) {
-          const fileContent = fs.readFileSync(filePath);
-          const base64Image = fileContent.toString('base64');
-
-          const contentVersion = {
-            Title: path.basename(filePath), // Set file name as the title
-            PathOnClient: filePath, // Path on the local machine
-            VersionData: base64Image, // Base64-encoded file content
-            FirstPublishLocationId: parentId, // The parent record ID (like an Account or Opportunity)
-          };
-
-          const result = await conn.sobject('ContentVersion').create(contentVersion);
-
-          if (result.success) {
-            this.log('Image inserted successfully with ContentVersion ID:', result.id);
-          } else {
-            this.error('Failed to insert image:');
-          }
-        }
-      }
-    } catch (error) {
-      this.error('Error inserting random image:');
-    }
-  }
+  
 
   private saveMapToJsonFile(folderName: string, fileName: string): void {
     const sanitizedFileName = fileName.replace(/[:/\\<>?|*]/g, '_');
