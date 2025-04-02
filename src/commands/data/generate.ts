@@ -1,3 +1,4 @@
+/* eslint-disable no-param-reassign */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -81,12 +82,15 @@ type TargetData = {
   max?: number;
   decimals?: number;
   values?: string[];
+  label?: string;
 };
 
 type fieldType =
   | 'picklist'
   | 'reference'
   | 'dependent-picklist'
+  | 'string'
+  | 'textarea'
 
 
   type Field = {
@@ -279,10 +283,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
       JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2),
       'utf8'
     );
-
-
-    // const jsonDataLib = await main.main(fieldsConfigFile);
-    // console.log('------------>GeneratedData', jsonDataLib);
     
     /* create */
 
@@ -323,17 +323,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
         this.log(`No fields found for object: ${object}`);
         continue;
       }
-      // const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
-
-      // console.log('processedFields', processedFields);
+      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
       if (countofRecordsToGenerate === undefined) {
         throw new Error(`Count for object "${object}" is undefined.`);
       }
-      // const jsonData = await main.main(fieldsConfigFile);
       const basicJsonData = await main.main(configPath,object);
-      console.log('basicJsonData', basicJsonData);
-      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
-      console.log('processedFields', processedFields);
       const jsonData = this.enhanceDataWithSpecialFields(basicJsonData, processedFields, countofRecordsToGenerate);
 
       this.saveOutputFileOfJsonAndCsv(jsonData as GenericRecord[], object, outputFormat, flags.templateName);
@@ -392,7 +386,24 @@ private processFieldsToConsider(configForObject: sObjectSchemaType): Record<stri
 
   return considerMap;
 }
+private getFieldType(item: Record<string, any>, isParentObject: boolean = false): string {
+  const itemType = isParentObject ? item.DataType : item.type;
+  
+  if (itemType === 'reference') {
+    return 'reference';
+  }
 
+  if (itemType === 'string' || itemType === 'textarea') {
+    return 'text';
+  }
+  
+  if (itemType === 'picklist' || itemType === 'multipicklist') {
+    return 'picklist';
+  }
+
+  // For all other types, return the original type as the library will handle it
+  return itemType;
+}
 private processObjectConfiguration(baseConfig: templateSchema, objectName: string | undefined, flags: tempAddFlags): any[] {
   let objectsToProcess = baseConfig.sObjects;
 
@@ -850,6 +861,7 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     ): Promise<Array<Partial<TargetData>>> {
   
       const processedFields = await this.handleFieldProcessingForIntitalJsonFile(conn, object, config);
+      console.log('processedFields870');
       return processedFields;
     }
 
@@ -869,95 +881,108 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       if (onlyRequiredFields) query += ' AND IsNillable = false';
       return query;
     }
+
+  private async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
+    const results: CreateResult[] = [];
+    const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+    const sObjectName = Array.isArray(object) ? object[0] : object;
   
-  
-    private async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
-      const results: CreateResult[] = [];
-      const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
-      
-  
-      if (dataArray.length <= 200) {
-          try {
-              const insertResults = await conn.sobject(object).create(jsonData);
-              const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
-                  (result) => ({
-                      id: result.id ?? '',
-                      success: result.success,
-                      errors: result.errors,
-                  })
-              );
-              results.push(...initialInsertResult);
-  
-          } catch (error) {
-              console.error('Error inserting records:', error);
+    if (dataArray.length <= 200) {
+      try {
+        const insertResults = await conn.sobject(sObjectName).create(jsonData);
+        const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
+          (result, index) => {
+            if (!result.success) {
+              console.error(`Failed to insert record ${index} for ${sObjectName}:`, result.errors);
+            }
+            return {
+              id: result.id ?? '',
+              success: result.success,
+              errors: result.errors,
+            };
           }
-      } else {
-        const storeHere = dataArray.splice(0, 200);
-        const insertResults = await conn.sobject(object).create(storeHere);
-              const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
-                  (result) => ({
-                      id: result.id ?? '',
-                      success: result.success,
-                      errors: result.errors,
-                  })
-              );
+        );
         results.push(...initialInsertResult);
-        
+      } catch (error) {
+        console.error('Error inserting records:', error);
+      }
+    } else {
+      // Bulk processing logic (similarly enhance error logging)
+      const storeHere = dataArray.splice(0, 200);
+      const insertResults = await conn.sobject(sObjectName).create(storeHere);
+      const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
+        (result, index) => {
+          if (!result.success) {
+            console.error(`Failed to insert record ${index} for ${sObjectName}:`, result.errors);
+          }
+          return {
+            id: result.id ?? '',
+            success: result.success,
+            errors: result.errors,
+          };
+        }
+      );
+      results.push(...initialInsertResult);
   
-        progressBar.start(100, { title: 'Test' } ); 
-          const totalRecords = dataArray.length;
-          let processedRecords = 0;
+      progressBar.start(100, { title: 'Test' });
+      const totalRecords = dataArray.length;
+      let processedRecords = 0;
   
-          try {
-              const job = conn.bulk.createJob(object, 'insert');
-              const batchSize = 200;
+      try {
+        const job = conn.bulk.createJob(sObjectName, 'insert');
+        const batchSize = 200;
   
-              for (let i = 0; i < dataArray.length; i += batchSize) {
-                  const batchData = dataArray.slice(i, i + batchSize);
-                  const batch = job.createBatch();
-                  batch.execute(batchData);
+        for (let i = 0; i < dataArray.length; i += batchSize) {
+          const batchData = dataArray.slice(i, i + batchSize);
+          const batch = job.createBatch();
+          batch.execute(batchData);
   
-                  await new Promise<void>((resolve, reject) => {
-                      batch.on('queue', () => {
-                        batch.poll(500 /* interval(ms) */, 600_000 /* timeout(ms) */);
-                      });
+          await new Promise<void>((resolve, reject) => {
+            batch.on('queue', () => {
+              batch.poll(500, 600_000);
+            });
   
-                      batch.on('response', (rets: any[]) => {
-                          const mappedResults: CreateResult[] = rets.map((ret: any) => ({
-                              id: ret.id ?? '',
-                              success: ret.success ?? false,
-                              errors: ret.errors ?? [],
-                          }));
+            batch.on('response', (rets: any[]) => {
+              const mappedResults: CreateResult[] = rets.map((ret, index) => {
+                if (!ret.success) {
+                  console.error(`Bulk insert failed for record ${index + i} in ${sObjectName}:`, ret.errors);
+                }
+                return {
+                  id: ret.id ?? '',
+                  success: ret.success ?? false,
+                  errors: ret.errors ?? [],
+                };
+              });
   
-                          results.push(...mappedResults);
-                          processedRecords += batchData.length;
-                          const percentage = Math.ceil((processedRecords / totalRecords) * 100);
-                          progressBar.update(percentage);
+              results.push(...mappedResults);
+              processedRecords += batchData.length;
+              const percentage = Math.ceil((processedRecords / totalRecords) * 100);
+              progressBar.update(percentage);
   
-                          if (processedRecords >= totalRecords) {
-                              progressBar.update(100);
-                              progressBar.finish();
-                          }
-  
-                          resolve();
-                      });
-  
-                      batch.on('error', (err) => {
-                          console.error('Batch Error:', err);
-                          reject(err);
-                      });
-                  });
+              if (processedRecords >= totalRecords) {
+                progressBar.update(100);
+                progressBar.finish();
               }
   
-              await job.close();
-          } catch (error) {
-              console.error('Error during bulk processing:', error);
-              progressBar.stop();
-              throw error;
-          }
-      }
+              resolve();
+            });
   
-      return results;
+            batch.on('error', (err) => {
+              console.error('Batch Error:', err);
+              reject(err);
+            });
+          });
+        }
+  
+        await job.close();
+      } catch (error) {
+        console.error('Error during bulk processing:', error);
+        progressBar.stop();
+        throw error;
+      }
+    }
+  
+    return results;
   }
   
    
@@ -993,10 +1018,9 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       isParentObject: boolean = false
     ): Promise<Array<Partial<TargetData>>> {
       const processedFields: Array<Partial<TargetData>> = [];
-  
       for (const item of records) {
-        const fieldName = isParentObject ? (item.QualifiedApiName as string) : (item.name as string);
-        const dataType: string = isParentObject ? (item.DataType as string) : (item.type as string);
+        const fieldName = isParentObject ? item.QualifiedApiName : item.name;
+        const dataType = isParentObject ? item.DataType : item.type;
         const isReference = dataType === 'reference';
         const isPicklist = dataType === 'picklist' || dataType === 'multipicklist';
   
@@ -1009,11 +1033,11 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
   
           if (item.values?.length) {
-            details.values = item.values as string[];
+            details.values = item.values;
           } else {
             details.values = isMasterDetail
-              ? await this.fetchRelatedMasterRecordIds(conn, String(item.referenceTo || item.ReferenceTo?.referenceTo))
-              : await this.fetchRelatedRecordIds(conn, String(item.referenceTo || item.ReferenceTo?.referenceTo));
+              ? await this.fetchRelatedMasterRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo)
+              : await this.fetchRelatedRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo);
           }
   
           if (isMasterDetail) {
@@ -1021,17 +1045,15 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           }
           processedFields.push(details);
         } else if (isPicklist || item.values?.length > 0) {
-          details.type = 'Custom List'; // random value pick
+          details.type = 'Custom List'; // random value pick krta h
           details.values = await this.getPicklistValuesWithDependentValues(conn, object, fieldName, item);
           processedFields.push(details);
-        } 
-        // else {
-        //    // details value contains item.value
-        //   details.type = this.getFieldType(item, isParentObject);
-        //   if (details.type) processedFields.push(details);
-        // }
+        } else {
+           // details ki value contains item .value contain hoti
+          details.type = this.getFieldType(item, isParentObject);
+          if (details.type) processedFields.push(details);
+        }
       }
-
       return processedFields;
     }
   
@@ -1060,28 +1082,115 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
 
     }
   
-    private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
-      if (createdRecordsIds.has(referenceTo + '')) {
-        return Array.from(createdRecordsIds.get(referenceTo + '') ?? []);
-      }
+  //   private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
+  //     // Retrieve existing created record IDs if available
+  //     const existingIds = createdRecordsIds.get(referenceTo) ?? [];
+  //     if (existingIds.length > 0) {
+  //         return Array.from(existingIds);
+  //     }
   
-      const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
+  //     // Query existing records
+  //     const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
   
-      if (relatedRecords.records.length === 0) {
-        if (depthForRecord === 3) {
-          this.error('Max Depth Reach Please Create ' + referenceTo + ' Records First');
-        }
-        await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
-        const jsonData = await main.main(fieldsConfigFile,referenceTo)
-        const limitedData = jsonData.slice(0, 1); // Limit to 1 record for creation
+  //     if (relatedRecords.records.length === 0) {
+  //         if (depthForRecord === 3) {
+  //             this.error(`Max Depth Reached! Please create ${referenceTo} records first.`);
+  //         }
+  
+  //         // Fetch fields required for parent object creation
+  //         const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
+  
+  //         // Convert processFields to a field mapping object
+  //         const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
+  //             if (field.name) {
+  //                 return {
+  //                     ...acc,
+  //                     [field.name]: {
+  //                         type: field.type,
+  //                         values: field.values ?? [],
+  //                         label: field.label ?? field.name,
+  //                     }
+  //                 };
+  //             }
+  //             return acc;
+  //         }, {});
+  //         // console.log('fieldMap---------------', fieldMap);
+  
+  //         // Generate JSON data for the new record
+  //         const jsonData = await main.getFieldsData(fieldMap, 1);
+  
+  //         if (!Array.isArray(jsonData) || jsonData.length === 0) {
+  //             this.error('Failed to generate valid data for');
+  //         }
+  
+  //         // console.log('line125', jsonData);
+  //         // Insert the new record and update created records cache
 
-        const insertResult = await this.insertRecords(conn, referenceTo, limitedData);
-        this.updateCreatedRecordIds(referenceTo, insertResult);
-        return insertResult.map((result) => result.id).filter((id) => id !== '');
-      }
-      return relatedRecords.records.map((record: RecordId) => record.Id);
+  //         const insertResult = await this.insertRecords(conn, referenceTo, jsonData);
+  //         this.updateCreatedRecordIds(referenceTo, insertResult);
+  
+  //         // Return valid record IDs
+  //         return insertResult.map(result => result.id);
+  //     }
+  
+  //     // Return existing record IDs from query
+  //     return relatedRecords.records.map((record: RecordId) => record.Id);
+  // }
+
+  private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
+    const existingIds = createdRecordsIds.get(referenceTo) ?? [];
+    if (existingIds.length > 0) {
+      return Array.from(existingIds);
     }
   
+    const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
+  
+    if (relatedRecords.records.length === 0) {
+      if (depthForRecord === 3) {
+        this.error(`Max Depth Reached! Please create ${referenceTo} records first.`);
+      }
+  
+      const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
+  
+      const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
+        if (field.name) {
+          return {
+            ...acc,
+            [field.name]: {
+              type: field.type,
+              values: field.values ?? [],
+              label: field.label ?? field.name,
+            },
+          };
+        }
+        return acc;
+      }, {});
+  
+      // Generate initial JSON data using the existing getFieldsData
+      const initialJsonData = await main.getFieldsData(fieldMap, 1);
+  
+      if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
+        this.error(`Failed to generate valid data for ${referenceTo}`);
+      }
+  
+      // Enhance the JSON data with required fields
+      const enhancedJsonData = this.enhanceJsonDataWithRequiredFields(initialJsonData, fieldMap);
+
+  
+      const insertResult = await this.insertRecords(conn, referenceTo, enhancedJsonData);
+      this.updateCreatedRecordIds(referenceTo, insertResult);
+  
+      const validIds = insertResult.filter(result => result.success).map(result => result.id);
+      if (validIds.length === 0) {
+        this.error(`Failed to insert records for ${referenceTo}`);
+      }
+  
+      return validIds;
+    }
+  
+    return relatedRecords.records.map((record: RecordId) => record.Id);
+  }
+
     private async getPicklistValuesWithDependentValues(
       conn: Connection,
       object: string,
@@ -1154,6 +1263,8 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         picklist: 'picklist',
         reference: 'reference',
         'dependent-picklist': 'picklist',
+        string: 'text',
+        textarea: 'text',
       };
   
       return typeMapping[fieldType] || 'Unknown';
@@ -1255,7 +1366,6 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
       const outputFile = path.join(outputDir, sanitizedFileName);
       fs.writeFileSync(outputFile, JSON.stringify(resultObject, null, 2), 'utf-8');
-      // this.log(`File created at=============: ${outputFile}`);
   
     }
 
@@ -1275,35 +1385,47 @@ private async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           });
         }
       }
+
   
       return enhancedData;
     }
 
-    // private enhanceDataWithSpecialFields(basicData: any[], processedFields: Array<Partial<TargetData>>, count: number): any[] {
-    //   const enhancedData = basicData.map(item => ({ ...item }));
-      
-    //   for (const field of processedFields) {
-    //     if (field.type === 'Custom List' && field.values) {
-    //       // Flatten nested arrays in field.values
-    //       const flatValues = Array.isArray(field.values) ? field.values.flat() : [];
-    //       // Ensure we have a valid array of strings
-    //       const validValues = flatValues.length > 0 ? flatValues : [];
-          
-    //       if (validValues.length > 0) {
-    //         const values = Array.from({ length: count }, () => this.getRandomElement(validValues));
-    //         values.forEach((value, index) => {
-    //           if (field.name) {
-    //             enhancedData[index][field.name] = value;
-    //           }
-    //         });
-    //       } else {
-    //         console.warn('No valid values for field', field.name);
-    //       }
-    //     }
-    //   }
     
-    //   return enhancedData;
-    // }
+    private enhanceJsonDataWithRequiredFields(jsonData: any[],fieldMap: Record<string, { type: string; values: any[]; label: string }>): any[] {
+      if (!jsonData || jsonData.length === 0) {
+        console.error('No JSON data provided to enhance');
+        return jsonData;
+      }
+    
+      // Helper to pick a random value from an array
+      const getRandomValue = (values: any[]): any => {
+        if (!values || values.length === 0) return null;
+        return values[Math.floor(Math.random() * values.length)];
+      };
+    
+      // Enhance each record in the JSON data
+      const enhancedData = jsonData.map(record => ({ ...record }));
+    
+      for (const [fieldName, fieldDetails] of Object.entries(fieldMap)) {
+        const { type, values } = fieldDetails;
+    
+        // Skip if the field is already populated or if no values are available
+        if (values.length === 0 || enhancedData.every(record => fieldName in record)) {
+          continue;
+        }
+    
+        // Handle fields that need values (e.g., Custom List or reference)
+        if (type === 'Custom List' || type === 'reference') {
+          enhancedData.forEach(record => {
+            if (!(fieldName in record)) {
+              record[fieldName] = getRandomValue(values);
+            }
+          });
+        }
+      }
+    
+      return enhancedData;
+    }
   
     private convertJsonToCsv(jsonData: GenericRecord[]): string {
       let fields;
