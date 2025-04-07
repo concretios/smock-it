@@ -35,6 +35,22 @@ function handleDirStruct(): string {
     throw new Error(`Failed to create 'data_gen' directory structure on path ${cwd}`);
   }
 }
+
+// async function handleDirStruct(): Promise<string> {
+//   const cwd = process.cwd();
+//   const dataGenDirPath = path.join(cwd, 'data_gen');
+//   const templateDirPath = path.join(dataGenDirPath, 'templates');
+//   const outputDirPath = path.join(dataGenDirPath, 'output');
+//   try {
+//     await fs.promises.mkdir(dataGenDirPath, { recursive: true });
+//     await fs.promises.mkdir(templateDirPath, { recursive: true });
+//     await fs.promises.mkdir(outputDirPath, { recursive: true });
+//     console.log(chalk.green(`Success: data-gen structure created: ${dataGenDirPath}`));
+//     return dataGenDirPath;
+//   } catch (err) {
+//     throw new Error(`Failed to create 'data_gen' directory structure on path ${cwd}`);
+//   }
+// }
 let sigintListenerAdded = false;
 
 async function runMultiSelectPrompt(): Promise<string[]> {

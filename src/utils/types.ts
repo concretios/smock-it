@@ -1,41 +1,5 @@
-export type TargetData = {
-  name: string;
-  type: string;
-  min?: number;
-  max?: number;
-  decimals?: number;
-  values?: string[];
-};
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type GenericRecord = { [key: string]: unknown };
-
-export type CreateResult = { id: string; success: boolean; errors: unknown[] };
-
-export type fieldType =
-  | 'text'
-  | 'boolean'
-  | 'phone'
-  | 'currency'
-  | 'double'
-  | 'date'
-  | 'time'
-  | 'datetime'
-  | 'picklist'
-  | 'reference'
-  | 'dependent-picklist'
-  | 'email'
-  | 'address';
-
-export type SObjectConfig = {
-  sObject: string;
-  language: string;
-  count?: number;
-  fields?: { [key: string]: Types.Field };
-};
-
-export type SObjectConfigFile = {
-  sObjects: SObjectConfig[];
-};
 
 // types for init.ts
 
@@ -131,3 +95,100 @@ export type sObjectSchemaType = {
 export type fieldsToConsiderMap = {
   [key: string]: string[] | string;
 };
+
+// output format table 
+export type ResultEntry = {
+  'SObject(s)': string;
+  JSON: string;
+  CSV: string;
+  DI: string;
+  'Failed(DI)': number;
+};
+
+/* --------------------------------------------------------------------------------*/
+/* data generation types without mockaroo */
+export type DataGenerateResult = {
+  path: string;
+};
+
+export type FieldRecord = {
+  Label: string;
+  attributes: {
+    type: string;
+    url: string;
+  };
+  QualifiedApiName: string;
+  IsDependentPicklist: boolean;
+  NamespacePrefix: string | null;
+  DataType: string;
+  ReferenceTo: {
+    referenceTo: null | any[];
+  };
+  RelationshipName: string | null;
+  IsNillable: boolean;
+};
+
+export type RecordId = {
+  Id: string;
+}
+
+export type QueryResult = {
+  records: RecordId[];
+}
+
+export type Fields = {
+  [key: string]: any;
+  type: string;
+  values?: string[];
+  relationshipType?: string;
+  referenceTo?: string;
+  'max-length'?: number;
+  'child-dependent-field'?: string;
+};
+
+/* ------------------------------------------*/
+
+export type TargetData = {
+  name: string;
+  type: string;
+  min?: number;
+  max?: number;
+  decimals?: number;
+  values?: string[];
+  label?: string;
+};
+
+export type fieldType =
+  | 'picklist'
+  | 'reference'
+  | 'dependent-picklist'
+
+
+
+  export type Field = {
+    label?: string;
+    type: fieldType;
+    values?: string[]; // For picklist or dependent-picklist
+    referenceTo?: string; // For reference fields
+    relationshipType?: 'lookup' | 'master-detail'; // For reference fields
+    'child-dependent-field'?: string; // For dependent picklists
+  };
+
+export type SObjectConfig = {
+  sObject: string;
+  language: string;
+  count?: number;
+  fields?: { [key: string]: Field };
+};
+
+export type SObjectConfigFile = {
+  sObjects: SObjectConfig[];
+};
+
+export type jsonConfig = {
+  outputFormat?: string[];
+  sObjects: SObjectConfig[];
+}
+
+export type GenericRecord = { [key: string]: any };
+export type CreateResult = { id: string; success: boolean; errors: any[] };
