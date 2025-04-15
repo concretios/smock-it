@@ -5,10 +5,11 @@ import chalk from 'chalk';
 import { Messages } from '@salesforce/core';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import Enquirer from 'enquirer';
-import { connectToSalesforceOrg, validateConfigJson } from '../template/validate.js';
+import {validateConfigJson } from '../template/validate.js';
 import { SetupInitResult, typeSObjectSettingsMap, flagsForInit, fieldsToConsiderMap } from '../../utils/types.js';
+import { connectToSalesforceOrg} from '../../utils/generic_function.js';
+
 import { languageChoices, outputChoices } from '../../utils/constants.js';
-// import { promises } from 'node:dns';
 // Import messages from the specified directory
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('smocker-concretio', 'template.init');

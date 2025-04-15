@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as dotenv from 'dotenv';
 import { SfCommand, Flags, Spinner } from '@salesforce/sf-plugins-core';
-import { Messages, Connection, AuthInfo } from '@salesforce/core';
+import { Messages, Connection} from '@salesforce/core';
 import chalk from 'chalk';
 import {
   TemplateValidateResult,
@@ -12,35 +12,13 @@ import {
   sObjectMetaType,
   Types,
 } from '../../utils/types.js';
+import { connectToSalesforceOrg } from '../../utils/generic_function.js';
+
+
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('smocker-concretio', 'template.validate');
 dotenv.config();
-export async function connectToSalesforceOrg(userNameorAlias: string): Promise<Connection> {
-  try {
-    const allAuths = await AuthInfo.listAllAuthorizations();
-    const matchingAuths = allAuths.filter(
-      (auth) => auth.username === userNameorAlias || (auth.aliases && auth.aliases.includes(userNameorAlias))
-    );
-    const resolvedUsername = matchingAuths[0].username;
-    if (matchingAuths.length === 0) {
-      throw new Error(`The input "${userNameorAlias}" does not match any authenticated username or alias.`);
-    }
-    const authInfo = await AuthInfo.create({ username: resolvedUsername });
-    const connection = await Connection.create({ authInfo });
-    console.log(chalk.green(`Success: Connected to SF Org: ${resolvedUsername}`));
-    return connection;
-  } catch (error) {
-    throw new Error(
-      chalk.red(
-        `Failed: Connect to SF Org: ${chalk.redBright(
-          userNameorAlias
-        )} \n Either provide valid username/alias or authenticate your org using ${chalk.yellowBright(
-          "'sf org login web'"
-        )}`
-      )
-    );
-  }
-}
+
 
 export async function validateConfigJson(connection: Connection, configPath: string): Promise<boolean> {
   let isDataValid: boolean = true;

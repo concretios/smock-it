@@ -37,6 +37,7 @@ export type templateSchema = {
 };
 
 export type tempAddFlags = {
+  alias?: string;
   sObjects?: string;
   templateName: string;
   language?: string;

@@ -7,11 +7,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import fs from 'node:fs';
-import path from 'node:path';
-
 import { Messages } from '@salesforce/core';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
-import { error } from '@oclif/core/errors';
 import chalk from 'chalk';
 import {
   templateSchema,
@@ -20,6 +17,8 @@ import {
   SObjectItem,
   fieldsToConsiderMap,
 } from '../../utils/types.js';
+import { getTemplateJsonPath } from '../../utils/generic_function.js';
+
 import { askQuestion } from './init.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -231,22 +230,7 @@ export const templateAddFlags = {
     required: false,
   }),
 };
-/* checking valid directory structure for json data template */
-export function getTemplateJsonData(templateName: string): string {
-  const filename = templateName.endsWith('.json') ? templateName : `${templateName}.json`;
-  if (!filename) {
-    throw error('Error: You must specify a filename using the --template-name flag.');
-  }
-  const templateDirPath = path.join(process.cwd(), 'data_gen/templates');
-  if (!fs.existsSync(templateDirPath)) {
-    throw error(`Template directory does not exist at ${templateDirPath}. Please initialize the setup first.`);
-  }
-  const configFilePath = path.join(templateDirPath, filename);
-  if (!fs.existsSync(configFilePath)) {
-    throw error(`Data Template file not found at ${configFilePath}`);
-  }
-  return configFilePath;
-}
+
 
 let config: templateSchema;
 export default class TemplateAdd extends SfCommand<void> {
@@ -259,7 +243,7 @@ export default class TemplateAdd extends SfCommand<void> {
   public async run(): Promise<void> {
     const { flags } = await this.parse(TemplateAdd);
 
-    const configFilePath = getTemplateJsonData(flags.templateName);
+    const configFilePath = getTemplateJsonPath(flags.templateName);
     config = JSON.parse(fs.readFileSync(configFilePath, 'utf8')) as templateSchema;
 
     const objectName = flags.sObject ? flags.sObject.toLowerCase() : undefined;
