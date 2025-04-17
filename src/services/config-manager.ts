@@ -3,8 +3,7 @@ import * as path from 'node:path';
 import { Connection } from '@salesforce/core';
 import { validateConfigJson } from '../commands/template/validate.js';
 import { getTemplateJsonPath } from '../utils/generic_function.js';
-import { templateSchema,  SObjectConfigFile,
- } from '../utils/types.js';
+import { templateSchema, SObjectConfigFile } from '../utils/types.js';
 
 const fieldsConfigFile = 'generated_output.json';
 
@@ -16,7 +15,8 @@ export async function loadAndValidateConfig(conn: Connection, templateName: stri
   }
 
   try {
-    const baseConfig = JSON.parse(fs.readFileSync(configFilePath, 'utf-8')) as templateSchema;
+    const fileContent = await fs.promises.readFile(configFilePath, 'utf-8');
+    const baseConfig = JSON.parse(fileContent) as templateSchema;
     return { ...baseConfig, sObjects: baseConfig.sObjects ?? [] };
   } catch (error) {
     throw new Error(`Failed to read or parse the base config file at ${configFilePath}`);

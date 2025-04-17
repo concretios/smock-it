@@ -1,24 +1,21 @@
 /* eslint-disable sf-plugin/flag-case */
 
-import { Flags,SfCommand } from '@salesforce/sf-plugins-core';
+import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { DataGenerationService } from '../../services/data-generation-service.js';
 import { DataGenerateResult } from '../../utils/types.js';
-import { templateAddFlags} from '../template/upsert.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('smocker-concretio', 'data.generate');
 
-
-export default class DataGenerate extends SfCommand<DataGenerateResult>  {
+export default class DataGenerate extends SfCommand<DataGenerateResult> {
   public static readonly summary: string = messages.getMessage('summary');
   public static readonly examples: string[] = [messages.getMessage('Examples')];
 
   public static readonly flags = {
-    ...templateAddFlags,
-    sObject: Flags.string({
+    sObjects: Flags.string({
       char: 's',
-      summary: messages.getMessage('flags.sObject.summary'),
+      summary: messages.getMessage('flags.sObjects.summary'),
       required: false,
     }),
     templateName: Flags.string({
@@ -35,12 +32,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     }),
   };
 
-  
   public async run(): Promise<DataGenerateResult> {
-
     const { flags } = await this.parse(DataGenerate);
-    const service = new DataGenerationService(flags); 
+    const service = new DataGenerationService(flags);
     const result = await service.execute();
-    return result; 
+    return result;
   }
 }

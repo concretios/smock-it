@@ -49,6 +49,12 @@ export type tempAddFlags = {
   pickLeftFields?: boolean;
 };
 
+export type tempValidateFlags = {
+  alias?: string;
+  sObjects?: string;
+  templateName: string;
+};
+
 // types from remove.ts file
 export type flagObj = {
   templateName: string;
@@ -97,7 +103,7 @@ export type fieldsToConsiderMap = {
   [key: string]: string[] | string;
 };
 
-// output format table 
+// output format table
 export type ResultEntry = {
   'SObject(s)': string;
   JSON: string;
@@ -131,11 +137,11 @@ export type FieldRecord = {
 
 export type RecordId = {
   Id: string;
-}
+};
 
 export type QueryResult = {
   records: RecordId[];
-}
+};
 
 export type Fields = {
   [key: string]: any;
@@ -159,21 +165,16 @@ export type TargetData = {
   label?: string;
 };
 
-export type fieldType =
-  | 'picklist'
-  | 'reference'
-  | 'dependent-picklist'
+export type fieldType = 'picklist' | 'reference' | 'dependent-picklist';
 
-
-
-  export type Field = {
-    label?: string;
-    type: fieldType;
-    values?: string[]; // For picklist or dependent-picklist
-    referenceTo?: string; // For reference fields
-    relationshipType?: 'lookup' | 'master-detail'; // For reference fields
-    'child-dependent-field'?: string; // For dependent picklists
-  };
+export type Field = {
+  label?: string;
+  type: fieldType;
+  values?: string[]; // For picklist or dependent-picklist
+  referenceTo?: string; // For reference fields
+  relationshipType?: 'lookup' | 'master-detail'; // For reference fields
+  'child-dependent-field'?: string; // For dependent picklists
+};
 
 export type SObjectConfig = {
   sObject: string;
@@ -189,7 +190,7 @@ export type SObjectConfigFile = {
 export type jsonConfig = {
   outputFormat?: string[];
   sObjects: SObjectConfig[];
-}
+};
 
 export type GenericRecord = { [key: string]: any };
 export type CreateResult = { id: string; success: boolean; errors: any[] };

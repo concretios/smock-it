@@ -1,21 +1,25 @@
 /* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-floating-promises */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+/**
+ * It handles Salesforce object configurations and generates field data for creating records,
+ * It handles field filtering, picklist processing, and dependent picklist relationships, producing
+ * a JSON configuration file for use in data generation workflows. The module interacts with Salesforce
+ * via the SalesforceConnector and supports both initial and parent object field processing.
+ **/
+
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as main from 'sf-mock-data';
 import { Connection } from '@salesforce/core';
-import { updateOrInitializeConfig } from '../commands/template/upsert.js';
 import {
   templateSchema,
   sObjectSchemaType,
-  tempAddFlags,
   FieldRecord,
   fieldType,
   Fields,
@@ -25,13 +29,10 @@ import {
   RecordId,
 } from '../utils/types.js';
 
-import {SalesforceConnector} from './salesforce-connector.js';
-import {readSObjectConfigFile} from './config-manager.js';
-
+import { SalesforceConnector } from './salesforce-connector.js';
+import { readSObjectConfigFile } from './config-manager.js';
 
 const createdRecordsIds = new Map<string, string[]>();
-// const fieldsConfigFile = 'generated_output.json';
-
 
 let dependentPicklistResults: Record<
   string,
@@ -40,45 +41,39 @@ let dependentPicklistResults: Record<
 const independentFieldResults: Map<string, string[]> = new Map();
 let depthForRecord = 0;
 
-export function processObjectConfiguration(
-  baseConfig: templateSchema,
-  objectName: string | undefined,
-  flags: tempAddFlags,
-  log: (message: string) => void
-): any[] {
+export function processObjectConfiguration(baseConfig: templateSchema, objectName: string | undefined): sObjectSchemaType[] {
   let objectsToProcess = baseConfig.sObjects;
 
   if (objectName) {
     const existingObjectConfig = baseConfig.sObjects.find((object: any) => {
       const objectKey = Object.keys(object)[0];
-      return objectKey.toLowerCase() === objectName;
+      return objectKey.toLowerCase() === objectName.toLowerCase();
     });
 
     if (!existingObjectConfig) {
       throw new Error(`Object ${objectName} not found in base-config.`);
-    } else {
-      const objectKey = Object.keys(existingObjectConfig)[0];
-      updateOrInitializeConfig(
-        existingObjectConfig[objectKey],
-        flags,
-        ['language', 'count', 'fieldsToExclude', 'pickLeftFields', 'fieldsToConsider'],
-        log
-      );
-      objectsToProcess = [existingObjectConfig];
     }
+
+    objectsToProcess = [existingObjectConfig];
   }
+
   return objectsToProcess;
 }
 
-export async function generateFieldsAndWriteConfig(conn: Connection,objectsToProcess: any[],baseConfig: templateSchema): Promise<void> {
-    const outputData: any[] = [];
+export async function generateFieldsAndWriteConfig(
+  conn: Connection,
+  objectsToProcess: any[],
+  baseConfig: templateSchema
+): Promise<void> {
+  const outputData: any[] = [];
 
   for (const objectConfig of objectsToProcess) {
     const objectName = Object.keys(objectConfig as Record<string, any>)[0];
     const configForObject: sObjectSchemaType = (objectConfig as Record<string, any>)[objectName] as sObjectSchemaType;
 
-    const namespacePrefixToExclude = baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
-    
+    const namespacePrefixToExclude =
+      baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
+
     const allFields = await conn.query(
       `SELECT QualifiedApiName, IsDependentPicklist, Label, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
        FROM EntityParticle
@@ -101,7 +96,14 @@ export async function generateFieldsAndWriteConfig(conn: Connection,objectsToPro
     const considerMap = processFieldsToConsider(configForObject);
     const fieldsToConsider = Object.keys(considerMap);
 
-    const fieldsToPass = filterFieldsByPickLeftConfig(getPickLeftFields,configForObject,fieldsToConsider,fieldsToExclude,fieldsToIgnore,allFields);
+    const fieldsToPass = filterFieldsByPickLeftConfig(
+      getPickLeftFields,
+      configForObject,
+      fieldsToConsider,
+      fieldsToExclude,
+      fieldsToIgnore,
+      allFields
+    );
 
     const fieldsObject = await processFieldsWithFieldsValues(conn, fieldsToPass, objectName, considerMap);
 
@@ -151,7 +153,11 @@ function getFieldType(item: Record<string, any>, isParentObject: boolean = false
   return itemType;
 }
 
-function getDefaultFieldsToPass(configForObject: sObjectSchemaType, allFields: any, fieldsToIgnore: string[]): FieldRecord[] {
+function getDefaultFieldsToPass(
+  configForObject: sObjectSchemaType,
+  allFields: any,
+  fieldsToIgnore: string[]
+): FieldRecord[] {
   let fieldsToPass: FieldRecord[] = [];
 
   if (
@@ -159,7 +165,7 @@ function getDefaultFieldsToPass(configForObject: sObjectSchemaType, allFields: a
     configForObject['fieldsToExclude'] === undefined &&
     configForObject['pickLeftFields'] === undefined
   ) {
-    fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+    fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
       (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
     );
   }
@@ -178,15 +184,15 @@ function filterFieldsByPickLeftConfig(
 
   if (getPickLeftFields === true && fieldsToIgnore.length > 0) {
     if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
-      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+      fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
         (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
       );
     } else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
-      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+      fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
         (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
       );
     } else if (fieldsToExclude.length === 0 && fieldsToConsider.length === 0) {
-      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+      fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
         (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
       );
     }
@@ -196,7 +202,7 @@ function filterFieldsByPickLeftConfig(
     } else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
       throw new Error('Please provide fieldsToConsider or set pickLeftFields to true');
     } else if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
-      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+      fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
         (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
       );
 
@@ -207,7 +213,7 @@ function filterFieldsByPickLeftConfig(
 
       fieldsToPass = mergeFieldsToPass([...consideredFields, ...requiredFields]);
     } else if (fieldsToConsider.length > 0 && fieldsToIgnore.length > 0 && fieldsToExclude.length === 0) {
-      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+      fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
         (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
       );
 
@@ -258,7 +264,9 @@ async function processFieldsWithFieldsValues(
       case 'reference':
         fieldConfig = {
           type: 'reference',
-          referenceTo: inputObject.ReferenceTo?.referenceTo ? (inputObject.ReferenceTo.referenceTo[0] as string) : undefined,
+          referenceTo: inputObject.ReferenceTo?.referenceTo
+            ? (inputObject.ReferenceTo.referenceTo[0] as string)
+            : undefined,
           values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()]
             ? considerMap[inputObject.QualifiedApiName.toLowerCase()]
             : [],
@@ -318,7 +326,8 @@ async function getPicklistValues(
 ): Promise<string[]> {
   const result = await conn.describe(object);
   const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-  const pickListValues: string[] = fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value as string) ?? [];
+  const pickListValues: string[] =
+    fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value as string) ?? [];
 
   Object.keys(considerMap).forEach((key) => {
     if (
@@ -484,7 +493,10 @@ function buildNestedJSON(
         values: entry.childValues,
       };
 
-      const nestedOutput = buildNestedJSON(input, entry.childFieldName, entry.childValues) as Record<string, Fields> | null;
+      const nestedOutput = buildNestedJSON(input, entry.childFieldName, entry.childValues) as Record<
+        string,
+        Fields
+      > | null;
       if (nestedOutput) {
         Object.assign(output[childFieldName][parentValue], nestedOutput);
       }
@@ -502,12 +514,16 @@ function mergeFieldsToPass(fields: FieldRecord[]): FieldRecord[] {
   return [...new Map(fields.map((field) => [field.QualifiedApiName, field])).values()];
 }
 
-export async function processObjectFieldsForIntitalJsonFile(conn: Connection, config: any[], object: string): Promise<Array<Partial<TargetData>>> {
-  const processedFields =   await handleFieldProcessingForIntitalJsonFile(conn, object, config);
-  return processedFields
+export async function processObjectFieldsForIntitalJsonFile(
+  conn: Connection,
+  config: any[],
+  object: string
+): Promise<Array<Partial<TargetData>>> {
+  const processedFields = await handleFieldProcessingForIntitalJsonFile(conn, object, config);
+  return processedFields;
 }
 
- async function handleFieldProcessingForIntitalJsonFile(
+async function handleFieldProcessingForIntitalJsonFile(
   conn: Connection,
   object: string,
   file: any[]
@@ -541,46 +557,46 @@ async function processFields(
     const isReference = dataType === 'reference';
     const isPicklist = dataType === 'picklist' || dataType === 'multipicklist';
 
-    const excludeFieldsSet = new Set<string>(); // Assuming this is managed elsewhere if needed
+    const excludeFieldsSet = new Set<string>();
     if (excludeFieldsSet.has(fieldName)) continue;
 
-   const details: Partial<TargetData> = { name: fieldName };
-  
-        if (isReference && !['OwnerId', 'CreatedById', 'ParentId'].includes(fieldName)) {
-          details.type = 'Custom List';
-          const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
-  
-          if (item.values?.length) {
-            details.values = item.values;
-          } else {
-            details.values = isMasterDetail
-              ? await fetchRelatedMasterRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo)
-              : await fetchRelatedRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo);
-          }
-  
-          if (isMasterDetail) {
-            depthForRecord++;
-          }
-          processedFields.push(details);
-        } else if (isPicklist || item.values?.length > 0) {
-          details.type = 'Custom List'; // random value pick
-          details.values = await getPicklistValuesWithDependentValues(conn, object, fieldName, item);
-          processedFields.push(details);
-        } else {
-           // details value contains item .value contain
-          details.type = getFieldType(item, isParentObject);
-          if (details.type) processedFields.push(details);
-        }
+    const details: Partial<TargetData> = { name: fieldName };
+
+    if (isReference && !['OwnerId', 'CreatedById', 'ParentId'].includes(fieldName)) {
+      details.type = 'Custom List';
+      const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
+
+      if (item.values?.length) {
+        details.values = item.values;
+      } else {
+        details.values = isMasterDetail
+          ? await fetchRelatedMasterRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo)
+          : await fetchRelatedRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo);
       }
-      return processedFields;
+
+      if (isMasterDetail) {
+        depthForRecord++;
+      }
+      processedFields.push(details);
+    } else if (isPicklist || item.values?.length > 0) {
+      details.type = 'Custom List'; // random value pick
+      details.values = await SalesforceConnector.getPicklistValuesWithDependentValues(conn, object, fieldName, item);
+      processedFields.push(details);
+    } else {
+      // details value contains item .value contain
+      details.type = getFieldType(item, isParentObject);
+      if (details.type) processedFields.push(details);
     }
+  }
+  return processedFields;
+}
 
 async function processFieldsForInitialJsonFile(
   records: Array<Record<string, any>>,
   conn: Connection,
   object: string
 ): Promise<Array<Partial<TargetData>>> {
-  return  processFields(records, conn, object);
+  return processFields(records, conn, object);
 }
 
 async function processFieldsForParentObjects(
@@ -640,7 +656,6 @@ async function fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string
 
     SalesforceConnector.updateCreatedRecordIds(referenceTo, insertResult);
 
-
     const validIds = insertResult.filter((result) => result.success).map((result) => result.id);
     if (validIds.length === 0) {
       throw new Error(`Failed to insert records for ${referenceTo}`);
@@ -667,29 +682,11 @@ function buildFieldQuery(object: string, onlyRequiredFields: boolean): string {
   return query;
 }
 
-async function getPicklistValuesWithDependentValues(
-  conn: Connection,
-  object: string,
-  field: string,
-  item: Record<string, any>
-): Promise<string[]> {
-  if (item.values != null && item.values.length > 0) {
-    return item.values as string[];
-  } else if (item.value != null && item.value.length > 0) {
-    return [item.value] as string[];
-  }
-  const result = await conn.describe(object);
-  const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-  const picklistValues: string[] = fieldDetails?.picklistValues?.map((pv: { value: string }) => pv.value) ?? [];
-  return picklistValues;
-}
-
 export async function getProcessedFields(): Promise<Map<string, any[]>> {
   const config = await readSObjectConfigFile();
   const sObjectFieldsMap: Map<string, any[]> = new Map();
   config.sObjects.forEach((sObject) => {
     if (sObject.fields) {
-      
       const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObject
       for (const [fieldName, fieldDetails] of Object.entries(sObject.fields)) {
         if (fieldDetails.type === 'dependent-picklist') {
@@ -702,11 +699,11 @@ export async function getProcessedFields(): Promise<Map<string, any[]>> {
         };
 
         if (fieldDetails.values?.length && fieldDetails.values?.length > 0) {
-              fieldObject = {
-                name: fieldName,
-                values: fieldDetails.values,
-              };
-        } 
+          fieldObject = {
+            name: fieldName,
+            values: fieldDetails.values,
+          };
+        }
 
         if (fieldDetails.type === 'picklist' || fieldDetails.type === 'reference') {
           fieldObject.values = fieldDetails.values ?? [];
@@ -725,18 +722,20 @@ export async function getProcessedFields(): Promise<Map<string, any[]>> {
   return sObjectFieldsMap;
 }
 
-
 function mapFieldType(fieldTypes: fieldType): string {
   const typeMapping: { [key in fieldType]: string } = {
     picklist: 'picklist',
     reference: 'reference',
-    'dependent-picklist': 'picklist'
+    'dependent-picklist': 'picklist',
   };
 
   return typeMapping[fieldTypes] || 'Unknown';
 }
 
-function getDataForParentFields(jsonData: any[],fieldMap: Record<string, { type: string; values: any[]; label: string }>): any[] {
+function getDataForParentFields(
+  jsonData: any[],
+  fieldMap: Record<string, { type: string; values: any[]; label: string }>
+): any[] {
   if (!jsonData || jsonData.length === 0) {
     console.error('No JSON data provided to enhance');
     return jsonData;
@@ -764,9 +763,12 @@ function getDataForParentFields(jsonData: any[],fieldMap: Record<string, { type:
   return enhancedData;
 }
 
-export function enhanceDataWithSpecialFields(basicData: any[], processedFields: Array<Partial<TargetData>>, count: number): any[] {
+export function enhanceDataWithSpecialFields(
+  basicData: any[],
+  processedFields: Array<Partial<TargetData>>,
+  count: number
+): any[] {
   const enhancedData = basicData.map((item) => ({ ...item }));
-
 
   const getRandomElements = <T>(array: T[]): T | undefined => {
     const element = array[Math.floor(Math.random() * array.length)];
@@ -843,7 +845,9 @@ function processDependentPicklists(fieldName: string, fieldDetails: any, fieldsA
           if (childDependentField) {
             const childFieldDetails = fieldDetails[childField][randomParentValue] as Record<string, Field>;
             if (childFieldDetails?.[childDependentField]) {
-              const grandChildFieldDetails = (childFieldDetails[childDependentField] as Record<string, any>)[randomChildValue] as Record<string, Field>;
+              const grandChildFieldDetails = (childFieldDetails[childDependentField] as Record<string, any>)[
+                randomChildValue
+              ] as Record<string, Field>;
 
               // Updated: handle nested values inside the `values` key
               if (grandChildFieldDetails?.['values']) {
@@ -852,7 +856,7 @@ function processDependentPicklists(fieldName: string, fieldDetails: any, fieldsA
                   const grandChildFieldObject: any = {
                     name: childDependentField,
                     type: 'picklist',
-                    value: Array.isArray(grandChildValues) ? getRandomElement(grandChildValues) as string : undefined,
+                    value: Array.isArray(grandChildValues) ? (getRandomElement(grandChildValues) as string) : undefined,
                   };
                   fieldsArray.push(grandChildFieldObject);
                 }

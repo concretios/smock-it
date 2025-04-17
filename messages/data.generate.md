@@ -9,11 +9,11 @@ For getting the alias details
 # flags.alias.description
 
 For alias details 
-# flags.sObject.summary
+# flags.sObjects.summary
 
 summary
 
-# flags.sObject.description
+# flags.sObjects.description
 
 des
 
