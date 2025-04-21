@@ -9,7 +9,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { GenericRecord } from '../utils/types.js';
-import { SalesforceConnector } from './salesforce-connector.js';
+import DataGenerate from '../commands/data/generate.js';
 
 export function saveOutputFileOfJsonAndCsv(
   jsonData: GenericRecord[],
@@ -53,14 +53,14 @@ function saveMapToJsonFile(folderName: string, fileName: string): void {
 
   const resultObject: Record<string, string[]> = {};
 
-  SalesforceConnector.createdRecordsIds.forEach((ids, objectName) => {
+  DataGenerate.createdRecordsIds.forEach((ids, objectName) => {
     resultObject[objectName] = ids;
   });
   const outputFile = path.join(outputDir, sanitizedFileName);
   fs.writeFileSync(outputFile, JSON.stringify(resultObject, null, 2), 'utf-8');
 }
 
-function convertJsonToCsv(jsonData: GenericRecord[]): string {
+export function convertJsonToCsv(jsonData: GenericRecord[]): string {
   let fields;
   let data = jsonData;
   if (Array.isArray(jsonData)) {

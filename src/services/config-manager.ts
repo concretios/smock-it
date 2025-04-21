@@ -9,10 +9,7 @@ const fieldsConfigFile = 'generated_output.json';
 
 export async function loadAndValidateConfig(conn: Connection, templateName: string): Promise<templateSchema> {
   const configFilePath = getTemplateJsonPath(templateName);
-  const isDataValid = await validateConfigJson(conn, configFilePath);
-  if (!isDataValid) {
-    throw new Error('Invalid data in the template');
-  }
+  await validateConfigJson(conn, configFilePath);
 
   try {
     const fileContent = await fs.promises.readFile(configFilePath, 'utf-8');
@@ -32,3 +29,4 @@ export async function readSObjectConfigFile(): Promise<SObjectConfigFile> {
 export function getConfigPath(templateName: string): string {
   return getTemplateJsonPath(templateName);
 }
+

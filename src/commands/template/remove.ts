@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { error } from '@oclif/core/errors';
 import chalk from 'chalk';
 import {
   typeSObjectSettingsMap,
@@ -27,7 +26,7 @@ function deleteSObjectField(jsonData: templateSchema, sObjectName: string, field
       throw new Error(`The specified flag '${fieldName}' does not exist in the '${sObjectName}' sObject.`);
     }
   } else {
-    throw error(`'The '${sObjectName}' does not exist in the sobjects settings.`);
+    throw new Error(`'The '${sObjectName}' does not exist in the sobjects settings.`);
   }
   return jsonData;
 }
@@ -87,7 +86,7 @@ function DeleteArrayValue(
       console.log(`Removing '${fieldValues.join(', ')}' from the '${fieldName}' settings.`);
     }
   } else {
-    throw error(`${fieldName} does not exist in the data template.`);
+    throw new Error(`${fieldName} does not exist in the data template.`);
   }
   return updatedJsonData;
 }
@@ -238,22 +237,22 @@ function validateInput(flags: flagObj, jsonData: templateSchema): templateSchema
     }
   }
   if (updatedJsonData === undefined) {
-    throw error('undefined JSON');
+    throw new Error('JSON data is undefined after processing the flags.');
   }
   return updatedJsonData;
 }
 function getJsonData(templateName: string): string {
   const filename = templateName.endsWith('.json') ? templateName : `${templateName}.json`;
   if (!filename) {
-    throw error('Error: You must specify a filename using the --template-name flag.');
+    throw new Error('Error: You must specify a filename using the --template-name flag.');
   }
   const templateDirPath = path.join(process.cwd(), 'data_gen/templates');
   if (!fs.existsSync(templateDirPath)) {
-    throw error(`Template directory does not exist at ${templateDirPath}. Please initialize the setup first.`);
+    throw new Error(`Template directory does not exist at ${templateDirPath}. Please initialize the setup first.`);
   }
   const configFilePath = path.join(templateDirPath, filename);
   if (!fs.existsSync(configFilePath)) {
-    throw error(`Data Template file not found at ${configFilePath}`);
+    throw new Error(`Data Template file not found at ${configFilePath}`);
   }
   return configFilePath;
 }

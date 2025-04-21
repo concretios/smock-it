@@ -23,7 +23,7 @@ import * as readline from 'node:readline';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
 import { connectToSalesforceOrg } from '../../utils/generic_function.js';
-import { SalesforceConnector } from '../../services/salesforce-connector.js';
+import DataGenerate from '../../commands/data/generate.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('smocker-concretio', 'data.upload');
@@ -528,7 +528,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     this.log(`>>> Inserting ${referencedObject}`);
     let insertResults: { id?: string; success: boolean; errors?: any[] }[];
     try {
-      insertResults = await SalesforceConnector.insertRecords(conn, referencedObject, cleanedJsonData);
+      insertResults = await DataGenerate.insertRecords(conn, referencedObject, cleanedJsonData);
     } catch (error) {
       const errorMsg = `Failed to insert ${referencedObject}: ${error}`;
       this.log(`>>> ERROR: ${errorMsg}`);
@@ -662,7 +662,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     );
 
     try {
-      const insertResults = await SalesforceConnector.insertRecords(conn, sobject, finalRecords);
+      const insertResults = await DataGenerate.insertRecords(conn, sobject, finalRecords);
       DataUpload.processInsertResults(sobject, insertResults);
     } catch (error) {
       console.error('Insert Error:', error);
