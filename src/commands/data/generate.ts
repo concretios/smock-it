@@ -15,13 +15,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import DataLibrary from 'sf-mock-data';
+import GenerateTestData  from 'sf-mock-data';
 
 import { Flags,Progress,SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
-import {loadAndValidateConfig} from '../../services/config-manager.js'
+import {loadAndValidateConfig,readSObjectConfigFile} from '../../services/config-manager.js'
 import {templateSchema,sObjectSchemaType,DataGenerateResult,FieldRecord,
-  RecordId,QueryResult,Fields,TargetData,fieldType,Field,SObjectConfigFile,jsonConfig,GenericRecord,CreateResult
+  RecordId,QueryResult,Fields,TargetData,fieldType,Field,jsonConfig,GenericRecord,CreateResult
 } 
 from '../../utils/types.js';
 import { createTable,createResultEntryTable } from '../../utils/output_table.js';
@@ -102,9 +102,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
 
     const outputFormat = jsonDataForObjectNames.outputFormat ?? [];
     const sObjectNames = jsonDataForObjectNames.sObjects.map((sObject: { sObject: string }) => sObject.sObject);
-    if (!sObjectNames) {
-      throw new Error('One or more sObject names are undefined. Please check the configuration file.');
-    }
+  
     const outputPathDir = `${path.join(process.cwd())}/data_gen/output/`;
 
     const table = createTable();
@@ -132,7 +130,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
         throw new Error(`Count for object "${object}" is undefined.`);
       }
       // fetching the basic fields data from the Data Library
-      const basicJsonData = await DataLibrary.getAllFieldsBasicData(generateOutputconfigPath,object);
+      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath,object);
 
       // adding all fields to the json data 
       const jsonData = this.enhanceDataWithSpecialFields(basicJsonData, processedFields, countofRecordsToGenerate);
@@ -531,7 +529,7 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     const insertedIds: string[] = [];
     let failedCount = 0;
 
-    const insertResult = await this.insertRecords(conn, object, jsonData);
+    const insertResult = await DataGenerate.insertRecords(conn, object, jsonData);
 
     insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }) => {
       if (result.success && result.id) {
@@ -990,7 +988,7 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
  * @returns {Promise<CreateResult[]>} - A promise that resolves to an array of `CreateResult` objects representing the outcome of each insert operation.
  */
 
-  private async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
+  public static async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
     const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     const sObjectName = Array.isArray(object) ? object[0] : object;
     const results: CreateResult[] = [];
@@ -1004,7 +1002,7 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     const mapResults = (insertResults: any, startIndex: number = 0): CreateResult[] => 
         (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result, index) => {
             if (!result.success) {
-                console.error(`Failed to insert record ${startIndex + index} for ${sObjectName}:`, result.errors);
+              console.error(`Failed to insert record ${startIndex + index} for ${sObjectName}:`, result.errors);
             }
             return {
                 id: result.id ?? '',
@@ -1022,7 +1020,7 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         }
 
         // Initial batch
-        const initialBatch = dataArray.slice(0, BATCH_SIZE);
+        const initialBatch = dataArray.splice(0, BATCH_SIZE);
         const initialResults = await conn.sobject(sObjectName).create(initialBatch);
         results.push(...mapResults(initialResults));
 
@@ -1068,9 +1066,9 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         progressBar.finish();
 
     } catch (error) {
-        console.error('Error in insertRecords:', error);
-        progressBar.stop();
-        throw error; // Re-throw to maintain error handling upstream
+      console.error('Error in insertRecords:', error);
+      progressBar.stop();
+      throw error;
     }
 
     return results;
@@ -1279,21 +1277,22 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       }, {});
   
       // getting the values for parent fields records
-      const initialJsonData = await DataLibrary.getFieldsData(fieldMap, 1);
+      const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
+      console.log('initialJsonData', initialJsonData);
   
       if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
-        this.error(`Failed to generate valid data for ${referenceTo}`);
+        throw new Error(`Failed to generate valid data for ${referenceTo}`);
       }
   
       // Enhance the JSON data with required fields
       const enhancedJsonData = this.getJsonDataParentFields(initialJsonData, fieldMap);
   
-      const insertResult = await this.insertRecords(conn, referenceTo, enhancedJsonData);
+      const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
       this.updateCreatedRecordIds(referenceTo, insertResult);
   
       const validIds = insertResult.filter(result => result.success).map(result => result.id);
       if (validIds.length === 0) {
-        this.error(`Failed to insert records for ${referenceTo}`);
+        throw new Error(`Failed to insert records for ${referenceTo}`);
       }
   
       return validIds;
@@ -1331,23 +1330,12 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     }
   
   /**
-   * Reads and parses the SObject configuration file.
-   *
-   * @returns {Promise<SObjectConfigFile>} - A promise that resolves to the parsed SObject configuration data.
-   */
-    private async readSObjectConfigFile(): Promise<SObjectConfigFile> {
-      const configPath = path.resolve(process.cwd(), fieldsConfigFile);
-      const configData = await fs.promises.readFile(configPath, 'utf-8');
-      return JSON.parse(configData) as SObjectConfigFile;
-    }
-  
-  /**
    * Processes the SObject configuration and returns a map of SObject names to their field objects.
    *
    * @returns {Promise<Map<string, any[]>>} - A promise that resolves to a map of SObject names to field objects.
    */  
     private async getProcessedFields(): Promise<Map<string, any[]>> {
-      const config = await this.readSObjectConfigFile();
+      const config = await readSObjectConfigFile();
       const sObjectFieldsMap: Map<string, any[]> = new Map();
       config.sObjects.forEach((sObject) => {
         if (sObject.fields) {
@@ -1507,7 +1495,7 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
  * @returns {any[]} - The enhanced data with special field values added.
  */
 
-    private enhanceDataWithSpecialFields(basicData: any[], processedFields: Array<Partial<TargetData>>, count: number): any[] {
+  private enhanceDataWithSpecialFields(basicData: any[], processedFields: Array<Partial<TargetData>>, count: number): any[] {
       const enhancedData = basicData.map(item => ({ ...item }));
        this.getRandomElement = <T>(array: T[]): T | undefined => {
         const element = array[Math.floor(Math.random() * array.length)];
@@ -1523,10 +1511,8 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
           });
         }
       }
-
-  
       return enhancedData;
-    }
+  }
 
 /**
  * Enhances JSON data by adding random values from a specified field map for "Custom List" or "reference" fields.
@@ -1539,8 +1525,7 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
  
     private getJsonDataParentFields(jsonData: any[],fieldMap: Record<string, { type: string; values: any[]; label: string }>): any[] {
       if (!jsonData || jsonData.length === 0) {
-        console.error('No JSON data provided to enhance');
-        return jsonData;
+        throw new Error('No JSON data found.');
       }
     
       // Helper to pick a random value from an array
@@ -1550,7 +1535,6 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       };    
       // Enhance each record in the JSON data
       let enhancedData = jsonData.map(record => ({ ...record }));
-      console.log('==================>',fieldMap)
     
       for (const [fieldName, fieldDetails] of Object.entries(fieldMap)) {
         const { type, values } = fieldDetails;
@@ -1575,3 +1559,10 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
     }
   
 }
+
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */

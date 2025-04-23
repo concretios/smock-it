@@ -72,3 +72,10 @@ export function convertJsonToCsv(jsonData: GenericRecord[]): string {
   const csvRows = data.map((row: Record<string, any>) => fields.map((field: string) => row[field] as string).join(','));
   return [fields.join(','), ...csvRows].join('\n');
 }
+
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */

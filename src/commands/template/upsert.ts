@@ -299,3 +299,10 @@ export default class TemplateAdd extends SfCommand<void> {
     this.log(chalk.green(`Success: Configuration updated in ${configFilePath}`));
   }
 }
+
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */

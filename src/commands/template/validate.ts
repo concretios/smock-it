@@ -32,10 +32,11 @@ export async function validateConfigJson(connection: Connection, configPath: str
   const invalidFieldsMap: { [key: string]: string[] } = {};
 
   const sObjectNames: string[] = config.sObjects.map((sObjectEntry: sObjectSchemaType) => Object.keys(sObjectEntry)[0]);
-
+  if (sObjectNames.length === 0) {
+    throw new Error(chalk.red('Error: No SObjects found in the template configuration file.'));
+  }
   const metadata = await connection.metadata.read('CustomObject', sObjectNames);
   const metadataArray = Array.isArray(metadata) ? metadata : [metadata];
-
   for (const sObjectEntry of config.sObjects) {
     const [sObjectName, sObjectData] = Object.entries(sObjectEntry)[0] as [string, sObjectSchemaType];
     const sObjectMeta = metadataArray.find((meta) => meta.fullName === sObjectName) as sObjectMetaType;
@@ -189,3 +190,10 @@ export class TemplateValidate extends SfCommand<TemplateValidateResult> {
     };
   }
 }
+
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */

@@ -20,13 +20,21 @@ export async function loadAndValidateConfig(conn: Connection, templateName: stri
   }
 }
 
+  /**
+   * Reads and parses the SObject configuration file.
+   *
+   * @returns {Promise<SObjectConfigFile>} - A promise that resolves to the parsed SObject configuration data.
+   */
 export async function readSObjectConfigFile(): Promise<SObjectConfigFile> {
   const configPath = path.resolve(process.cwd(), fieldsConfigFile);
   const configData = await fs.promises.readFile(configPath, 'utf-8');
   return JSON.parse(configData) as SObjectConfigFile;
 }
 
-export function getConfigPath(templateName: string): string {
-  return getTemplateJsonPath(templateName);
-}
 
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
