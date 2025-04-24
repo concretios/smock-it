@@ -1167,15 +1167,13 @@ public async handleDirectInsert(conn: Connection,outputFormat: string[],object: 
   
       // getting the values for parent fields records
       const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
-      console.log('initialJsonData', initialJsonData);
-  
+
       if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
         throw new Error(`Failed to generate valid data for ${referenceTo}`);
       }
   
       // Enhance the JSON data with required fields
       const enhancedJsonData = this.getJsonDataParentFields(initialJsonData, fieldMap);
-      // console.log('enhancedJsonData', enhancedJsonData);
   
       const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
       this.updateCreatedRecordIds(referenceTo, insertResult);
