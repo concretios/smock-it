@@ -129,7 +129,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
   }
 
   if (Object.keys(invalidFieldsMap).length > 0 || invalidObjects.length > 0) {
-    console.warn(
+    throw new Error(
       chalk.bold.magenta(
         'Note: Still we keep these populated these values, You can change them anytime from the data template!'
       )

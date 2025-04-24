@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/numeric-separators-style */
 /* eslint-disable @typescript-eslint/member-ordering */
 /* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
@@ -419,7 +420,6 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
 
   const fieldsObject: Record<string, Fields> = {};
 
- // Initialize dependentPicklistResults for each object
       this.dependentPicklistResults = {};
 
       for (const inputObject of fieldsToPass) {
@@ -522,7 +522,7 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
  * @param {GenericRecord[]} jsonData - The array of records to insert.
  * @returns {Promise<{ failedCount: number; insertedIds: string[] }>} - A promise that resolves to the count of failed inserts and the inserted record IDs.
  */
-public  async handleDirectInsert(conn: Connection,outputFormat: string[],object: string,jsonData: GenericRecord[]): Promise<{ failedCount: number; insertedIds: string[] }> {
+public async handleDirectInsert(conn: Connection,outputFormat: string[],object: string,jsonData: GenericRecord[]): Promise<{ failedCount: number; insertedIds: string[] }> {
 
   if (outputFormat.includes('DI') || outputFormat.includes('di')) {
     const errorSet: Set<string> = new Set();
@@ -874,109 +874,6 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
       return query;
     }
 
-  // private async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
-  //   const results: CreateResult[] = [];
-  //   const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
-  //   const sObjectName = Array.isArray(object) ? object[0] : object;
-  
-  //   if (dataArray.length <= 200) {
-  //     try {
-  //       const insertResults = await conn.sobject(sObjectName).create(jsonData);
-  //       const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
-  //         (result, index) => {
-  //           if (!result.success) {
-  //             console.error(`Failed to insert record ${index} for ${sObjectName}:`, result.errors);
-  //           }
-  //           return {
-  //             id: result.id ?? '',
-  //             success: result.success,
-  //             errors: result.errors,
-  //           };
-  //         }
-  //       );
-  //       results.push(...initialInsertResult);
-  //     } catch (error) {
-  //       console.error('Error inserting records:', error);
-  //     }
-  //   } else {
-  //     // Bulk processing logic (similarly enhance error logging)
-  //     const storeHere = dataArray.splice(0, 200);
-  //     const insertResults = await conn.sobject(sObjectName).create(storeHere);
-  //     const initialInsertResult: CreateResult[] = (Array.isArray(insertResults) ? insertResults : [insertResults]).map(
-  //       (result, index) => {
-  //         if (!result.success) {
-  //           console.error(`Failed to insert record ${index} for ${sObjectName}:`, result.errors);
-  //         }
-  //         return {
-  //           id: result.id ?? '',
-  //           success: result.success,
-  //           errors: result.errors,
-  //         };
-  //       }
-  //     );
-  //     results.push(...initialInsertResult);
-  
-  //     progressBar.start(100, { title: 'Test' });
-  //     const totalRecords = dataArray.length;
-  //     let processedRecords = 0;
-  
-  //     try {
-  //       const job = conn.bulk.createJob(sObjectName, 'insert');
-  //       const batchSize = 200;
-  
-  //       for (let i = 0; i < dataArray.length; i += batchSize) {
-  //         const batchData = dataArray.slice(i, i + batchSize);
-  //         const batch = job.createBatch();
-  //         batch.execute(batchData);
-  
-  //         await new Promise<void>((resolve, reject) => {
-  //           batch.on('queue', () => {
-  //             batch.poll(500, 600_000);
-  //           });
-  
-  //           batch.on('response', (rets: any[]) => {
-  //             const mappedResults: CreateResult[] = rets.map((ret, index) => {
-  //               if (!ret.success) {
-  //                 console.error(`Bulk insert failed for record ${index + i} in ${sObjectName}:`, ret.errors);
-  //               }
-  //               return {
-  //                 id: ret.id ?? '',
-  //                 success: ret.success ?? false,
-  //                 errors: ret.errors ?? [],
-  //               };
-  //             });
-  
-  //             results.push(...mappedResults);
-  //             processedRecords += batchData.length;
-  //             const percentage = Math.ceil((processedRecords / totalRecords) * 100);
-  //             progressBar.update(percentage);
-  
-  //             if (processedRecords >= totalRecords) {
-  //               progressBar.update(100);
-  //               progressBar.finish();
-  //             }
-  
-  //             resolve();
-  //           });
-  
-  //           batch.on('error', (err) => {
-  //             console.error('Batch Error:', err);
-  //             reject(err);
-  //           });
-  //         });
-  //       }
-  
-  //       await job.close();
-  //     } catch (error) {
-  //       console.error('Error during bulk processing:', error);
-  //       progressBar.stop();
-  //       throw error;
-  //     }
-  //   }
-  
-  //   return results;
-  // }
-
 /**
  * Inserts records into a specified Salesforce object using both REST and Bulk API based on data size.
  * It handles small batches directly and large datasets using bulk insert, processing batches in parallel with controlled concurrency.
@@ -1025,7 +922,7 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
         results.push(...mapResults(initialResults));
 
         // Bulk processing for remaining records
-        const remainingData = dataArray.slice(BATCH_SIZE);
+        const remainingData = dataArray;
         if (!remainingData.length) return results;
 
         const job = conn.bulk.createJob(sObjectName, 'insert');
@@ -1039,7 +936,7 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
             const batch = job.createBatch();
 
             const batchPromise = new Promise<void>((resolve, reject) => {
-                batch.on('queue', () => batch.poll(500, 600_000));
+                batch.on('queue', () => batch.poll(1000, 600_000));
                 
                 batch.on('response', (rets: any[]) => {
                     results.push(...mapResults(rets, i + BATCH_SIZE));
@@ -1278,7 +1175,6 @@ public  async handleDirectInsert(conn: Connection,outputFormat: string[],object:
   
       // getting the values for parent fields records
       const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
-      console.log('initialJsonData', initialJsonData);
   
       if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
         throw new Error(`Failed to generate valid data for ${referenceTo}`);
