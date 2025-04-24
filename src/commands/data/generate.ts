@@ -16,7 +16,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import GenerateTestData  from 'sf-mock-data';
+import GenerateTestData from 'sf-mock-data';
 
 import { Flags,Progress,SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
@@ -1143,14 +1143,6 @@ public async handleDirectInsert(conn: Connection,outputFormat: string[],object: 
  */
 
   private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
-    const existingIds = DataGenerate.createdRecordsIds.get(referenceTo) ?? [];
-    if (existingIds.length > 0) {
-      return Array.from(existingIds);
-    }
-  
-    const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
-  
-    if (relatedRecords.records.length === 0) {
       
       if (depthForRecord === 3) {
         this.error(`Max Depth Reached! Please create ${referenceTo} records first.`);
@@ -1175,6 +1167,7 @@ public async handleDirectInsert(conn: Connection,outputFormat: string[],object: 
   
       // getting the values for parent fields records
       const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
+      console.log('initialJsonData', initialJsonData);
   
       if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
         throw new Error(`Failed to generate valid data for ${referenceTo}`);
@@ -1182,6 +1175,7 @@ public async handleDirectInsert(conn: Connection,outputFormat: string[],object: 
   
       // Enhance the JSON data with required fields
       const enhancedJsonData = this.getJsonDataParentFields(initialJsonData, fieldMap);
+      // console.log('enhancedJsonData', enhancedJsonData);
   
       const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
       this.updateCreatedRecordIds(referenceTo, insertResult);
@@ -1192,9 +1186,6 @@ public async handleDirectInsert(conn: Connection,outputFormat: string[],object: 
       }
   
       return validIds;
-    }
-  
-    return relatedRecords.records.map((record: RecordId) => record.Id);
   }
 
 
