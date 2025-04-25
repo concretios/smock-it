@@ -26,7 +26,7 @@ export async function loadAndValidateConfig(conn: Connection, templateName: stri
    * @returns {Promise<SObjectConfigFile>} - A promise that resolves to the parsed SObject configuration data.
    */
 export async function readSObjectConfigFile(): Promise<SObjectConfigFile> {
-  const configPath = path.resolve(process.cwd(), fieldsConfigFile);
+  const configPath = path.resolve(process.cwd(),  'data_gen', 'output', fieldsConfigFile);
   const configData = await fs.promises.readFile(configPath, 'utf-8');
   return JSON.parse(configData) as SObjectConfigFile;
 }

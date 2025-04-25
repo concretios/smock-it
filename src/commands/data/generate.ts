@@ -96,7 +96,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult>  {
     let sObjectFieldsMap: Map<string, any[]> = new Map();
     sObjectFieldsMap = await this.getProcessedFields();
     
-    const generateOutputconfigPath = path.join(process.cwd(), fieldsConfigFile);
+    const generateOutputconfigPath = path.join(process.cwd(), 'data_gen', 'output', fieldsConfigFile);
+
     const generatedOutputconfigData = fs.readFileSync(generateOutputconfigPath, 'utf8');        
     const jsonDataForObjectNames: jsonConfig = JSON.parse(generatedOutputconfigData) as jsonConfig;
 
@@ -395,12 +396,18 @@ private async  generateFieldsAndWriteConfig(
     outputData.push(configToWrite);
   }
 
-  const outputFile = path.resolve('./generated_output.json');
+  const outputDir = path.resolve('./data_gen/output/');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const outputFile = path.join(outputDir, 'generated_output.json');
   fs.writeFileSync(
     outputFile,
     JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2),
     'utf8'
   );
+
 }
 
 /**
@@ -887,90 +894,110 @@ public async handleDirectInsert(conn: Connection,outputFormat: string[],object: 
  * @returns {Promise<CreateResult[]>} - A promise that resolves to an array of `CreateResult` objects representing the outcome of each insert operation.
  */
 
-  public static async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
-    const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
-    const sObjectName = Array.isArray(object) ? object[0] : object;
-    const results: CreateResult[] = [];
+public static async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
+  const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+  const sObjectName = Array.isArray(object) ? object[0] : object;
+  const results: CreateResult[] = [];
+  let failedcount = 0;
+  const errorDetails: Set<string> = new Set();
 
-    // Early return for empty array
-    if (!dataArray.length) return results;
+  // Early return for empty array
+  if (!dataArray.length) return results;
 
-    const BATCH_SIZE = 200;
-    
-    // Helper function to map results
-    const mapResults = (insertResults: any, startIndex: number = 0): CreateResult[] => 
-        (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result, index) => {
-            if (!result.success) {
-              console.error(`Failed to insert record ${startIndex + index} for ${sObjectName}:`, result.errors);
-            }
-            return {
-                id: result.id ?? '',
-                success: result.success,
-                errors: result.errors ?? []
-            };
+  const BATCH_SIZE = 100;
+
+  // Helper function to map results
+  const mapResults = (insertResults: any): CreateResult[] =>
+    (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result) => {
+      if (!result.success) {
+        failedcount++;
+        if (result.errors && Array.isArray(result.errors)) {
+          result.errors.forEach((err: any) => {
+            errorDetails.add(JSON.stringify(err)); 
+          });
+        }
+      }
+      return {
+        id: result.id ?? '',
+        success: result.success,
+        errors: result.errors ?? []
+      };
+    });
+
+  try {
+    // Small batch processing
+    if (dataArray.length <= BATCH_SIZE) {
+      const insertResults = await conn.sobject(sObjectName).create(dataArray);
+      results.push(...mapResults(insertResults));
+      if (failedcount > 0) {
+        console.error(`Failed to insert ${failedcount} record(s) for ${sObjectName}`);
+        Array.from(errorDetails).forEach((error) => {
+          console.error(error);
         });
-
-    try {
-        // Small batch processing
-        if (dataArray.length <= BATCH_SIZE) {
-            const insertResults = await conn.sobject(sObjectName).create(dataArray);
-            results.push(...mapResults(insertResults));
-            return results;
-        }
-
-        // Initial batch
-        const initialBatch = dataArray.splice(0, BATCH_SIZE);
-        const initialResults = await conn.sobject(sObjectName).create(initialBatch);
-        results.push(...mapResults(initialResults));
-
-        // Bulk processing for remaining records
-        const remainingData = dataArray;
-        if (!remainingData.length) return results;
-
-        const job = conn.bulk.createJob(sObjectName, 'insert');
-        const batches: Array<Promise<void>> = [];
-        progressBar.start(100, { title: 'Test' });
-
-        // Process in parallel with controlled concurrency
-        const concurrencyLimit = 5;
-        for (let i = 0; i < remainingData.length; i += BATCH_SIZE) {
-            const batchData = remainingData.slice(i, i + BATCH_SIZE);
-            const batch = job.createBatch();
-
-            const batchPromise = new Promise<void>((resolve, reject) => {
-                batch.on('queue', () => batch.poll(1000, 600_000));
-                
-                batch.on('response', (rets: any[]) => {
-                    results.push(...mapResults(rets, i + BATCH_SIZE));
-                    const percentage = Math.ceil(((i + batchData.length + BATCH_SIZE) / dataArray.length) * 100);
-                    progressBar.update(percentage);
-                    resolve();
-                });
-
-                batch.on('error', reject);
-                batch.execute(batchData);
-            });
-
-            batches.push(batchPromise);
-            
-            // Control concurrency
-            if (batches.length >= concurrencyLimit) {
-                await Promise.race(batches);
-            }
-        }
-
-        await Promise.all(batches);
-        await job.close();
-        progressBar.update(100);
-        progressBar.finish();
-
-    } catch (error) {
-      console.error('Error in insertRecords:', error);
-      progressBar.stop();
-      throw error;
+      }
+      return results;
     }
 
-    return results;
+    // Initial batch
+    const initialBatch = dataArray.splice(0, BATCH_SIZE);
+    const initialResults = await conn.sobject(sObjectName).create(initialBatch);
+    results.push(...mapResults(initialResults));
+
+    // Bulk processing for remaining records
+    const remainingData = dataArray;
+    if (!remainingData.length) return results;
+
+    const job = conn.bulk.createJob(sObjectName, 'insert');
+    const batches: Array<Promise<void>> = [];
+    progressBar.start(100, { title: 'Test' });
+
+    // Process in parallel with controlled concurrency
+    const concurrencyLimit = 2;
+    for (let i = 0; i < remainingData.length; i += BATCH_SIZE) {
+      const batchData = remainingData.slice(i, i + BATCH_SIZE);
+      const batch = job.createBatch();
+
+      const batchPromise = new Promise<void>((resolve, reject) => {
+        batch.on('queue', () => batch.poll(1000, 900_000));
+
+        batch.on('response', (rets: any[]) => {
+          results.push(...mapResults(rets));
+          const percentage = Math.ceil(((i + batchData.length + BATCH_SIZE) / dataArray.length) * 100);
+          progressBar.update(percentage);
+          resolve();
+        });
+
+        batch.on('error', reject);
+        batch.execute(batchData);
+      });
+
+      batches.push(batchPromise);
+
+      // Control concurrency
+      if (batches.length >= concurrencyLimit) {
+        await Promise.race(batches);
+      }
+    }
+
+    await Promise.all(batches);
+    await job.close();
+    progressBar.update(100);
+    progressBar.finish();
+
+    if (failedcount > 0) {
+      console.error(`Failed to insert ${failedcount} record(s) for ${sObjectName}`);
+      Array.from(errorDetails).forEach((error) => {
+        console.error(error);
+      });
+    }
+
+  } catch (error) {
+    console.error('Error in insertRecords:', error);
+    progressBar.stop();
+    throw error;
+  }
+
+  return results;
 }
   
   /**
