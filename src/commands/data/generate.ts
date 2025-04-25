@@ -16,7 +16,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import GenerateTestData from 'sf-mock-data';
+import GenerateTestData from 'smockit-data-engine';
 
 import { Flags,Progress,SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
@@ -428,25 +428,28 @@ private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: Fiel
         switch (inputObject.DataType) {
           case 'textarea':
           case 'string':
-            if (
-              inputObject.QualifiedApiName.match(
-                /^(Billing|Shipping|Other|Mailing)(Street|City|State|PostalCode|Country)$/i
-              )
-            ) {
+            if (inputObject.QualifiedApiName.match(/^(Billing|Shipping|Other|Mailing)(Street|City|State|PostalCode|Country)$/i)) {
               fieldConfig = {
                 type: 'address',
                 label : inputObject.Label
 
               };
-            } else {
+            } 
+            else {
+              let label = inputObject.Label;
+              if (objectName.toLowerCase() === 'opportunity' || objectName.toLowerCase() === 'campaign') {
+
+              if (inputObject.QualifiedApiName === 'Name') {
+                  label = objectName+' '+label;
+                }
+              }
+
               fieldConfig = {
                 type: 'text',
                 values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]) 
                 ? (considerMap[inputObject.QualifiedApiName.toLowerCase()]) 
                 : [],
-                label : inputObject.Label
-
-                
+                label 
               };
             }
             break;
@@ -1142,49 +1145,61 @@ public async handleDirectInsert(conn: Connection,outputFormat: string[],object: 
  * @throws {Error} - Throws an error if records cannot be fetched or inserted, or if maximum depth is reached.
  */
 
-  private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
-      
-      if (depthForRecord === 3) {
-        this.error(`Max Depth Reached! Please create ${referenceTo} records first.`);
-      }
-  
-      const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
-  
-      // formatting the parent fields for the JSON data
-      const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
-        if (field.name) {
-          return {
-            ...acc,
-            [field.name]: {
-              type: field.type,
-              values: field.values ?? [],
-              label: field.label ?? field.name,
-            },
-          };
-        }
-        return acc;
-      }, {});
-  
-      // getting the values for parent fields records
-      const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
-
-      if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
-        throw new Error(`Failed to generate valid data for ${referenceTo}`);
-      }
-  
-      // Enhance the JSON data with required fields
-      const enhancedJsonData = this.getJsonDataParentFields(initialJsonData, fieldMap);
-  
-      const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
-      this.updateCreatedRecordIds(referenceTo, insertResult);
-  
-      const validIds = insertResult.filter(result => result.success).map(result => result.id);
-      if (validIds.length === 0) {
-        throw new Error(`Failed to insert records for ${referenceTo}`);
-      }
-  
-      return validIds;
+private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
+  const existingIds = DataGenerate.createdRecordsIds.get(referenceTo) ?? [];
+  if (existingIds.length > 0) {
+    return Array.from(existingIds);
   }
+
+  const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
+
+  if (relatedRecords.records.length === 0) {
+    
+    if (depthForRecord === 3) {
+      this.error(`Max Depth Reached! Please create ${referenceTo} records first.`);
+    }
+
+    const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
+
+    // formatting the parent fields for the JSON data
+    const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
+      if (field.name) {
+        return {
+          ...acc,
+          [field.name]: {
+            type: field.type,
+            values: field.values ?? [],
+            label: field.label ?? field.name,
+          },
+        };
+      }
+      return acc;
+    }, {});
+
+    // getting the values for parent fields records
+    const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
+
+    if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
+      throw new Error(`Failed to generate valid data for ${referenceTo}`);
+    }
+
+    // Enhance the JSON data with required fields
+    const enhancedJsonData = this.getJsonDataParentFields(initialJsonData, fieldMap);
+
+    const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
+    this.updateCreatedRecordIds(referenceTo, insertResult);
+
+    const validIds = insertResult.filter(result => result.success).map(result => result.id);
+    if (validIds.length === 0) {
+      throw new Error(`Failed to insert records for ${referenceTo}`);
+    }
+
+    return validIds;
+  }
+
+  return relatedRecords.records.map((record: RecordId) => record.Id);
+}
+
 
 
   /**

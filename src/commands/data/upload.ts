@@ -15,7 +15,7 @@
 /* eslint-disable @typescript-eslint/array-type */
 /* eslint-disable sf-plugin/flag-case */
 import * as fs from 'node:fs';
-import main from 'sf-mock-data';
+import DataLibrary from 'smockit-data-engine';
 
 import * as path from 'node:path';
 import * as readline from 'node:readline';
@@ -501,7 +501,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
 
     let jsonData: GenericRecord[];
     try {
-      const initialJsonData = await main.getFieldsData(fieldMap, 1);
+      const initialJsonData = await DataLibrary.getFieldsData(fieldMap, 1);
       if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
         throw new Error(`Failed to generate valid data for ${referencedObject}`);
       }
