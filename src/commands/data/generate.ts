@@ -1,6 +1,5 @@
 /* eslint-disable unicorn/numeric-separators-style */
 /* eslint-disable @typescript-eslint/member-ordering */
-/* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
