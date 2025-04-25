@@ -30,7 +30,7 @@ import {
 import { askQuestion } from './init.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.upsert');
+const messages = Messages.loadMessages('smock-it', 'template.upsert');
 
 export function handleFieldsToConsider(sObjectConfig: typeSObjectSettingsMap, input: string): typeSObjectSettingsMap {
   if (!sObjectConfig.fieldsToConsider) {
@@ -73,7 +73,9 @@ function checkDuplicateFields(configObject: any, flags: tempAddFlags): void {
     return;
   }
   let fieldsToExcludeValues: string[] = configObject?.fieldsToExclude ? configObject?.fieldsToExclude : [];
-  let fieldsToConsiderKeys: string[] = configObject?.fieldsToConsider ? Object.keys(configObject?.fieldsToConsider) : [];
+  let fieldsToConsiderKeys: string[] = configObject?.fieldsToConsider
+    ? Object.keys(configObject?.fieldsToConsider)
+    : [];
   for (const [key, value] of Object.entries(flags)) {
     let valuesArray: string[] = [];
     if (key === 'fieldsToExclude' && typeof value === 'string') {
@@ -101,15 +103,22 @@ function checkDuplicateFields(configObject: any, flags: tempAddFlags): void {
       fieldsToConsiderKeys = fieldsToConsiderKeys.concat(valuesArray);
     }
   }
-  const commonValues = fieldsToConsiderKeys.filter((val) =>
-    fieldsToExcludeValues.includes(val)
-  );
+  const commonValues = fieldsToConsiderKeys.filter((val) => fieldsToExcludeValues.includes(val));
   if (commonValues.length > 0) {
-    throw new Error(`Please do not add Common value ${commonValues.join(', ')} in fieldsToConsider and fieldsToExclude, Please ensure no overlap between them.`);
+    throw new Error(
+      `Please do not add Common value ${commonValues.join(
+        ', '
+      )} in fieldsToConsider and fieldsToExclude, Please ensure no overlap between them.`
+    );
   }
 }
 /* Handling all array input in the data template*/
-export function updateArrayValueInput(key: string, value: string, configObject: any, log: (message: string) => void): void {
+export function updateArrayValueInput(
+  key: string,
+  value: string,
+  configObject: any,
+  log: (message: string) => void
+): void {
   const valuesArray = value
     .toLowerCase()
     .split(/[\s,]+/)
@@ -167,16 +176,15 @@ export function updateOrInitializeConfig(
           /* if (key === 'language' && value !== 'en' && value !== 'jp') {
             throw new Error('Invalid language input. supports `en` or `jp` only');
           }*/
-          if (key === 'count' && ((value as number) < 1)) {
-            throw new Error(
-              'Invalid input. Please enter a valid positive count.');
+          if (key === 'count' && (value as number) < 1) {
+            throw new Error('Invalid input. Please enter a valid positive count.');
           }
 
           configObject[key] = value;
           log(`Setting '${key}' to: ${configObject[key]}`);
           break;
       }
-    } else if (!['sObject', 'templateName','alias'].includes(key)) {
+    } else if (!['sObject', 'templateName', 'alias'].includes(key)) {
       log(chalk.yellow(`Skipped: '${key}' flag cannot be passed in the current command`));
     }
   }
@@ -306,4 +314,3 @@ export default class TemplateAdd extends SfCommand<void> {
     this.log(chalk.green(`Success: Configuration updated in ${configFilePath}`));
   }
 }
-

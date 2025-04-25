@@ -1,7 +1,7 @@
 {
-  "name": "smocker-concretio",
-  "description": "This SFDX plugin generates relastic data for salesforce using mockaroo API. Easily create customized datasets for any Salesforce object. helping streamline development and testing with accurate, varied data",
-  "version": "1.0.18",
+  "name": "smock-it",
+  "description": "Smock-it is a CLI plugin for generating synthetic test data in Salesforce, helping SF devs, QAs, and admins create realistic data without using live customer info—boosting efficiency and privacy.",
+  "version": "3.0.0",
   "dependencies": {
     "@oclif/core": "^4",
     "@salesforce/core": "^7.4.1",

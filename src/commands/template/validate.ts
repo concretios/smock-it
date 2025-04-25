@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as dotenv from 'dotenv';
 import { SfCommand, Flags, Spinner } from '@salesforce/sf-plugins-core';
-import { Messages, Connection} from '@salesforce/core';
+import { Messages, Connection } from '@salesforce/core';
 import chalk from 'chalk';
 import {
   TemplateValidateResult,
@@ -23,7 +23,7 @@ import {
 import { connectToSalesforceOrg } from '../../utils/generic_function.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'template.validate');
+const messages = Messages.loadMessages('smock-it', 'template.validate');
 dotenv.config();
 
 export async function validateConfigJson(connection: Connection, configPath: string): Promise<boolean> {
@@ -197,4 +197,3 @@ export class TemplateValidate extends SfCommand<TemplateValidateResult> {
     };
   }
 }
-

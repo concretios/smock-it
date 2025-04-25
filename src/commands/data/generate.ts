@@ -1,4 +1,3 @@
-
 /**
  * Copyright (c) 2025 concret.io
  *
@@ -25,26 +24,36 @@ import GenerateTestData from 'smockit-data-engine';
 
 import { Flags, Progress, SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
-import { loadAndValidateConfig, readSObjectConfigFile } from '../../services/config-manager.js'
+import { loadAndValidateConfig, readSObjectConfigFile } from '../../services/config-manager.js';
 import {
-  templateSchema, sObjectSchemaType, DataGenerateResult, FieldRecord,
-  RecordId, QueryResult, Fields, TargetData, fieldType, Field, jsonConfig, GenericRecord, CreateResult
-}
-  from '../../utils/types.js';
+  templateSchema,
+  sObjectSchemaType,
+  DataGenerateResult,
+  FieldRecord,
+  RecordId,
+  QueryResult,
+  Fields,
+  TargetData,
+  fieldType,
+  Field,
+  jsonConfig,
+  GenericRecord,
+  CreateResult,
+} from '../../utils/types.js';
 import { createTable, createResultEntryTable } from '../../utils/output_table.js';
-import { saveOutputFileOfJsonAndCsv, saveCreatedRecordIds } from '../../services/output-formatter.js'
+import { saveOutputFileOfJsonAndCsv, saveCreatedRecordIds } from '../../services/output-formatter.js';
 import { connectToSalesforceOrg } from '../../utils/generic_function.js';
 
 const fieldsConfigFile = 'generated_output.json';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 
-const messages = Messages.loadMessages('smocker-concretio', 'data.generate');
+const messages = Messages.loadMessages('smock-it', 'data.generate');
 
 let depthForRecord = 0;
 
 const excludeFieldsSet = new Set<string>();
-const progressBar = new Progress(true)
+const progressBar = new Progress(true);
 
 export default class DataGenerate extends SfCommand<DataGenerateResult> {
   public static createdRecordsIds: Map<string, string[]> = new Map();
@@ -79,7 +88,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   > = {};
   public independentFieldResults: Map<string, string[]> = new Map();
 
-
   /**
    * Main method to execute the data generation process.
    *
@@ -87,7 +95,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    */
 
   public async run(): Promise<DataGenerateResult> {
-
     const { flags } = await this.parse(DataGenerate);
 
     const conn = await connectToSalesforceOrg(flags.alias);
@@ -103,7 +110,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     let sObjectFieldsMap: Map<string, any[]> = new Map();
     sObjectFieldsMap = await this.getProcessedFields();
     const generateOutputconfigPath = path.join(process.cwd(), 'data_gen', 'output', fieldsConfigFile);
-    const generatedOutputconfigData = fs.readFileSync(generateOutputconfigPath, 'utf8');        
+    const generatedOutputconfigData = fs.readFileSync(generateOutputconfigPath, 'utf8');
     const jsonDataForObjectNames: jsonConfig = JSON.parse(generatedOutputconfigData) as jsonConfig;
 
     const outputFormat = jsonDataForObjectNames.outputFormat ?? [];
@@ -116,7 +123,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     let failedCount = 0;
     const startTime = Date.now();
     for (const object of sObjectNames) {
-
       depthForRecord = 0;
       const currentSObject = jsonDataForObjectNames.sObjects.find(
         (sObject: { sObject: string }) => sObject.sObject === object
@@ -124,7 +130,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       if (!currentSObject) {
         throw new Error(`No configuration found for object: ${object}`);
       }
-      const countofRecordsToGenerate = currentSObject.count
+      const countofRecordsToGenerate = currentSObject.count;
       const fields = sObjectFieldsMap.get(object);
 
       if (!fields) {
@@ -138,23 +144,27 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       // fetching the basic fields data from the Data Library
       const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object);
 
-      // adding all fields to the json data 
+      // adding all fields to the json data
       const jsonData = this.enhanceDataWithSpecialFields(basicJsonData, processedFields, countofRecordsToGenerate);
 
       // save the output file in json and csv format
       saveOutputFileOfJsonAndCsv(jsonData as GenericRecord[], object, outputFormat, flags.templateName);
 
       // handling failedCount and insertedRecordIds
-      const { failedCount: failedInsertions } = await this.handleDirectInsert(conn, outputFormat, object, jsonData as GenericRecord[]);
+      const { failedCount: failedInsertions } = await this.handleDirectInsert(
+        conn,
+        outputFormat,
+        object,
+        jsonData as GenericRecord[]
+      );
       failedCount = failedInsertions; // Update the failed count
 
       const resultEntry = createResultEntryTable(object, outputFormat, failedCount);
       // adding values to the result output table
       table.addRow(resultEntry);
-
     }
     // Save created record IDs file
-    saveCreatedRecordIds(outputFormat, flags.templateName)
+    saveCreatedRecordIds(outputFormat, flags.templateName);
 
     const endTime = Date.now();
     const totalTime = ((endTime - startTime) / 1000).toFixed(2);
@@ -164,7 +174,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     return { path: flags.templateName };
   }
-
 
   /**
    * Processes the `fieldsToConsider` configuration for a given Salesforce object, normalizing key names.
@@ -241,7 +250,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
   /**
    * Determines the default set of fields to include for processing when no specific field configuration is provided.
-   * Filters out fields that are listed in `fieldsToIgnore`, and only returns fields if no `fieldsToConsider`, 
+   * Filters out fields that are listed in `fieldsToIgnore`, and only returns fields if no `fieldsToConsider`,
    * `fieldsToExclude`, or `pickLeftFields` settings are present in the object configuration.
    *
    * @param {sObjectSchemaType} configForObject - The object-specific configuration containing optional field filters.
@@ -250,12 +259,20 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @returns {FieldRecord[]} - The filtered list of `FieldRecord` objects to pass forward.
    */
 
-  private getDefaultFieldsToPass(configForObject: sObjectSchemaType, allFields: any, fieldsToIgnore: string[]): FieldRecord[] {
+  private getDefaultFieldsToPass(
+    configForObject: sObjectSchemaType,
+    allFields: any,
+    fieldsToIgnore: string[]
+  ): FieldRecord[] {
     let fieldsToPass: FieldRecord[] = [];
 
     // Check if the relevant fields in configForObject are undefined
-    if (configForObject['fieldsToConsider'] === undefined && configForObject['fieldsToExclude'] === undefined && configForObject['pickLeftFields'] === undefined) {
-      fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+    if (
+      configForObject['fieldsToConsider'] === undefined &&
+      configForObject['fieldsToExclude'] === undefined &&
+      configForObject['pickLeftFields'] === undefined
+    ) {
+      fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
         (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
       );
     }
@@ -277,23 +294,29 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @returns {FieldRecord[]} - A filtered and potentially merged list of `FieldRecord` objects to pass forward.
    */
 
-  private filterFieldsByPickLeftConfig(getPickLeftFields: boolean | undefined, configForObject: sObjectSchemaType, fieldsToConsider: string[], fieldsToExclude: string[], fieldsToIgnore: string[], allFields: any): FieldRecord[] {
-
+  private filterFieldsByPickLeftConfig(
+    getPickLeftFields: boolean | undefined,
+    configForObject: sObjectSchemaType,
+    fieldsToConsider: string[],
+    fieldsToExclude: string[],
+    fieldsToIgnore: string[],
+    allFields: any
+  ): FieldRecord[] {
     let fieldsToPass: FieldRecord[] = [];
     // default object fields to pass when undefined
     fieldsToPass = this.getDefaultFieldsToPass(configForObject, allFields, fieldsToIgnore);
 
     if (getPickLeftFields === true && fieldsToIgnore.length > 0) {
       if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
-        fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+        fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
           (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
         );
       } else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
-        fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+        fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
           (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
         );
       } else if (fieldsToExclude.length === 0 && fieldsToConsider.length === 0) {
-        fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+        fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
           (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
         );
       }
@@ -303,7 +326,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       } else if (fieldsToExclude.length > 0 && fieldsToConsider.length === 0) {
         throw new Error('Please provide fieldsToConsider or set pickLeftFields to true');
       } else if (fieldsToConsider.length > 0 && fieldsToExclude.length > 0) {
-        fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+        fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
           (record) => !fieldsToExclude.includes(record.QualifiedApiName.toLowerCase())
         );
 
@@ -314,7 +337,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
         fieldsToPass = this.mergeFieldsToPass([...consideredFields, ...requiredFields]);
       } else if (fieldsToConsider.length > 0 && fieldsToIgnore.length > 0 && fieldsToExclude.length === 0) {
-        fieldsToPass = ((allFields as { records: FieldRecord[] }).records).filter(
+        fieldsToPass = (allFields as { records: FieldRecord[] }).records.filter(
           (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
         );
 
@@ -397,38 +420,40 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         configToWrite.fields = fieldsObject;
       }
 
-     outputData.push(configToWrite);
+      outputData.push(configToWrite);
+    }
+
+    const outputDir = path.resolve('./data_gen/output/');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const outputFile = path.join(outputDir, 'generated_output.json');
+    fs.writeFileSync(
+      outputFile,
+      JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2),
+      'utf8'
+    );
   }
 
-  const outputDir = path.resolve('./data_gen/output/');
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
-  }
+  /**
+   * Processes the fields to generate configuration objects based on field types and values.
+   * It handles various data types (e.g., picklist, reference, text) and applies appropriate transformations.
+   * The result is a mapping of field API names to their configurations.
+   *
+   * @param {Connection} conn - Salesforce connection instance for querying additional field data.
+   * @param {FieldRecord[]} fieldsToPass - The fields to process, each containing metadata and values.
+   * @param {string} objectName - The name of the Salesforce object to which the fields belong.
+   * @param {Record<string, string[]>} considerMap - A map of fields and their corresponding values for consideration.
+   * @returns {Promise<Record<string, Fields>>} - A promise that resolves to a record of field configurations.
+   */
 
-  const outputFile = path.join(outputDir, 'generated_output.json');
-  fs.writeFileSync(
-    outputFile,
-    JSON.stringify({ outputFormat: baseConfig.outputFormat, sObjects: outputData }, null, 2),
-    'utf8'
-  );
-
-}
-
-
-/**
- * Processes the fields to generate configuration objects based on field types and values.
- * It handles various data types (e.g., picklist, reference, text) and applies appropriate transformations.
- * The result is a mapping of field API names to their configurations.
- *
- * @param {Connection} conn - Salesforce connection instance for querying additional field data.
- * @param {FieldRecord[]} fieldsToPass - The fields to process, each containing metadata and values.
- * @param {string} objectName - The name of the Salesforce object to which the fields belong.
- * @param {Record<string, string[]>} considerMap - A map of fields and their corresponding values for consideration.
- * @returns {Promise<Record<string, Fields>>} - A promise that resolves to a record of field configurations.
- */
-
-  private async processFieldsWithFieldsValues(conn: Connection, fieldsToPass: FieldRecord[], objectName: string, considerMap: Record<string, string[]>): Promise<Record<string, Fields>> {
-
+  private async processFieldsWithFieldsValues(
+    conn: Connection,
+    fieldsToPass: FieldRecord[],
+    objectName: string,
+    considerMap: Record<string, string[]>
+  ): Promise<Record<string, Fields>> {
     const fieldsObject: Record<string, Fields> = {};
 
     this.dependentPicklistResults = {};
@@ -439,17 +464,18 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       switch (inputObject.DataType) {
         case 'textarea':
         case 'string':
-          if (inputObject.QualifiedApiName.match(/^(Billing|Shipping|Other|Mailing)(Street|City|State|PostalCode|Country)$/i)) {
+          if (
+            inputObject.QualifiedApiName.match(
+              /^(Billing|Shipping|Other|Mailing)(Street|City|State|PostalCode|Country)$/i
+            )
+          ) {
             fieldConfig = {
               type: 'address',
-              label: inputObject.Label
-
+              label: inputObject.Label,
             };
-          }
-          else {
+          } else {
             let label = inputObject.Label;
             if (objectName.toLowerCase() === 'opportunity' || objectName.toLowerCase() === 'campaign') {
-
               if (inputObject.QualifiedApiName === 'Name') {
                 label = objectName + ' ' + label;
               }
@@ -457,10 +483,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
             fieldConfig = {
               type: 'text',
-              values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()])
-                ? (considerMap[inputObject.QualifiedApiName.toLowerCase()])
+              values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()]
+                ? considerMap[inputObject.QualifiedApiName.toLowerCase()]
                 : [],
-              label
+              label,
             };
           }
           break;
@@ -468,13 +494,15 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         case 'reference':
           fieldConfig = {
             type: 'reference',
-            referenceTo: inputObject.ReferenceTo?.referenceTo ? (inputObject.ReferenceTo.referenceTo[0] as string) : undefined,
+            referenceTo: inputObject.ReferenceTo?.referenceTo
+              ? (inputObject.ReferenceTo.referenceTo[0] as string)
+              : undefined,
 
             values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()]
               ? considerMap[inputObject.QualifiedApiName.toLowerCase()]
               : [],
             relationshipType: inputObject.RelationshipName ? 'master-detail' : 'lookup',
-            label: inputObject.Label
+            label: inputObject.Label,
           };
           break;
 
@@ -482,13 +510,18 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           if (inputObject.IsDependentPicklist) {
             await this.depPicklist(conn, objectName, inputObject.QualifiedApiName, considerMap);
           } else {
-            const picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName, considerMap);
+            const picklistValues = await this.getPicklistValues(
+              conn,
+              objectName,
+              inputObject.QualifiedApiName,
+              considerMap
+            );
             fieldConfig = {
               type: 'picklist',
-              values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()])
-                ? (considerMap[inputObject.QualifiedApiName.toLowerCase()])
+              values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()]
+                ? considerMap[inputObject.QualifiedApiName.toLowerCase()]
                 : picklistValues,
-              label: inputObject.Label
+              label: inputObject.Label,
             };
           }
           break;
@@ -498,12 +531,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             fieldConfig = {
               type: inputObject.DataType,
               values: considerMap[inputObject.QualifiedApiName.toLowerCase()],
-              label: inputObject.Label
+              label: inputObject.Label,
             };
           } else {
             fieldConfig = {
               type: inputObject.DataType,
-              label: inputObject.Label
+              label: inputObject.Label,
             };
           }
 
@@ -516,7 +549,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     if (Object.keys(this.dependentPicklistResults).length > 0) {
       const topControllingField = Object.keys(this.dependentPicklistResults)[0];
-      const dependentFieldsData = this.convertJSON(this.dependentPicklistResults, topControllingField) as Record<string, Fields>;
+      const dependentFieldsData = this.convertJSON(this.dependentPicklistResults, topControllingField) as Record<
+        string,
+        Fields
+      >;
 
       Object.assign(fieldsObject, dependentFieldsData);
       this.dependentPicklistResults = {};
@@ -536,8 +572,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {GenericRecord[]} jsonData - The array of records to insert.
    * @returns {Promise<{ failedCount: number; insertedIds: string[] }>} - A promise that resolves to the count of failed inserts and the inserted record IDs.
    */
-  public async handleDirectInsert(conn: Connection, outputFormat: string[], object: string, jsonData: GenericRecord[]): Promise<{ failedCount: number; insertedIds: string[] }> {
-
+  public async handleDirectInsert(
+    conn: Connection,
+    outputFormat: string[],
+    object: string,
+    jsonData: GenericRecord[]
+  ): Promise<{ failedCount: number; insertedIds: string[] }> {
     if (outputFormat.includes('DI') || outputFormat.includes('di')) {
       const errorSet: Set<string> = new Set();
       const insertedIds: string[] = [];
@@ -550,7 +590,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             insertedIds.push(result.id);
           } else if (result.errors) {
             result.errors.forEach((error) => {
-              const errorMessage = ((error as { message?: string })?.message ?? JSON.stringify(error)) || 'Unknown error';
+              const errorMessage =
+                ((error as { message?: string })?.message ?? JSON.stringify(error)) || 'Unknown error';
               errorSet.add(errorMessage);
             });
           }
@@ -597,7 +638,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   ): Promise<string[]> {
     const result = await conn.describe(object);
     const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
-    const pickListValues: string[] = fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value as string) ?? [];
+    const pickListValues: string[] =
+      fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value as string) ?? [];
 
     Object.keys(considerMap).forEach((key) => {
       if (
@@ -605,7 +647,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         considerMap[key.toLowerCase()].length > 0 &&
         key.toLowerCase() === field.toLowerCase()
       ) {
-        const fieldConsiderationValues: string[] = considerMap[field.toLowerCase()] as string[]
+        const fieldConsiderationValues: string[] = considerMap[field.toLowerCase()] as string[];
         const pickListSet = new Set(pickListValues);
         const missingValues = fieldConsiderationValues?.filter((value: string) => !pickListSet.has(value));
 
@@ -622,9 +664,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
   /**
    * Handles the processing of dependent picklist values for a specified dependent field in a Salesforce object.
-   * It retrieves the controlling field, processes valid dependent picklist values based on the controller field values, 
+   * It retrieves the controlling field, processes valid dependent picklist values based on the controller field values,
    * and updates the dependent picklist results.
-   * If any value in the consideration map does not match the valid parent value in the dependent picklist, 
+   * If any value in the consideration map does not match the valid parent value in the dependent picklist,
    * an error is thrown.
    *
    * @param {Connection} conn - Salesforce connection instance used to query the object schema.
@@ -633,7 +675,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {Record<string, string[]>} considerMap - A map of field names to values that should be considered for validation.
    * @returns {Promise<void>} - A promise that resolves when the processing is complete.
    */
-  private async depPicklist(conn: Connection, objectName: string, dependentFieldApiName: string, considerMap: Record<string, string[]>): Promise<void> {
+  private async depPicklist(
+    conn: Connection,
+    objectName: string,
+    dependentFieldApiName: string,
+    considerMap: Record<string, string[]>
+  ): Promise<void> {
     const schema = await conn.sobject(objectName).describe();
 
     const dependentFieldResult = schema.fields.find((field) => field.name === dependentFieldApiName);
@@ -693,10 +740,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     Object.keys(this.dependentPicklistResults).forEach((key) => {
       if (Object.keys(considerMap).includes(key.toLowerCase()) && considerMap[key.toLowerCase()].length > 0) {
         const pickListFieldValues = this.dependentPicklistResults[key];
-        if (!pickListFieldValues.some(item => item.parentFieldValue === considerMap[key.toLowerCase()][0])) {
-          throw new Error(`Parent value '${considerMap[key.toLowerCase()][0]}' not found in the picklist values for '${key}'`);
+        if (!pickListFieldValues.some((item) => item.parentFieldValue === considerMap[key.toLowerCase()][0])) {
+          throw new Error(
+            `Parent value '${considerMap[key.toLowerCase()][0]}' not found in the picklist values for '${key}'`
+          );
         }
-        const filteredArray = pickListFieldValues.filter(item => item.parentFieldValue === considerMap[key.toLowerCase()][0]);
+        const filteredArray = pickListFieldValues.filter(
+          (item) => item.parentFieldValue === considerMap[key.toLowerCase()][0]
+        );
 
         if (filteredArray.length > 0) {
           const childValues = considerMap[filteredArray[0].childFieldName.toLowerCase()];
@@ -704,7 +755,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             filteredArray[0].childValues = childValues;
           }
           this.dependentPicklistResults[key] = filteredArray;
-
         }
       }
     });
@@ -755,7 +805,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           values: entry.childValues,
         };
 
-        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues) as Record<string, Fields>;
+        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues) as Record<
+          string,
+          Fields
+        >;
         if (nestedOutput) {
           Object.assign(output[controllingFieldName][childFieldName][entry.parentFieldValue], nestedOutput);
         }
@@ -799,7 +852,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           values: entry.childValues,
         };
 
-        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues) as Record<string, Fields> | null;
+        const nestedOutput = this.buildNestedJSON(input, entry.childFieldName, entry.childValues) as Record<
+          string,
+          Fields
+        > | null;
 
         if (nestedOutput) {
           Object.assign(output[childFieldName][parentValue], nestedOutput);
@@ -852,7 +908,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     config: any[],
     object: string
   ): Promise<Array<Partial<TargetData>>> {
-
     const processedFields = await this.handleFieldProcessingForIntitalJsonFile(conn, object, config);
     return processedFields;
   }
@@ -905,8 +960,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @returns {Promise<CreateResult[]>} - A promise that resolves to an array of `CreateResult` objects representing the outcome of each insert operation.
    */
 
-
-  public static async insertRecords(conn: Connection, object: string, jsonData: GenericRecord[]): Promise<CreateResult[]> {
+  public static async insertRecords(
+    conn: Connection,
+    object: string,
+    jsonData: GenericRecord[]
+  ): Promise<CreateResult[]> {
     const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     const sObjectName = Array.isArray(object) ? object[0] : object;
     const results: CreateResult[] = [];
@@ -930,7 +988,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         return {
           id: result.id ?? '',
           success: result.success,
-          errors: result.errors ?? []
+          errors: result.errors ?? [],
         };
       });
 
@@ -942,7 +1000,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         if (failedcount > 0) {
           console.error(chalk.yellowBright(`Failed to insert ${failedcount} record(s) for ${sObjectName}`));
           errorCountMap.forEach((count, error) => {
-          console.error(chalk.whiteBright(`${count} record(s) have failed with error: ${chalk.redBright(error)}`));
+            console.error(chalk.whiteBright(`${count} record(s) have failed with error: ${chalk.redBright(error)}`));
           });
         }
         return results;
@@ -997,10 +1055,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       if (failedcount > 0) {
         console.error(chalk.yellowBright(`Failed to insert ${failedcount} record(s) for ${sObjectName}`));
         errorCountMap.forEach((count, error) => {
-        console.error(chalk.whiteBright(`${count} record(s) have failed with error: ${chalk.redBright(error)}`));
+          console.error(chalk.whiteBright(`${count} record(s) have failed with error: ${chalk.redBright(error)}`));
         });
       }
-
     } catch (error) {
       console.error('Error in insertRecords:\n', error);
       progressBar.stop();
@@ -1009,7 +1066,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     return results;
   }
-
 
   /**
    * Updates the set of created record IDs for a specified Salesforce object based on the results of an insert operation.
@@ -1167,15 +1223,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
     return relatedRecords.records.map((record: RecordId) => record.Id);
-
   }
 
   /**
    * Fetches related master record IDs from a given reference object, and creates new records if none exist.
-   * 
-   * If related records are found, it returns their IDs. If no records are found, it attempts to generate data 
+   *
+   * If related records are found, it returns their IDs. If no records are found, it attempts to generate data
    * for the given reference object, inserts the records, and then returns the IDs of the newly created records.
-   * 
+   *
    * @param {Connection} conn - The Salesforce connection object to execute queries and insert records.
    * @param {string} referenceTo - The name of the reference object whose related records are being fetched.
    * @returns {Promise<string[]>} - A promise that resolves to an array of record IDs.
@@ -1191,7 +1246,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
 
     if (relatedRecords.records.length === 0) {
-
       if (depthForRecord === 3) {
         this.error(`Max Depth Reached! Please create ${referenceTo} records first.`);
       }
@@ -1226,7 +1280,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
       this.updateCreatedRecordIds(referenceTo, insertResult);
 
-      const validIds = insertResult.filter(result => result.success).map(result => result.id);
+      const validIds = insertResult.filter((result) => result.success).map((result) => result.id);
       if (validIds.length === 0) {
         throw new Error(`Failed to insert records for ${referenceTo}`);
       }
@@ -1236,8 +1290,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     return relatedRecords.records.map((record: RecordId) => record.Id);
   }
-
-
 
   /**
    * Retrieves picklist values for a given field from Salesforce.
@@ -1256,8 +1308,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   ): Promise<string[]> {
     if (item.values != null && item.values.length > 0) {
       return item.values as string[];
-    }
-    else if (item.value != null && item.value.length > 0) {
+    } else if (item.value != null && item.value.length > 0) {
       return [item.value] as string[];
     }
     const result = await conn.describe(object);
@@ -1276,7 +1327,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const sObjectFieldsMap: Map<string, any[]> = new Map();
     config.sObjects.forEach((sObject) => {
       if (sObject.fields) {
-
         const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObject
         for (const [fieldName, fieldDetails] of Object.entries(sObject.fields)) {
           if (fieldDetails.type === 'dependent-picklist') {
@@ -1323,7 +1373,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const typeMapping: { [key in fieldType]: string } = {
       picklist: 'picklist',
       reference: 'reference',
-      'dependent-picklist': 'picklist'
+      'dependent-picklist': 'picklist',
     };
 
     return typeMapping[fieldTypes] || 'Unknown';
@@ -1399,7 +1449,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             if (childDependentField) {
               const childFieldDetails = fieldDetails[childField][randomParentValue] as Record<string, Field>;
               if (childFieldDetails?.[childDependentField]) {
-                const grandChildFieldDetails = (childFieldDetails[childDependentField] as Record<string, any>)[randomChildValue] as Record<string, Field>;
+                const grandChildFieldDetails = (childFieldDetails[childDependentField] as Record<string, any>)[
+                  randomChildValue
+                ] as Record<string, Field>;
 
                 // Updated: handle nested values inside the `values` key
                 if (grandChildFieldDetails?.['values']) {
@@ -1408,7 +1460,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
                     const grandChildFieldObject: any = {
                       name: childDependentField,
                       type: 'picklist',
-                      value: Array.isArray(grandChildValues) ? this.getRandomElement(grandChildValues) as string : undefined,
+                      value: Array.isArray(grandChildValues)
+                        ? (this.getRandomElement(grandChildValues) as string)
+                        : undefined,
                     };
                     fieldsArray.push(grandChildFieldObject);
                   }
@@ -1431,8 +1485,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @returns {any[]} - The enhanced data with special field values added.
    */
 
-  private enhanceDataWithSpecialFields(basicData: any[], processedFields: Array<Partial<TargetData>>, count: number): any[] {
-    const enhancedData = basicData.map(item => ({ ...item }));
+  private enhanceDataWithSpecialFields(
+    basicData: any[],
+    processedFields: Array<Partial<TargetData>>,
+    count: number
+  ): any[] {
+    const enhancedData = basicData.map((item) => ({ ...item }));
     this.getRandomElement = <T>(array: T[]): T | undefined => {
       const element = array[Math.floor(Math.random() * array.length)];
       return Array.isArray(element) ? element[0] : element;
@@ -1459,7 +1517,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @returns {any[]} - The enhanced JSON data with new field values added.
    */
 
-  private getJsonDataParentFields(jsonData: any[], fieldMap: Record<string, { type: string; values: any[]; label: string }>): any[] {
+  private getJsonDataParentFields(
+    jsonData: any[],
+    fieldMap: Record<string, { type: string; values: any[]; label: string }>
+  ): any[] {
     if (!jsonData || jsonData.length === 0) {
       throw new Error('No JSON data found.');
     }
@@ -1470,19 +1531,19 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       return values[Math.floor(Math.random() * values.length)];
     };
     // Enhance each record in the JSON data
-    let enhancedData = jsonData.map(record => ({ ...record }));
+    let enhancedData = jsonData.map((record) => ({ ...record }));
 
     for (const [fieldName, fieldDetails] of Object.entries(fieldMap)) {
       const { type, values } = fieldDetails;
 
       // Skip if the field is already populated or if no values are available
-      if (values.length === 0 || enhancedData.every(record => fieldName in record)) {
+      if (values.length === 0 || enhancedData.every((record) => fieldName in record)) {
         continue;
       }
 
       // Handle fields that need values (e.g., Custom List or reference)
       if (type === 'Custom List' || type === 'reference') {
-        enhancedData = enhancedData.map(record => {
+        enhancedData = enhancedData.map((record) => {
           if (!(fieldName in record)) {
             return { ...record, [fieldName]: getRandomValue(values) };
           }
@@ -1493,6 +1554,4 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     return enhancedData;
   }
-
 }
-

@@ -27,11 +27,16 @@ import { connectToSalesforceOrg } from '../../utils/generic_function.js';
 import DataGenerate from './generate.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smocker-concretio', 'data.upload');
+const messages = Messages.loadMessages('smock-it', 'data.upload');
 
 type DataUploadResult = { path: string };
 type GenericRecord = Record<string, unknown>;
-type FieldRecord = { QualifiedApiName: string; DataType: string; IsNillable: boolean; ReferenceTo: string[] | { referenceTo: string[] } };
+type FieldRecord = {
+  QualifiedApiName: string;
+  DataType: string;
+  IsNillable: boolean;
+  ReferenceTo: string[] | { referenceTo: string[] };
+};
 type TargetData = { name: string; type: string; values?: string[]; label?: string };
 type CreateResult = { id: string; success: boolean; errors: any[] };
 
@@ -103,14 +108,18 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
       }
       throw new Error('Unsupported file type. Please provide a .json or .csv file.');
     } catch (error) {
-      throw new Error(`Failed to parse file: ${String(error)}`)
+      throw new Error(`Failed to parse file: ${String(error)}`);
     }
   }
 
   private static checkFileType(filename: string): 'json' | 'csv' {
-    if (!filename.includes('.')) throw new Error("File type missing from '-u' or '--upload' flag. Please provide a filename with .json or .csv extension.");
+    if (!filename.includes('.'))
+      throw new Error(
+        "File type missing from '-u' or '--upload' flag. Please provide a filename with .json or .csv extension."
+      );
     const fileExtension = path.extname(filename).toLowerCase();
-    if (fileExtension !== '.json' && fileExtension !== '.csv') throw new Error("Unsupported file type in '-u' or '--upload' flag. Please provide a .json or .csv file.");
+    if (fileExtension !== '.json' && fileExtension !== '.csv')
+      throw new Error("Unsupported file type in '-u' or '--upload' flag. Please provide a .json or .csv file.");
     const filePath = path.join(process.cwd(), 'data_gen/output', filename);
     if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
     return fileExtension === '.json' ? 'json' : 'csv';
@@ -119,15 +128,19 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
   private static saveCreatedRecordIds(): void {
     const outputDir = path.join(process.cwd(), 'data_gen', 'output');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-    const fileName = `createdRecords_${new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0]}.json`;
+    const fileName = `createdRecords_${
+      new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0]
+    }.json`;
     const resultObject: Record<string, string[]> = {};
     createdRecordsIds.forEach((ids, objectName) => (resultObject[objectName] = ids));
     fs.writeFileSync(path.join(outputDir, fileName), JSON.stringify(resultObject, null, 2), 'utf-8');
-    console.log(chalk.green.bold(`The IDs of the created records have been saved to: ${path.join(outputDir, fileName)}`));
+    console.log(
+      chalk.green.bold(`The IDs of the created records have been saved to: ${path.join(outputDir, fileName)}`)
+    );
   }
 
   private static processInsertResults(sobject: string, insertResults: CreateResult[]): void {
-    const failedRecords: number = insertResults.filter(result => !result.success).length;
+    const failedRecords: number = insertResults.filter((result) => !result.success).length;
 
     const insertedIds: string[] = [];
 
@@ -171,9 +184,14 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
   ): Promise<Array<Partial<TargetData>>> {
     const processedFields: Array<Partial<TargetData>> = [];
     const picklistFields = fields.filter((f) => f.DataType === 'picklist' || f.DataType === 'multipicklist');
-    const picklistValues = picklistFields.length > 0
-      ? await this.getPicklistValuesBulk(conn, object, picklistFields.map((f) => f.QualifiedApiName))
-      : {};
+    const picklistValues =
+      picklistFields.length > 0
+        ? await this.getPicklistValuesBulk(
+            conn,
+            object,
+            picklistFields.map((f) => f.QualifiedApiName)
+          )
+        : {};
 
     for (const item of fields) {
       const fieldName = item.QualifiedApiName;
@@ -213,7 +231,11 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     return itemType;
   }
 
-  private async getPicklistValuesBulk(conn: Connection, object: string, fields: string[]): Promise<Record<string, string[]>> {
+  private async getPicklistValuesBulk(
+    conn: Connection,
+    object: string,
+    fields: string[]
+  ): Promise<Record<string, string[]>> {
     try {
       const describe = await conn.describe(object);
       const result: Record<string, string[]> = {};
@@ -240,7 +262,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
       referenceIdCache.set(referenceTo, ids);
       return ids;
     } catch (error) {
-      throw new Error(`Failed to fetch related record IDs for ${referenceTo}:${String(error)}`);;
+      throw new Error(`Failed to fetch related record IDs for ${referenceTo}:${String(error)}`);
     }
   }
 
@@ -251,7 +273,8 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     sobject: string
   ): Promise<GenericRecord[]> {
     if (!jsonData?.length) return jsonData;
-    const getRandomValue = (values: any[]): any => values.length ? values[Math.floor(Math.random() * values.length)] : null;
+    const getRandomValue = (values: any[]): any =>
+      values.length ? values[Math.floor(Math.random() * values.length)] : null;
 
     const referenceFields = (await this.fetchObjectMetadata(conn, sobject)).filter(
       (f) => f.DataType === 'reference' && f.QualifiedApiName !== 'OwnerId'
@@ -261,7 +284,9 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     for (const [fieldName, fieldDetails] of Object.entries(fieldMap)) {
       if (fieldDetails.type !== 'Custom List' || !fieldDetails.values.length) continue;
       const refField = referenceFields.find((f) => f.QualifiedApiName === fieldName);
-      const refObject = refField && (Array.isArray(refField.ReferenceTo) ? refField.ReferenceTo[0] : refField.ReferenceTo?.referenceTo?.[0]);
+      const refObject =
+        refField &&
+        (Array.isArray(refField.ReferenceTo) ? refField.ReferenceTo[0] : refField.ReferenceTo?.referenceTo?.[0]);
       if (!refObject) continue;
 
       const idsToValidate = new Set<string>();
@@ -276,7 +301,9 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     for (const [fieldName, fieldDetails] of Object.entries(fieldMap)) {
       if (fieldDetails.type !== 'Custom List' || !fieldDetails.values.length) continue;
       const refField = referenceFields.find((f) => f.QualifiedApiName === fieldName);
-      const refObject = refField && (Array.isArray(refField.ReferenceTo) ? refField.ReferenceTo[0] : refField.ReferenceTo?.referenceTo?.[0]);
+      const refObject =
+        refField &&
+        (Array.isArray(refField.ReferenceTo) ? refField.ReferenceTo[0] : refField.ReferenceTo?.referenceTo?.[0]);
       if (!refObject) continue;
 
       const validIds = refIdValidations.get(fieldName)?.size
@@ -313,7 +340,9 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
   ): Promise<string> {
     const MAX_DEPTH = 2;
     if (hierarchyLevel >= MAX_DEPTH) {
-      throw new Error(`Max depth of ${MAX_DEPTH} reached at ${referencedObject}. Reference chain: ${parentChain.join(' -> ')}.`);
+      throw new Error(
+        `Max depth of ${MAX_DEPTH} reached at ${referencedObject}. Reference chain: ${parentChain.join(' -> ')}.`
+      );
     }
 
     if (!referencedObject) throw new Error('Referenced object is undefined or invalid.');
@@ -343,7 +372,9 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     const parentIds: Map<string, string> = new Map();
     for (const refField of requiredReferenceFields) {
       const fieldName = refField.QualifiedApiName;
-      const refObject = Array.isArray(refField.ReferenceTo) ? refField.ReferenceTo[0] : refField.ReferenceTo?.referenceTo?.[0];
+      const refObject = Array.isArray(refField.ReferenceTo)
+        ? refField.ReferenceTo[0]
+        : refField.ReferenceTo?.referenceTo?.[0];
       if (!refObject || refObject === referencedObject) continue;
 
       const parentId = await this.ensureParentRecordsExist(conn, refObject, true, hierarchyLevel + 1, currentChain);
@@ -371,7 +402,10 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
 
     const insertResults = await DataGenerate.insertRecords(conn, referencedObject, cleanedData);
     const newIds = insertResults.filter((r) => r.success && r.id).map((r) => r.id);
-    if (!newIds.length) throw new Error(`Failed to create ${referencedObject}: ${JSON.stringify(insertResults.flatMap((r) => r.errors ?? []))}`);
+    if (!newIds.length)
+      throw new Error(
+        `Failed to create ${referencedObject}: ${JSON.stringify(insertResults.flatMap((r) => r.errors ?? []))}`
+      );
 
     createdRecordsIds.set(referencedObject, newIds);
     depthForRecord--;
@@ -384,7 +418,9 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     const aliasOrUsername = flags.alias ?? 'err';
     const sobject = flags.sObject ?? 'err';
     if (!flags.sObject) {
-      throw new Error("Data can't be uploaded without a sObject. Please provide a valid sObject name in the command using '-s' or '--sObject' flag.");
+      throw new Error(
+        "Data can't be uploaded without a sObject. Please provide a valid sObject name in the command using '-s' or '--sObject' flag."
+      );
     }
     const fileType = DataUpload.checkFileType(filename);
     const filePath = path.join(process.cwd(), 'data_gen/output', filename);
@@ -406,7 +442,10 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
         const isFieldInJson = records.some((r) => r[fieldName] !== undefined);
         const isRequired = !field.IsNillable;
         if (isFieldInJson || isRequired) {
-          parentRecordIds.set(fieldName, await this.ensureParentRecordsExist(conn, refObject, isRequired, 0, [sobject]));
+          parentRecordIds.set(
+            fieldName,
+            await this.ensureParentRecordsExist(conn, refObject, isRequired, 0, [sobject])
+          );
         }
       }
 
@@ -435,7 +474,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
 
       return { path: filePath };
     } catch (error) {
-      throw new Error(`${String(error)}`)
+      throw new Error(`${String(error)}`);
     }
   }
 }
