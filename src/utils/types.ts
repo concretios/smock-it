@@ -1,56 +1,25 @@
-export type TargetData = {
-  name: string;
-  type: string;
-  min?: number;
-  max?: number;
-  decimals?: number;
-  values?: string[];
-};
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 
-export type GenericRecord = { [key: string]: unknown };
-
-export type CreateResult = { id: string; success: boolean; errors: unknown[] };
-
-export type fieldType =
-  | 'text'
-  | 'boolean'
-  | 'phone'
-  | 'currency'
-  | 'double'
-  | 'date'
-  | 'time'
-  | 'datetime'
-  | 'picklist'
-  | 'reference'
-  | 'dependent-picklist'
-  | 'email'
-  | 'address';
-
-export type SObjectConfig = {
-  sObject: string;
-  language: string;
-  count?: number;
-  fields?: { [key: string]: Types.Field };
-};
-
-export type SObjectConfigFile = {
-  sObjects: SObjectConfig[];
-};
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // types for init.ts
 
 export type SetupInitResult = {
-  templateFileName: string;
   namespaceToExclude: string[];
   outputFormat: string[];
-  language: string;
+  // language: string;
   count: number;
   sObjects: Array<{ [key: string]: typeSObjectSettingsMap }>;
 };
-
+  
 export type typeSObjectSettingsMap = {
   count?: number;
-  language?: string;
+  // language?: string;
   fieldsToExclude?: string[];
   fieldsToConsider?: { [key: string]: string[] | string };
   pickLeftFields?: boolean | string | undefined;
@@ -67,15 +36,16 @@ export type templateSchema = {
   templateFileName: string;
   namespaceToExclude: string[];
   outputFormat: string[];
-  language: string;
+  // language: string;
   count: number;
   sObjects: SObjectItem[];
 };
 
 export type tempAddFlags = {
+  alias?: string;
   sObjects?: string;
   templateName: string;
-  language?: string;
+  // language?: string;
   count?: number;
   namespaceToExclude?: string;
   outputFormat?: string;
@@ -84,12 +54,18 @@ export type tempAddFlags = {
   pickLeftFields?: boolean;
 };
 
+export type tempValidateFlags = {
+  alias?: string;
+  sObjects?: string;
+  templateName: string;
+};
+
 // types from remove.ts file
 export type flagObj = {
   templateName: string;
   namespaceToExclude?: string[];
   outputFormat?: string[];
-  language?: boolean;
+ //  language?: boolean;
   count?: boolean;
   sObject?: string;
   fieldsToExclude?: string[];
@@ -125,9 +101,102 @@ export type sObjectSchemaType = {
   fieldsToExclude?: string[];
   fieldsToConsider?: fieldsToConsiderMap;
   count?: number;
-  language?: string;
+  // language?: string;
   pickLeftFields?: boolean;
 };
 export type fieldsToConsiderMap = {
   [key: string]: string[] | string;
 };
+
+// output format table
+export type ResultEntry = {
+  'SObject(s)': string;
+  JSON: string;
+  CSV: string;
+  DI: string;
+  'Failed(DI)': number;
+};
+
+/* --------------------------------------------------------------------------------*/
+/* data generation types without mockaroo */
+export type DataGenerateResult = {
+  path: string;
+};
+
+export type FieldRecord = {
+  Label: string;
+  attributes: {
+    type: string;
+    url: string;
+  };
+  QualifiedApiName: string;
+  IsDependentPicklist: boolean;
+  NamespacePrefix: string | null;
+  DataType: string;
+  ReferenceTo: {
+    referenceTo: null | any[];
+  };
+  RelationshipName: string | null;
+  IsNillable: boolean;
+};
+
+export type RecordId = {
+  Id: string;
+};
+
+export type QueryResult = {
+  records: RecordId[];
+};
+
+export type Fields = {
+  [key: string]: any;
+  type: string;
+  values?: string[];
+  relationshipType?: string;
+  referenceTo?: string;
+  'max-length'?: number;
+  'child-dependent-field'?: string;
+};
+
+/* ------------------------------------------*/
+
+export type TargetData = {
+  name: string;
+  type: string;
+  min?: number;
+  max?: number;
+  decimals?: number;
+  values?: string[];
+  label?: string;
+};
+
+export type fieldType = 'picklist' | 'reference' | 'dependent-picklist';
+
+export type Field = {
+  label?: string;
+  type: fieldType;
+  values?: string[]; // For picklist or dependent-picklist
+  referenceTo?: string; // For reference fields
+  relationshipType?: 'lookup' | 'master-detail'; // For reference fields
+  'child-dependent-field'?: string; // For dependent picklists
+};
+
+export type SObjectConfig = {
+  sObject: string;
+  // language: string;
+  count?: number;
+  fields?: { [key: string]: Field };
+};
+
+export type SObjectConfigFile = {
+  sObjects: SObjectConfig[];
+};
+
+export type jsonConfig = {
+  outputFormat?: string[];
+  sObjects: SObjectConfig[];
+};
+
+export type GenericRecord = { [key: string]: any };
+export type CreateResult = { id: string; success: boolean; errors: any[] };
+

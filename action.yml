@@ -1,13 +1,10 @@
-name: "Smock-it - Test Data Generator tool"
+name: "Generate Mock Data"
 description: "Generate mock(synthetic) data for salesforce using smock-it."
 author: "Divy Muni"
 
 inputs:
   templates:
     description: "Provide comma-separated list of Template(s) name (e.g. lead_creation.json, account_update.json)"
-    required: true
-  mockaroo-api-key:
-    description: "Provide Mockaroo API key for test data generation"
     required: true
   org-alias:
     description: "Provide alias of connected salesforce org"
@@ -18,15 +15,14 @@ runs:
   steps:
     - name: generate synthetic test data
       run: |
-        export MOCKAROO_API_KEY="${{ inputs.mockaroo-api-key }}"
         DATA_GEN_PATH="data_gen"
         
         if [[ -z "$DATA_GEN_PATH" ]]; then
           DATA_GEN_PATH="data_gen"
           echo "SUCCESSFUL: Path is validated - $DATA_GEN_PATH"
         fi
-        if [[ ! -d "$DATA_GEN_PATH" || ! -d "$DATA_GEN_PATH/templates" || ! -d "$DATA_GEN_PATH/output" ]]; then
-          echo "Error: Required directories ($DATA_GEN_PATH, templates, output) not found."
+        if [[ ! -d "$DATA_GEN_PATH" || ! -d "$DATA_GEN_PATH/templates" ]]; then
+          echo "Error: Required directories ($DATA_GEN_PATH, templates) not found."
           exit 1
         fi
         
@@ -39,6 +35,4 @@ runs:
           echo "validating templates & generating synthetic data for : $TEMPLATE"
           sf data generate -a ${{ inputs.org-alias }} -t $TEMPLATE
         done
-      env:
-        MOCKAROO_API_KEY: ${{ inputs.mockaroo-api-key }}
       shell: bash

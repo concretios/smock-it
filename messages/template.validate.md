@@ -6,6 +6,10 @@ This will validate the SObject and its fields in the given data template from th
 
 Specify the data template name.
 
+# flags.sObjects.summary
+
+summary
+
 # flags.templateName.description
 
 Use `--templateName` or `-t` to specify the name of the data template to be utilized. The template must exist in the `data_gen/templates` directory.
