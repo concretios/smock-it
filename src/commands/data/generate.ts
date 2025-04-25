@@ -923,7 +923,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           if (result.errors && Array.isArray(result.errors)) {
             result.errors.forEach((err: any) => {
               const errString = JSON.stringify(err);
-              const currentCount = errorCountMap.get(errString) || 0;
+              const currentCount = errorCountMap.get(errString) ?? 0;
               errorCountMap.set(errString, currentCount + 1);
             });
           }
