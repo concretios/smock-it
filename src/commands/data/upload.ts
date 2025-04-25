@@ -1,3 +1,11 @@
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable no-param-reassign */
 /* eslint-disable @typescript-eslint/member-ordering */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
@@ -7,6 +15,7 @@
 /* eslint-disable sf-plugin/command-example */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
@@ -74,7 +83,6 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
       });
 
       rl.on('close', () => {
-        // console.log(`Finished parsing CSV with ${records.length} records.`);
         resolve(records);
       });
       rl.on('error', (err) => {
@@ -100,9 +108,9 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
   }
 
   private static checkFileType(filename: string): 'json' | 'csv' {
-    if (!filename.includes('.')) throw new Error('File type missing. Please provide a filename with .json or .csv extension.');
+    if (!filename.includes('.')) throw new Error("File type missing from '-u' or '--upload' flag. Please provide a filename with .json or .csv extension.");
     const fileExtension = path.extname(filename).toLowerCase();
-    if (fileExtension !== '.json' && fileExtension !== '.csv') throw new Error('Unsupported file type. Please provide a .json or .csv file.');
+    if (fileExtension !== '.json' && fileExtension !== '.csv') throw new Error("Unsupported file type in '-u' or '--upload' flag. Please provide a .json or .csv file.");
     const filePath = path.join(process.cwd(), 'data_gen/output', filename);
     if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
     return fileExtension === '.json' ? 'json' : 'csv';
@@ -119,19 +127,19 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
   }
 
   private static processInsertResults(sobject: string, insertResults: CreateResult[]): void {
-    const errors: string[] = [];
+    const failedRecords: number = insertResults.filter(result => !result.success).length;
+
     const insertedIds: string[] = [];
 
     insertResults.forEach((result, index) => {
       if (result.success && result.id) {
         insertedIds.push(result.id);
-      } else if (result.errors) {
-        result.errors.forEach((error) => errors.push(`Record ${index + 1}: ${error.message || JSON.stringify(error) || 'Unknown error'}`));
       }
     });
 
-    if (errors.length > 0) {
-      errors.forEach((error) => console.log(`- ${error}`));
+    if (failedRecords > 0) {
+      const errorMessage = `${failedRecords} record(s) failed to insert.`;
+      throw new Error(errorMessage); // Throw a single error message
     }
     if (insertedIds.length > 0) {
       createdRecordsIds.set(sobject, insertedIds);
@@ -324,7 +332,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
         return id;
       }
     } catch (error) {
-      throw new Error(`Failed to query ${referencedObject}: $Strin{error}`);
+      throw new Error(`Failed to query ${referencedObject}: ${String(error)}`);
     }
 
     depthForRecord++;
@@ -375,6 +383,9 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     const filename = flags.uploadFile ?? 'err';
     const aliasOrUsername = flags.alias ?? 'err';
     const sobject = flags.sObject ?? 'err';
+    if (!flags.sObject) {
+      throw new Error("Data can't be uploaded without a sObject. Please provide a valid sObject name in the command using '-s' or '--sObject' flag.");
+    }
     const fileType = DataUpload.checkFileType(filename);
     const filePath = path.join(process.cwd(), 'data_gen/output', filename);
 
@@ -424,15 +435,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
 
       return { path: filePath };
     } catch (error) {
-      throw new Error(`Error during data upload: $${String(error)}`)
-
+      throw new Error(`${String(error)}`)
     }
   }
 }
-
-/**
- * Copyright (c) 2025 concret.io
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
