@@ -7,21 +7,19 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-
 // types for init.ts
 
 export type SetupInitResult = {
-  templateFileName: string;
   namespaceToExclude: string[];
   outputFormat: string[];
-  language: string;
+  // language: string;
   count: number;
   sObjects: Array<{ [key: string]: typeSObjectSettingsMap }>;
 };
-
+  
 export type typeSObjectSettingsMap = {
   count?: number;
-  language?: string;
+  // language?: string;
   fieldsToExclude?: string[];
   fieldsToConsider?: { [key: string]: string[] | string };
   pickLeftFields?: boolean | string | undefined;
@@ -38,7 +36,7 @@ export type templateSchema = {
   templateFileName: string;
   namespaceToExclude: string[];
   outputFormat: string[];
-  language: string;
+  // language: string;
   count: number;
   sObjects: SObjectItem[];
 };
@@ -47,7 +45,7 @@ export type tempAddFlags = {
   alias?: string;
   sObjects?: string;
   templateName: string;
-  language?: string;
+  // language?: string;
   count?: number;
   namespaceToExclude?: string;
   outputFormat?: string;
@@ -67,7 +65,7 @@ export type flagObj = {
   templateName: string;
   namespaceToExclude?: string[];
   outputFormat?: string[];
-  language?: boolean;
+ //  language?: boolean;
   count?: boolean;
   sObject?: string;
   fieldsToExclude?: string[];
@@ -103,7 +101,7 @@ export type sObjectSchemaType = {
   fieldsToExclude?: string[];
   fieldsToConsider?: fieldsToConsiderMap;
   count?: number;
-  language?: string;
+  // language?: string;
   pickLeftFields?: boolean;
 };
 export type fieldsToConsiderMap = {
@@ -185,7 +183,7 @@ export type Field = {
 
 export type SObjectConfig = {
   sObject: string;
-  language: string;
+  // language: string;
   count?: number;
   fields?: { [key: string]: Field };
 };

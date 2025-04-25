@@ -164,9 +164,9 @@ export function updateOrInitializeConfig(
           break;
 
         default:
-          if (key === 'language' && value !== 'en' && value !== 'jp') {
+          /* if (key === 'language' && value !== 'en' && value !== 'jp') {
             throw new Error('Invalid language input. supports `en` or `jp` only');
-          }
+          }*/
           if (key === 'count' && ((value as number) < 1)) {
             throw new Error(
               'Invalid input. Please enter a valid positive count.');
@@ -195,12 +195,12 @@ export const templateAddFlags = {
     description: messages.getMessage('flags.templateName.description'),
     required: true,
   }),
-  language: Flags.string({
+  /* language: Flags.string({
     char: 'l',
     summary: messages.getMessage('flags.language.summary'),
     description: messages.getMessage('flags.language.description'),
     required: false,
-  }),
+  }),*/
   count: Flags.integer({
     char: 'c',
     summary: messages.getMessage('flags.count.summary'),

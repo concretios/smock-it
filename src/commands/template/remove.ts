@@ -211,7 +211,7 @@ function validateInput(flags: flagObj, jsonData: templateSchema): templateSchema
           );
         }
         break;
-      case 'language':
+      // case 'language':
       case 'count':
         updatedJsonData = deleteSObjectField(updatedJsonData, (flags.sObject as string).toLowerCase(), key);
         break;
@@ -281,11 +281,11 @@ export default class TemplateRemove extends SfCommand<TemplateRemoveResult> {
       description: messages.getMessage('flags.sObject.description'),
       char: 's',
     }),
-    language: Flags.boolean({
+    /* language: Flags.boolean({
       summary: messages.getMessage('flags.language.summary'),
       description: messages.getMessage('flags.language.description'),
       char: 'l',
-    }),
+    }),*/
     count: Flags.boolean({
       summary: messages.getMessage('flags.count.summary'),
       description: messages.getMessage('flags.count.description'),
