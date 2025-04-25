@@ -1,3 +1,9 @@
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 import * as readline from 'node:readline';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -557,9 +563,3 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
   }
 }
 
-/**
- * Copyright (c) 2025 concret.io
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */

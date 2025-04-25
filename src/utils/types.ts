@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 
@@ -195,9 +202,3 @@ export type jsonConfig = {
 export type GenericRecord = { [key: string]: any };
 export type CreateResult = { id: string; success: boolean; errors: any[] };
 
-/**
- * Copyright (c) 2025 concret.io
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */

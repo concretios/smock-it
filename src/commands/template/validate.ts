@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 /* eslint-disable sf-plugin/flag-case */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -191,9 +198,3 @@ export class TemplateValidate extends SfCommand<TemplateValidateResult> {
   }
 }
 
-/**
- * Copyright (c) 2025 concret.io
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */

@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Connection } from '@salesforce/core';
@@ -32,9 +39,3 @@ export async function readSObjectConfigFile(): Promise<SObjectConfigFile> {
 }
 
 
-/**
- * Copyright (c) 2025 concret.io
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */

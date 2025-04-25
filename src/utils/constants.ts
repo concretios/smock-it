@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 export const arrayFlags = ['namespaceToExclude', 'outputFormat', 'fieldsToExclude'];
 
 export const languageChoices = [
@@ -11,9 +18,3 @@ export const outputChoices = [
   { name: 'CSV', message: 'CSV', value: 'csv' },
 ];
 
-/**
- * Copyright (c) 2025 concret.io
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
