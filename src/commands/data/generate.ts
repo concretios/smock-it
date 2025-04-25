@@ -390,7 +390,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
       const configToWrite: any = {
         sObject: objectName,
-        language: configForObject.language ?? baseConfig.language,
         count: configForObject.count ?? baseConfig.count,
       };
 
