@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable sf-plugin/no-missing-messages */
@@ -66,7 +73,9 @@ function checkDuplicateFields(configObject: any, flags: tempAddFlags): void {
     return;
   }
   let fieldsToExcludeValues: string[] = configObject?.fieldsToExclude ? configObject?.fieldsToExclude : [];
-  let fieldsToConsiderKeys: string[] = configObject?.fieldsToConsider ? Object.keys(configObject?.fieldsToConsider) : [];
+  let fieldsToConsiderKeys: string[] = configObject?.fieldsToConsider
+    ? Object.keys(configObject?.fieldsToConsider)
+    : [];
   for (const [key, value] of Object.entries(flags)) {
     let valuesArray: string[] = [];
     if (key === 'fieldsToExclude' && typeof value === 'string') {
@@ -94,15 +103,22 @@ function checkDuplicateFields(configObject: any, flags: tempAddFlags): void {
       fieldsToConsiderKeys = fieldsToConsiderKeys.concat(valuesArray);
     }
   }
-  const commonValues = fieldsToConsiderKeys.filter((val) =>
-    fieldsToExcludeValues.includes(val)
-  );
+  const commonValues = fieldsToConsiderKeys.filter((val) => fieldsToExcludeValues.includes(val));
   if (commonValues.length > 0) {
-    throw new Error(`Please do not add Common value ${commonValues.join(', ')} in fieldsToConsider and fieldsToExclude, Please ensure no overlap between them.`);
+    throw new Error(
+      `Please do not add Common value ${commonValues.join(
+        ', '
+      )} in fieldsToConsider and fieldsToExclude, Please ensure no overlap between them.`
+    );
   }
 }
 /* Handling all array input in the data template*/
-export function updateArrayValueInput(key: string, value: string, configObject: any, log: (message: string) => void): void {
+export function updateArrayValueInput(
+  key: string,
+  value: string,
+  configObject: any,
+  log: (message: string) => void
+): void {
   const valuesArray = value
     .toLowerCase()
     .split(/[\s,]+/)
@@ -157,19 +173,18 @@ export function updateOrInitializeConfig(
           break;
 
         default:
-          if (key === 'language' && value !== 'en' && value !== 'jp') {
+          /* if (key === 'language' && value !== 'en' && value !== 'jp') {
             throw new Error('Invalid language input. supports `en` or `jp` only');
-          }
-          if (key === 'count' && ((value as number) < 1)) {
-            throw new Error(
-              'Invalid input. Please enter a valid positive count.');
+          }*/
+          if (key === 'count' && (value as number) < 1) {
+            throw new Error('Invalid input. Please enter a valid positive count.');
           }
 
           configObject[key] = value;
           log(`Setting '${key}' to: ${configObject[key]}`);
           break;
       }
-    } else if (!['sObject', 'templateName','alias'].includes(key)) {
+    } else if (!['sObject', 'templateName', 'alias'].includes(key)) {
       log(chalk.yellow(`Skipped: '${key}' flag cannot be passed in the current command`));
     }
   }
@@ -188,12 +203,12 @@ export const templateAddFlags = {
     description: messages.getMessage('flags.templateName.description'),
     required: true,
   }),
-  language: Flags.string({
+  /* language: Flags.string({
     char: 'l',
     summary: messages.getMessage('flags.language.summary'),
     description: messages.getMessage('flags.language.description'),
     required: false,
-  }),
+  }),*/
   count: Flags.integer({
     char: 'c',
     summary: messages.getMessage('flags.count.summary'),
@@ -235,7 +250,7 @@ export const templateAddFlags = {
 export function getTemplateJsonData(templateName: string): string {
   const filename = templateName.endsWith('.json') ? templateName : `${templateName}.json`;
   if (!filename) {
-    throw error('Error: You must specify a filename using the --template-name flag.');
+    throw error('Error: You must specify a filename using the --templateName flag.');
   }
   const templateDirPath = path.join(process.cwd(), 'data_gen/templates');
   if (!fs.existsSync(templateDirPath)) {
