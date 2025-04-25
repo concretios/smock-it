@@ -143,48 +143,26 @@ function createDefaultTemplate(flags: flagsForInit, templatePath: string): void 
     }
 
     const defaultTemplate = `
+{
+  "namespaceToExclude": [],
+  "outputFormat": ["csv", "json"],
+  "count": 1,
+  "sObjects": [
+    {"account": {}},
+    {"contact": {}},
     {
-      "_comment_importantNote": "We highly recommend removing all the comments for a cleaner exeperience once you are comfortable with this json format",
-
-     
-
-      "_comment_namespaceToExclude": "Fields from these namespace(s) will be excluded while generating test data",
-      "_example_namespaceToExclude": "namespaceToExclude:['namespace1','namespace2']",
-      "namespaceToExclude": [],
-      
-      "_comment_outputFormat": "Desired output format(s) for the storing the generated test data; Only 3 values are valid- csv,json and di(i.e. for direct insertion of upto 200 records into the connected org)",
-      "_example_outputFormat": "outputFormat:['csv','json','di']",
-      "outputFormat": ["csv"],
-      
-      "_comment_count": "Specifies the default count for data generation; applies to all sObjects unless overridden",
-      "count": 1,
-      
-      "_comment_sObjects": "Lists Salesforce objects (API names) to generate test data for.",
-      "sObjects": [
-        {"account": {}},
-        {"contact": {}},
-        {
-          "lead": {
-            "_comment_sobjectLevel": "These settings are object specific, so here these are set for lead object only",
-            "_comment_count": "Specifies count for generating test data for the Lead object.",
-            "count": 5,
-
-            "_comment_fieldsToExclude": "Lists fields to exclude from generating test data for the Lead object.",
-            "fieldsToExclude": ["fax", "website"],
-
-            "_comment_fieldsToConsider": "Fields and values to consider for generating test data for the Lead object.",
-            "fieldsToConsider": {
-              "email": ["smockit@gmail.com"],
-              "phone": ["9090909090","6788899990"]
-            },
-
-            "_comment_pickLeftFields": "Include all remaining fields for generating test data for the Lead object.",
-            "pickLeftFields": true
-          
-          }
-        }
-      ]
+      "lead": {
+        "count": 5,
+        "fieldsToExclude": ["fax", "website"],
+        "fieldsToConsider": {
+          "email": ["smockit@gmail.com"],
+          "phone": ["9090909090","6788899990"]
+        },
+        "pickLeftFields": true
+      }
     }
+  ]
+}
     `;
     // Write the JSON object to the file with custom formatting
     fs.writeFileSync(defaultTemplatePath, defaultTemplate, 'utf8');
@@ -196,7 +174,7 @@ async function getJSONFileName(templatePath: string): Promise<string> {
 
   while (true) {
     fileName = await askQuestion('Provide a template name', 'account_creation');
-    if (/^[A-Za-z][A-Za-z0-9]*$/.test(fileName)) {
+    if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(fileName)) {
       break;
     } else {
       console.error('Invalid Template name! It must start with an alphabet (A-Z, a-z) and can contain  alphanumeric characters (A-Z, a-z, 0-9). Try again.\n');
@@ -472,7 +450,10 @@ export  default class SetupInit extends SfCommand<SetupInitResult> {
     this.log( '🔗 '+ chalk.gray('For more template creation info, visit: ') + chalk.underline('https://github.com/concretios/smock-it/wiki/Template-Init-Questionnaire'));
     this.log(chalk.bold('====================================='));
     const { flags } =  await this.parse(SetupInit);
-    createDefaultTemplate(flags, templatePath);
+    if(flags.default){
+      createDefaultTemplate(flags, templatePath);
+      process.exit(0);
+    }
     const templateFileName = await getJSONFileName(templatePath);
     const filePath = path.join(templatePath, templateFileName);
     const namespaceToExclude = await getNamespaceToExclude();
