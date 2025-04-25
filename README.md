@@ -4,209 +4,226 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v2.0.0-brightgreen" />
+  <img src="https://img.shields.io/badge/version-v3.0.0-brightgreen" />
   <img src="https://img.shields.io/badge/mock--data-brightgreen" />
   <img src="https://img.shields.io/badge/SF--Plugin--Test%20Data%20Generator-blue" />
 </p>
 
+# Smock-it (v3.0.0)
 
+Smock-it is a powerful CLI plugin, a tool for generating mock data for Salesforce testing. It simplifies the creation of compliant, relationship-aware test data, allowing developers, QA teams, and admins to quickly generate and use unique datasets directly within their Salesforce orgs.
 
+Want to get started with Smock-it?  [**Quick Start Guide**](https://github.com/concretios/smock-it/wiki/Quick-Start-Guide).
 
-# Smock-it (v2.0.0)
-**A Salesforce CLI Plugin to simplify synthetic data generation for Salesforce Org.**
+## What\`s New in v3?
 
+Smock-it v3 brings smarter, faster test data generation for Salesforce, with:
 
-## Overview
-Smock-it is a fast, lightweight, and feature-rich Salesforce CLI plugin built to revolutionize test data generation. Effortlessly create realistic, customizable synthetic data tailored to complex Salesforce schemas and industry-specific needs. Whether you're testing simple configurations or intricate Salesforce setups, Smock-it empowers you with unmatched flexibility, precision, and ease - turning test data creation into a seamless experience. Perfect for developers, QAs and admins alike, smock-it ensures your data is always one step ahead!
+### 1\. Native Data Library
 
----
+Smock-it has eliminated its dependency on mockaroo and now comes with its own data library. This allows it to generate 100% unique data up to 300K records for Salesforce standard duplicate rules.
 
-## What`s New in v2.0.0 🚀
+### 2\. Realistic Address Mapping
 
-- **Enhanced Template Creation**: Greater customization and flexibility, enabling users to specify fields to include or exclude (`fieldsToConsider`, `fieldsToExclude`) and control data generation behavior (`pickLeftFields`) for precise and reliable test scenarios tailored to specific needs.  
-- **Simplified Authentication**: The `-a` (aliasOrUserName) flag replaces the need for environment variables like `SALESFORCE_USERNAME`, `SALESFORCE_SECURITY_TOKEN`, and `SALESFORCE_PASSWORD`. It is required for the `validate` and `data generate` commands and accepts a username or alias from the Salesforce Org List, simplifying authentication.  
-- **Generate Records Like Never Before!**: Say goodbye to the 1,000-record limit! Now, you can generate a significantly larger number of records across all output formats - CSV, JSON, and DI, giving you the flexibility to handle more extensive test data requirements with ease.  
-- **Automatic Field Inclusion**: If required fields for your object are missing, the system automatically identifies and includes them, ensuring that all necessary fields are present and data generation is seamless.  
+When generating location-based data, Smock-it intelligently associates countries with their respective states and cities, ensuring the data is both logical and realistic.
 
+### 3\. Text & Number Generation
 
+Using advanced, context-aware algorithms, it generates realistic names, industries, emails, currencies, and other text-based data. This ensures that your test data closely mirrors real-world scenarios, enhancing its authenticity and reliability.
 
+### 4\. Upload Generated Data to Multiple Orgs
 
----
+The new data upload feature allows users to upload generated datasets to different orgs using the username or alias. This makes it seamless for teams to test across environments with the exact same dataset.
 
-## Key Challenges solved
-Smock-it addresses critical challenges faced by Saleforce Professionals in managing and generating mock data for their environments. Here are the key pain points Smock-it solves:
+## Key Challenges Solved
 
-- **Privacy and Compliance**: Avoids the use of real customer data, ensuring GDPR and CCPA compliance by generating synthetic, privacy-safe test data.
-- **Time-Consuming Data Creation**: Automates the generation of complex, relationship-driven Salesforce data, saving time and reducing manual effort.
-- **Salesforce Schema Complexity**: Handles Salesforce’s complex schema, including custom objects and relationships, ensuring accurate data generation.
-- **Customization and Flexibility**: 
-     - **fieldsToConsider** - Enable precise test data customization by configuring specific fields at the object level, ensuring defined values apply exclusively to the targeted object for accurate and reliable scenarios.
-     - **fieldsToExclude** - Allow exclusion of specific fields during data creation, ensuring they are omitted from the generated test data for precise control over test scenarios.
-     - **pickLeftFields** - If set to true, generates data for all fields except those in FieldsToExclude. If false, generates data only for the fields in FieldsToConsider.
+Smock-it removes the biggest roadblocks Salesforce professionals face when managing and generating test data. 
 
----
+### 1\. Reuse Data Across Multiple Orgs
 
-# Installation
+Smock-It lets you easily upload and reuse generated data across different orgs, making it seamless for teams to test with the same dataset. This ensures consistency and accuracy across environments.
 
-#### Prerequisites
-- **Salesforce CLI**
-- **Node.js (v18.0.0 or later)**
-- **Mockaroo API Key**
-#### Commands
-1. **Install**:
-   ```bash
+### 2\. Realistic data generation
+
+QAs need test data that looks realistic, and Smock-It delivers just that. The data it generates isn’t just random numbers or text; it’s context-aware, logically correct, and closely resembles real-world scenarios. This ensures that the data is not only realistic but also meaningful.
+
+### 3\. Data Generation Speed & Usage Limit
+
+With no API dependencies, data generation time has drastically reduced, from approximately 15 minutes for 200,000 records to just 2 minutes. It also removes previous limitations, allowing unlimited data generation per day.
+
+## Installation
+
+### Prerequisites
+
+Before installing Smock-it, ensure you have the following:
+
+* Salesforce CLI  
+* Node.js (v18.0.0 or later)
+
+### Install Smock-it
+
+Run the following command in your terminal to install Smock-it as a Salesforce CLI plugin:
+
+   ``` 
    sf plugins install smock-it
    ```
-2. **Update**:
-   ```bash
-   sf plugins update
-   ```
-3. **Verify successful installation run**
-   ```bash
-    sf plugins
-   ```
-### Environment Variables
-Smock-it relies on this environment variable:
-- **For Windows**
-   ```bash
-   $env:MOCKAROO_API_KEY="your_mockaroo_api_key"
-   ```
-- **For MacOS**
-   ```
-   export MOCKAROO_API_KEY="your_mockaroo_api_key"
-   ```
 
- > Obtain your Mockaroo API key from [Mockaroo](https://www.mockaroo.com/sign-up).
+### Verify the Installation
 
+To confirm that Smock-it was installed successfully, run the below command. This will list all installed plugins, including Smock-it.
 
+``` 
+sf plugins
+```
 
----
+### Update Smock-it
+
+Keep Smock-it up to date with the latest enhancements by running:
+
+``` 
+sf plugins update
+```
 
 ## Directory Structure
-The following directories are created(if doesn't already exist) on current working directory when using Smock-it:
 
-- **data_gen**
-  - **templates**: Stores data templates for test data generation.
-  - **output**: Contains generated data and record insertion details.
----
+When running template init command, the following directories are automatically created in your current working directory (if they don’t already exist). These directories help to organize your output test data and template configurations, making it easier to manage and reuse:
 
+```html
+PROJECT_BASE/ 
+├── data_gen/
+│   ├── templates/ 			 	  #refer to template structure
+│   │   ├ createAccount.json
+│   ├── output/ 				  #refer to Output
+│   │   ├ CreateAccount_DI_Ouput.json
+│   │   ├ CreateAccount_CSV_Ouput.csv
+│   │   ├ CreateAccount_JSON_Ouput.json
+```
 
 ## Template Structure
-The ```sf template init``` command generates a data template based on the values provided in the questionnaire.
-```json
-{
-  "templateFileName": "default_data_template.json",
-  "namespaceToExclude": [],
-  "outputFormat": ["csv"],
-  "language": "en",
-  "count": 1,
-  "sObjects": [
-    { "account": {} },
-    { "contact": {} },
-    {
-      "lead": {
-        "language": "en",
-        "count": 5,
-        "fieldsToExclude": ["fax", "website"],
-        "fieldsToConsider": {
-          "country": ["India", "USA"], 
-          "dp-year__c": ["2024"], 
-          "dp-month__c": ["March"],
-          "email": []
-        },
-        "pickLeftFields": true
-      }
-    }
-  ]
+
+While creating the template (template init), you will be prompted with questions to fully customize your template based on your test data needs.  For a complete guide, please refer to [Template Init Questionnaire](https://github.com/concretios/smock-it/wiki/Template-Init-Questionnaire)..
+
+Below is an example template:
+
+```json  
+{      
+  "namespaceToExclude": ["testGen"],    
+  "outputFormat": [    
+    "di",    
+    "csv",    
+    "json"    
+  ],    
+  "count": 200,    
+  "sObjects": [    
+    {    
+       "account": {    
+        "count": 50,    
+        "fieldsToExclude": ["fax"],    
+        "fieldsToConsider": {    
+          "name": [],    
+          "email": [],    
+          "dp-country__c": ["USA"],    
+          "dp-state__c": ["California"]    
+        },    
+        "pickLeftFields": true    
+      }    
+    }    
+  ]    
 }
+
+```  
+ For more on Template Use Cases, Please refer [Common Template Use Cases](https://github.com/concretios/smock-it/wiki/Common-Template-Use-Cases).
+
+## Output
+
+Smock-it generates output based on the format provided in the template configuration file. Currently it supports csv, json and DI format where DI means Direct Insert into your Salesforce org.
+
+## Smock-it Commands 
+
+#### 1\. Create Template 
+
+Create fresh template for data generation. [Read more](https://github.com/concretios/smock-it/wiki/Template-Init-Command)
+
+``` 
+sf template init [--default]
 ```
-> For more on Template Use Cases, Please refer - **[SAMPLES.md](SAMPLES.md)**
 
-#### Field Instructions (for Template)
+#### 2\. Validate Template
 
-- **Fax & Website**: These fields are excluded from data generation in this template, so no data will be created for them.
-- **Country**: Data will only be generated for the specified countries, `India` and `USA`. No other country values will be included in the data generation process for this field.
-- **Email**: As no specific values are provided for the Email field, random email values will be generated automatically during the data creation process.
-- **dp-Year__c**: This is a controlling field (parent field) for a dependent picklist. It will always have the fixed value `2024` during data generation.
-- **dp-Month__c**: This is a dependent field linked to `dp-Year__c`. It will generate data using the specified value `March`, and only this value will be used for this field.
+Check data generation template for correctness. [Read more](https://github.com/concretios/smock-it/wiki/Template-Validate-Command)
 
-     - **Dependent Picklists**: The order of dependent picklists matters. The controlling field (`dp-Year__c`) must come before the dependent field (`dp-Month__c`) in the template.
-     - **Field Prefix**: All fields that are part of a dependent picklist must start with the prefix `dp-`. 
-     - **dp- Fields**: Fields with the `dp-` prefix must have either no value assigned or a single predefined value. Multiple values for these fields will not be considered.
+``` 
+sf template validate -t <templateFileName> -a <aliasorUsername>
+```
 
+#### 3\. Generate Data
 
+Generate and/or insert data based on the objects and settings defined within the template. [Read more](https://github.com/concretios/smock-it/wiki/Data-Generate-Command)
 
----
+``` 
+sf data generate -t <templateFileName> -a <aliasorUsername>
+```
 
+**Note:** The alias name or username of the Salesforce Org is required.
 
-## Commands
+#### 4\. Data Upload
 
-1. **Initialize Template**: This command initializes a new data generation template. It sets up the required directory structure, prompts for a valid template file name, and collects configuration details for Salesforce objects (such as fields to exclude and record counts). The configuration is validated against org before it is saved to a JSON file.
+Upload generated data (CSV, JSON) to multiple orgs. [Read more](https://github.com/concretios/smock-it/wiki/Data-Upload-Command)
 
-   ```bash
-   sf template init [--default]
-   ```
- 
+``` 
+sf data upload -u <filename.json|filename.csv> -a <alias_or_username> -s <sObject>
+```
 
-2. **Upsert Configurations**: This command allows users to add or update configuration settings in an existing data template. Users can specify options like the Salesforce object, language, record count, fields to exclude, and other settings. 
-If the object is not already present, the command will prompt users to add it.
+**Note**: Make sure to append the filename with .json or .csv to upload the data.
 
-   ```bash
-   sf template upsert -t <templateFileName> [-s <sObject>] [-l <languageCode>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
-   ```
-   
-3. **Remove Configurations**: This command allows users to remove specific configurations from an existing data template. It can remove settings like record count, language, namespaces, output format, and fields to exclude.However record count and language cannot be removed globally, and at least one output format is required.
-   ```bash
-   sf template remove -t <templateFileName> [-s <sObject>] [-l <languageCode>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
-   ```
-   
-4. **Validate Template**: This command validates a data generation template file, ensuring that it is correctly configured for Salesforce. It checks the template for correctness, connects to Salesforce (using environment variables for credentials), and logs any warnings or errors found in the template's configuration. This step ensures that all objects, fields, and settings are properly defined before use. It requires the alias name or username of the Salesforce Org to execute the command and only accepts org listed in the Salesforce Org list.
+#### 5\. Print Template
 
-   ```bash
-   sf template validate -t <templateFileName> -a <aliasorUsername>
-   ```
+Review the template configuration before using it to generate data in read-only. [Read more](https://github.com/concretios/smock-it/wiki/Template-Print-Command)
 
-   
-5. **Generate Data**: The generate command reads a Salesforce data generation template and generates data based on the objects and settings defined within it. It also excludes the  fields from the data template file that have been specified, ensuring that unwanted fields are omitted from the generated records. This command is designed to facilitate the creation of tailored datasets for Salesforce objects. It requires the alias name or username of the Salesforce Org to execute the command and only accepts org listed in the Salesforce Org list.
+``` 
+sf template print -t <templateFileName>
+```
 
-   ```bash
-   sf data generate -t <templateFileName> -a <aliasorUsername>
-   ```
-6. **Print Template**: This command retrieves and displays the contents of a specified Salesforce data generation template. It is useful for reviewing the configuration before using it to generate data.
+#### 6\. Upsert Configurations
 
-   ```bash
-   sf template print -t <templateFileName>
-   ```
----
+Modify or add configuration to an existing template. [Read more](https://github.com/concretios/smock-it/wiki/Template-Upsert-Command)
+
+``` 
+sf template upsert -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
+```
+
+#### 7\. Remove Configurations
+
+Remove specific configurations from an existing data generation template. [Read more](https://github.com/concretios/smock-it/wiki/Template-Remove-Command)
+
+``` 
+sf template remove -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
+```
 
 ## Flags
 
-| Flag                 | Short Hand | Flag Name             | Description                                                                                                                                 |
-|----------------------|------------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| `--default`          |            | Default Template      | Creates a default template.                                                                                                                 |
-| `--templateName`     | `-t`       | Template Name         | Specify the name of the data template to be utilized. The template must exist in the `data_gen/templates` directory.                        |
-| `--count`            | `-c`       | Count                | Set the number of records to generate. If `--sObject` or `-s` is provided, this will only update or remove the count for that object.       |
-| `--namespaceToExclude` | `-x`    | Namespace to Exclude | Exclude specific namespaces from generating record data for namespace fields. Multiple namespaces can be separated by commas.              |
-| `--language`         | `-l`       | Language             | Select the language (`en` or `jp`). When `--sObject` or `-s` is specified, this updates or removes the language setting for that object.    |
-| `--outputFormat`     | `-f`       | Output Format        | Define the output format(s) for generated data (e.g., CSV, JSON, DI). Multiple formats can be specified, separated by commas.               |
-| `--sObject`          | `-s`       | Specific Object      | Target a specific object and override its existing settings. If not found in the template, an "add object" prompt will appear.             |
-| `--fieldsToExclude`  | `-e`       | Fields to Exclude    | Exclude specific fields from test data generation for a given object. Applies only at the object level.                                    |
-| `--fieldsToConsider`  | `-i`       | Fields to Consider    | Include specific fields from test data generation for a given object. This applies only at the object level, with the specified values                                    |
-| `--pickLeftFields`  | `-p`       | Pick Left Fields    |     If true, generates data for all fields except those listed in FieldsToExclude. If false, generates data only for the fields specified in FieldsToConsider.
-| `--aliasOrUserName`  | `-a`       | Alias Or UserName    |    This flag is required when using the validate and data generate commands. It accepts a username or alias name and only supports orgs listed in the Salesforce Org List.
+| Flag | Short Hand | Flag Name | Description |
+| ----- | ----- | ----- | ----- |
+| `--default` |  | Default Template | Creates a default template. |
+| `--templateName` | `-t` | Template Name | Specify the name of the data template to be utilized. The template must exist in the `data_gen/templates` directory. |
+| `--count` | `-c` | Count | Set the number of records to generate. If `--sObject` or `-s` is provided, this will only update or remove the count for that object. |
+| `--namespaceToExclude` | `-x` | Namespace to Exclude | Exclude specific namespaces from generating record data for namespace fields. Multiple namespaces can be separated by commas. |
+| `--outputFormat` | `-f` | Output Format | Define the output format(s) for generated data (e.g., CSV, JSON, DI). Multiple formats can be specified, separated by commas. |
+| `--sObject` | `-s` | Specific Object | Target a specific object and override its existing settings. If not found in the template, an "add object" prompt will appear. |
+| `--fieldsToExclude` | `-e` | Fields to Exclude | Exclude specific fields from test data generation for a given object. Applies only at the object level. |
+| `--fieldsToConsider` | `-i` | Fields to Consider | Include specific fields from test data generation for a given object. This applies only at the object level, with the specified values. |
+| `--pickLeftFields` | `-p` | Pick Left Fields | If true, generates data for all fields except those listed in `FieldsToExclude`. If false, generates data only for the fields specified in `FieldsToConsider`. |
+| `--aliasOrUserName` | `-a` | Alias Or UserName | This flag is required when using the validate and data generate commands. It accepts a username or alias name and only supports orgs listed in the Salesforce Org List. |
 
----
+## Smock-it GitHub Action
+
+Integrate Smock-it within the DevOps pipeline. [Read more](https://github.com/concretios/smock-it/wiki/Smock%E2%80%90It-GitHub-Action)
 
 ## Command Help
+
 To access command help:
-```bash
+ 
+``` 
 sf <template/data> <command> --help
 ```
----
 
-
-
-## References
-- [Mockaroo API Documentation](https://www.mockaroo.com/docs)
-- [Salesforce CLI Setup Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_install_cli.htm)
-- [Salesforce Plugin Installation Guide](https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_setup_install_plugin.htm)
