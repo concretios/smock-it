@@ -229,24 +229,21 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {string | undefined} objectName - The optional name of a specific object to filter for.
    * @returns {sObjectSchemaType[]} - An array of processed sObject configurations to be used.
    */
-  private processObjectConfiguration(baseConfig: templateSchema, objectName: string | undefined): sObjectSchemaType[] {
-    let objectsToProcess = baseConfig.sObjects;
-
-    if (objectName) {
-      const existingObjectConfig = baseConfig.sObjects.find((object: any) => {
-        const objectKey = Object.keys(object)[0];
-        return objectKey.toLowerCase() === objectName.toLowerCase();
-      });
-
-      if (!existingObjectConfig) {
-        throw new Error(`Object ${objectName} not found in base-config.`);
-      }
-
-      objectsToProcess = [existingObjectConfig];
-    }
-
-    return objectsToProcess;
+  private processObjectConfiguration(baseConfig: templateSchema, objectNames: string | undefined): sObjectSchemaType[] {
+  const allObjects = baseConfig.sObjects;
+  if (!objectNames) {
+    return allObjects;
   }
+  const nameSet = new Set(objectNames.split(',').map(name => name.trim().toLowerCase()));
+  const matchedObjects = allObjects.filter((object: any) => {
+    const objectKey = Object.keys(object)[0]?.toLowerCase();
+    return nameSet.has(objectKey);
+  });
+  if (matchedObjects.length === 0) {
+    throw new Error(`None of the specified objects [${objectNames}] were found in base-config.`);
+  }
+  return matchedObjects;
+}
 
   /**
    * Determines the default set of fields to include for processing when no specific field configuration is provided.
