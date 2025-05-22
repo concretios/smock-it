@@ -20,7 +20,7 @@ export default class SmockitTemplateInit extends SfCommand<SmockitTemplateInitRe
   public static readonly examples = [messages.getMessage('Examples')];
 
   public async run(): Promise<SmockitTemplateInitResult> {
-    console.log(chalk.yellow('⚠️  Instead use sf smockit template print as current command will be deprecated soon'));
+    console.log(chalk.yellow('⚠️   Heads up! This command is retiring soon. Switch to "sf smockit template print" to keep things running smoothly.'));
     try {
       const setupInit = new SetupInit(this.argv, this.config);
       await setupInit.run();

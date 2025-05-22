@@ -59,7 +59,7 @@ const messages = Messages.loadMessages('smock-it', 'data.generate');
 let depthForRecord = 0;
 
 const excludeFieldsSet = new Set<string>();
-const generatedDUNSSet = new Set<string>();
+
 const progressBar = new Progress(true);
 
 export default class DataGenerate extends SfCommand<DataGenerateResult> {
@@ -564,15 +564,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     this.dependentPicklistResults = {};
 
-    const generateUnique9DigitNumber = (existingValues: Set<string>): string => {
-      let num: string;
-      do {
-        num = Math.floor(100000000 + Math.random() * 900000000).toString();
-      } while (existingValues.has(num));
-      existingValues.add(num);
-      return num;
-    };
-
     for (const inputObject of fieldsToPass) {
 
       let fieldConfig: Fields = { type: inputObject.DataType, label: inputObject.Label };
@@ -590,17 +581,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
               label: inputObject.Label,
             };
           }
-          else if (
-            objectName.toLowerCase() === 'dandbcompany' &&
-            inputObject.QualifiedApiName.toLowerCase() === 'dunsnumber'
-          ) {
-            const randomDUNS = generateUnique9DigitNumber(generatedDUNSSet);
-            fieldConfig = {
-              type: 'text',
-              value: randomDUNS,
-              label: inputObject.Label,
-            };
-          }
+        
 
           else {
             let label = inputObject.Label;
@@ -1780,6 +1761,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     if (object === 'product2') {
       enhancedData.forEach((record) => {
         record['StockKeepingUnit'] = 'SKU-' + Math.floor(Math.random() * 1000000);
+      });
+
+    }
+
+    if (object === 'dandbcompany') {
+      enhancedData.forEach((record) => {
+        record['DunsNumber'] = Math.floor(Math.random() * 1000000);
+        record['StockExchange'] = 'NYSE';
       });
 
     }

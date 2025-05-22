@@ -234,7 +234,7 @@ export const salesforceErrorMap: Record<string, string> = {
     INVALID_OPERATION: 'The operation couldn’t be completed due to business rules. Please review your input and adjust as needed.',
     CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: 'Entity failed validation. Please contact support.',
     UNABLE_TO_LOCK_ROW: 'This record is currently being updated by another process , generation is paused for now. Please try again shortly.',
-    LIMIT_EXCEEDED: 'TYou’ve reached the data processing limit. Please reduce the batch size or try again shortly',
+    LIMIT_EXCEEDED: 'You’ve reached the data processing limit. Please reduce the batch size or try again shortly',
     REQUEST_LIMIT_EXCEEDED: 'API request limit reached. Please wait a moment before trying again',
     FIELD_CUSTOM_VALIDATION_EXCEPTION: 'Some information doesn’t meet required criteria. Please review your data and try again.',
     FIELD_FILTER_VALIDATION_EXCEPTION: 'The value entered doesn’t meet the filter criteria set for the field. Please review and try again.',
