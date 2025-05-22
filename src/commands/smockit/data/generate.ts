@@ -1,5 +1,9 @@
-/* eslint-disable import/order */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+/* eslint-disable prefer-const */
+/* eslint-disable no-prototype-builtins */
 /* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable no-param-reassign */
 /**
  * Copyright (c) 2025 concret.io
  *
@@ -32,8 +36,6 @@ import {
   sObjectSchemaType,
   DataGenerateResult,
   FieldRecord,
-  RecordId,
-  QueryResult,
   Fields,
   TargetData,
   fieldType,
@@ -45,7 +47,8 @@ import {
 import { createTable, createResultEntryTable } from '../../../utils/output_table.js';
 import { saveOutputFileOfJsonAndCsv, saveCreatedRecordIds } from '../../../services/output-formatter.js';
 import { connectToSalesforceOrg } from '../../../utils/generic_function.js';
-// import { log } from 'node:util';
+import { restrictedObjects, insertRecordsspecial, userLicenseObjects, salesforceErrorMap } from '../../../utils/conditional_object_handling.js';
+
 
 const fieldsConfigFile = 'generated_output.json';
 
@@ -56,6 +59,7 @@ const messages = Messages.loadMessages('smock-it', 'data.generate');
 let depthForRecord = 0;
 
 const excludeFieldsSet = new Set<string>();
+const generatedDUNSSet = new Set<string>();
 const progressBar = new Progress(true);
 
 export default class DataGenerate extends SfCommand<DataGenerateResult> {
@@ -98,14 +102,23 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    */
 
   public async run(): Promise<DataGenerateResult> {
-
     const { flags } = await this.parse(DataGenerate);
-
     const conn = await connectToSalesforceOrg(flags.alias);
     // load and validate template baseConfig file
     const baseConfig = await loadAndValidateConfig(conn, flags.templateName);
+
     // Process specific object configuration
     const objectsToProcess = this.processObjectConfiguration(baseConfig, flags.sObject);
+
+    const restrictedObjectsFound = objectsToProcess
+      .map(obj => Object.keys(obj)[0])
+      .filter(key => restrictedObjects.includes(key));
+    const hasRestrictedValue = restrictedObjectsFound.length > 0;
+
+    if (hasRestrictedValue) {
+      throw new Error(`Alert restricted objects detected: ${chalk.yellow(restrictedObjectsFound.join(', '))}`);
+    }
+
     // Generate fields and write generated_output.json config
     await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig);
 
@@ -135,10 +148,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         throw new Error(`No configuration found for object: ${object}`);
       }
       const countofRecordsToGenerate = currentSObject.count;
+      if (object.toLowerCase() === 'location' || object.toLowerCase() === 'servicecontract' && (countofRecordsToGenerate ?? 0) > 10000) {
+        throw new Error(chalk.yellow.bold(`Salesforce allows up to 10,000 for ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
+      }
+      if (object.toLowerCase() === 'campaignmember' && (countofRecordsToGenerate ?? 0) > 1) {
+        throw new Error(chalk.yellow.bold(`Currently Supports only 1 record for sObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
+      }
+
       const fields = sObjectFieldsMap.get(object);
-
-
-
 
       if (!fields) {
         this.log(`No fields found for object: ${object}`);
@@ -152,7 +169,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object);
 
       // adding all fields to the json data
-      const jsonData = this.enhanceDataWithSpecialFields(basicJsonData, processedFields, countofRecordsToGenerate);
+      const jsonData = this.enhanceDataWithSpecialFields(basicJsonData, processedFields, countofRecordsToGenerate, object);
 
       // save the output file in json and csv format
       saveOutputFileOfJsonAndCsv(jsonData as GenericRecord[], object, outputFormat, flags.templateName);
@@ -227,6 +244,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     return itemType;
   }
 
+
+
+
   /**
    * Processes and returns the relevant Salesforce object configuration(s) from the base template.
    * If a specific `objectName` is provided, only the matching configuration is returned; otherwise, all are returned.
@@ -236,23 +256,61 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {string | undefined} objectName - The optional name of a specific object to filter for.
    * @returns {sObjectSchemaType[]} - An array of processed sObject configurations to be used.
    */
-  private processObjectConfiguration(baseConfig: templateSchema, objectName: string | undefined): sObjectSchemaType[] {
-    let objectsToProcess = baseConfig.sObjects;
 
-    if (objectName) {
-      const existingObjectConfig = baseConfig.sObjects.find((object: any) => {
-        const objectKey = Object.keys(object)[0];
-        return objectKey.toLowerCase() === objectName.toLowerCase();
+  private processObjectConfiguration(baseConfig: templateSchema, objectNames?: string): sObjectSchemaType[] {
+    const allObjects = baseConfig.sObjects;
+    if (!objectNames) {
+      const result = allObjects.map(obj => {
+        const key = Object.keys(obj)[0];
+        return { [key.toLowerCase()]: obj[key] };
       });
 
-      if (!existingObjectConfig) {
-        throw new Error(`Object ${objectName} not found in base-config.`);
-      }
+      // Check for unsupported objects
+      const foundUnsupported = result
+        .map(obj => Object.keys(obj)[0])
+        .filter(key => userLicenseObjects.has(key));
 
-      objectsToProcess = [existingObjectConfig];
+      if (foundUnsupported.length > 0) {
+        throw new Error(`Action blocked for SObjects ${chalk.yellow(foundUnsupported.join(', '))}! Requires Salesforce user license.`);
+
+      }
+      return result;
     }
 
-    return objectsToProcess;
+    const nameSet = new Set(objectNames.split(',').map(name => name.trim().toLowerCase()));
+    const availableNames = new Set(
+      allObjects.map((obj: any) => Object.keys(obj)[0]?.toLowerCase())
+    );
+
+    const missingNames = Array.from(nameSet).filter(name => !availableNames.has(name));
+    if (missingNames.length > 0) {
+      throw new Error(
+        `The following specified objects were not found in base-config: [${missingNames.join(', ')}]`
+      );
+    }
+
+    const matchedObjects = allObjects
+      .map((object: any) => {
+        const key = Object.keys(object)[0];
+        const value = object[key];
+        const lowerKey = key.toLowerCase();
+        if (nameSet.has(lowerKey)) {
+          return { [lowerKey]: value };
+        }
+        return null;
+      })
+      .filter((obj): obj is sObjectSchemaType => obj !== null);
+
+    // Check for unsupported objects in matched objects
+    const foundUnsupported = matchedObjects
+      .map(obj => Object.keys(obj)[0])
+      .filter(key => userLicenseObjects.has(key));
+
+    if (foundUnsupported.length > 0) {
+      throw new Error(`Action blocked for ${foundUnsupported.join(', ')}: Requires Salesforce user license.`);
+    }
+
+    return matchedObjects;
   }
 
   /**
@@ -397,7 +455,33 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const requiredFieldNames = requiredFields.map((field) => field.QualifiedApiName.toLowerCase());
 
       let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
-      const fieldsToIgnore = ['jigsaw', 'cleanstatus'];
+      const fieldsToIgnore = [
+        'jigsaw',
+        'endtime',
+        'activitydate',
+        'recurrence2patterntext',
+        'fromaddress',
+        'visitoraddressid',
+        'starttime',
+        'cleanstatus',
+        'latitude',
+        'longitude',
+        'recurrenceinterval',
+        'recurrencedayofweekmask',
+        'recurrencedayofmonth',
+        'recurrencestartdateonly',
+        'trackingnumber__c',
+        'recurrenceenddateonly',
+        'recurrencetype',
+        'isrecurrence',
+        'recurrenceinstance',
+        'recurrencemonthofyear',
+        'recurrencetimezonesidkey',
+        'recurrenceregeneratedtype',
+        'isreminderset',
+        'isreductionorder'
+
+      ];
       fieldsToExclude = fieldsToExclude.filter(
         (field: string) => !fieldsToIgnore.includes(field) && !requiredFieldNames.includes(field.toLowerCase())
       );
@@ -423,8 +507,21 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         count: configForObject.count ?? baseConfig.count,
       };
 
-      if (Object.keys(fieldsObject).length > 0) {
-        configToWrite.fields = fieldsObject;
+      const prioritizedField = 'AccountId';
+      const prioritizedFieldsObject: Record<string, any> = {};
+
+      if (fieldsObject[prioritizedField]) {
+        prioritizedFieldsObject[prioritizedField] = fieldsObject[prioritizedField];
+      }
+
+      for (const [key, value] of Object.entries(fieldsObject)) {
+        if (key !== prioritizedField) {
+          prioritizedFieldsObject[key] = value;
+        }
+      }
+
+      if (Object.keys(prioritizedFieldsObject).length > 0) {
+        configToWrite.fields = prioritizedFieldsObject;
       }
 
       outputData.push(configToWrite);
@@ -442,6 +539,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       'utf8'
     );
   }
+
+
 
   /**
    * Processes the fields to generate configuration objects based on field types and values.
@@ -465,7 +564,17 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     this.dependentPicklistResults = {};
 
+    const generateUnique9DigitNumber = (existingValues: Set<string>): string => {
+      let num: string;
+      do {
+        num = Math.floor(100000000 + Math.random() * 900000000).toString();
+      } while (existingValues.has(num));
+      existingValues.add(num);
+      return num;
+    };
+
     for (const inputObject of fieldsToPass) {
+
       let fieldConfig: Fields = { type: inputObject.DataType, label: inputObject.Label };
 
       switch (inputObject.DataType) {
@@ -480,9 +589,28 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
               type: 'address',
               label: inputObject.Label,
             };
-          } else {
+          }
+          else if (
+            objectName.toLowerCase() === 'dandbcompany' &&
+            inputObject.QualifiedApiName.toLowerCase() === 'dunsnumber'
+          ) {
+            const randomDUNS = generateUnique9DigitNumber(generatedDUNSSet);
+            fieldConfig = {
+              type: 'text',
+              value: randomDUNS,
+              label: inputObject.Label,
+            };
+          }
+
+          else {
             let label = inputObject.Label;
-            if (objectName.toLowerCase() === 'opportunity' || objectName.toLowerCase() === 'campaign') {
+            if (inputObject.QualifiedApiName === 'Name') {
+              label = 'fullname';
+            }
+            if (
+              objectName.toLowerCase() === 'opportunity' ||
+              objectName.toLowerCase() === 'campaign'
+            ) {
               if (inputObject.QualifiedApiName === 'Name') {
                 label = objectName + ' ' + label;
               }
@@ -517,23 +645,31 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           if (inputObject.IsDependentPicklist) {
             await this.depPicklist(conn, objectName, inputObject.QualifiedApiName, considerMap);
           } else {
-            const picklistValues = await this.getPicklistValues(
-              conn,
-              objectName,
-              inputObject.QualifiedApiName,
-              considerMap
-            );
+            let picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName, considerMap);
+            if ((objectName === 'contract' || objectName === 'order' || objectName === 'listemail') && inputObject.QualifiedApiName === 'Status') {
+              picklistValues = ['Draft'];
+            }
+            // if ((objectName === 'geolocationbasedaction') && inputObject.QualifiedApiName === 'ActionType') {
+            //   picklistValues = ['PlatformAlert'];
+            // }
+            if ((objectName === 'alternativepaymentmethod' || objectName === 'paymentauthorization' || objectName === 'refund') && inputObject.QualifiedApiName === 'ProcessingMode') {
+              picklistValues = ['External'];
+            }
+            if ((objectName === 'paymentauthadjustment' || objectName === 'paymentauthorization' || objectName === 'refund') && inputObject.QualifiedApiName === 'Status') {
+              picklistValues = ['Processed'];
+            }
             fieldConfig = {
               type: 'picklist',
-              values: considerMap?.[inputObject.QualifiedApiName.toLowerCase()]
-                ? considerMap[inputObject.QualifiedApiName.toLowerCase()]
+              values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()])
+                ? (considerMap[inputObject.QualifiedApiName.toLowerCase()])
                 : picklistValues,
-              label: inputObject.Label,
+              label: inputObject.Label
             };
           }
           break;
 
         default:
+
           if (considerMap?.[inputObject.QualifiedApiName.toLowerCase()]?.length > 0) {
             fieldConfig = {
               type: inputObject.DataType,
@@ -579,52 +715,62 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {GenericRecord[]} jsonData - The array of records to insert.
    * @returns {Promise<{ failedCount: number; insertedIds: string[] }>} - A promise that resolves to the count of failed inserts and the inserted record IDs.
    */
-  public async handleDirectInsert(
-    conn: Connection,
-    outputFormat: string[],
-    object: string,
-    jsonData: GenericRecord[]
-  ): Promise<{ failedCount: number; insertedIds: string[] }> {
+  public async handleDirectInsert(conn: Connection, outputFormat: string[], object: string, jsonData: GenericRecord[]): Promise<{ failedCount: number; insertedIds: string[] }> {
     if (outputFormat.includes('DI') || outputFormat.includes('di')) {
-      const errorSet: Set<string> = new Set();
+      const errorMessages: Map<string, number> = new Map();
       const insertedIds: string[] = [];
       let failedCount = 0;
       try {
-        const insertResult = await DataGenerate.insertRecords(conn, object, jsonData);
+        let insertResult;
+        if (object.toLowerCase() === 'order' || object.toLowerCase() === 'task' || object.toLowerCase() === 'productitemtransaction' || object.toLowerCase() === 'event') {
 
+          insertResult = await insertRecordsspecial(conn, object, jsonData)
+        }
+        else {
+          insertResult = await DataGenerate.insertRecords(conn, object, jsonData,);
+        }
         insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }) => {
           if (result.success && result.id) {
             insertedIds.push(result.id);
           } else if (result.errors) {
             result.errors.forEach((error) => {
-              const errorMessage =
-                ((error as { message?: string })?.message ?? JSON.stringify(error)) || 'Unknown error';
-              errorSet.add(errorMessage);
+              const errorCode = (error as { statusCode?: string })?.statusCode;
+              const humanReadableMessage = errorCode && salesforceErrorMap[errorCode]
+                ? salesforceErrorMap[errorCode]
+                : (error as { message?: string })?.message ?? 'Unknown error occurred during insertion.';
+              const currentCount = errorMessages.get(humanReadableMessage) ?? 0;
+              errorMessages.set(humanReadableMessage, currentCount + 1);
             });
           }
         });
 
+
         failedCount = insertResult.length - insertedIds.length;
 
-        if (errorSet.size > 0) {
-          this.log(chalk.bgGreenBright(`\nFailed to insert ${failedCount} record(s) for '${object}' object with the following error(s):`));
-          errorSet.forEach((error) => this.log(`- ${error}`));
-        }
+        // if (errorMessages.size > 0) {
+        //   this.log(`\nFailed to insert ${failedCount} record(s) for '${object}' object with the following error(s):`);
+        //   errorMessages.forEach((count, message) => {
+        //     this.log(`- ${count} record(s): ${message}`);
+        //   });
+        // }
 
         this.updateCreatedRecordIds(object, insertResult);
 
         return { failedCount, insertedIds };
       } catch (error) {
-        // Catch and log only the concise error message
-        const errorMessage = (error as any).message || 'Unknown error';
+        const errorCode = (error as any).statusCode;
+        const errorMessage = errorCode && salesforceErrorMap[errorCode]
+          ? salesforceErrorMap[errorCode]
+          : (error as any).message || 'Unknown error occurred during insertion.';
         this.log(`Error (${failedCount}): ${errorMessage}`);
         return { failedCount, insertedIds };
       }
     }
 
-    // Default return if outputFormat does not include 'DI' or 'di'
     return { failedCount: 0, insertedIds: [] };
   }
+
+
 
   /**
    * Retrieves picklist values for a specified field on a Salesforce object and validates the values against the provided consideration map.
@@ -935,6 +1081,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     object: string,
     onlyRequiredFields: boolean
   ): Promise<Array<Partial<TargetData>>> {
+
     const query = this.buildFieldQuery(object, onlyRequiredFields);
 
     const processedFields = await this.handleFieldProcessingForParentObjects(conn, query, object);
@@ -951,8 +1098,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    */
 
   private buildFieldQuery(object: string, onlyRequiredFields: boolean): string {
-    let query = `SELECT QualifiedApiName, DataType, IsNillable, ReferenceTo FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${object}' AND IsCreatable = true`;
-    if (onlyRequiredFields) query += ' AND IsNillable = false';
+    let query = `SELECT QualifiedApiName, DataType, IsNillable, ReferenceTo, RelationshipName FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${object}' AND IsCreatable = true`;
+    if (onlyRequiredFields) {
+      query += ' AND IsNillable = false';
+    }
     return query;
   }
 
@@ -967,6 +1116,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @returns {Promise<CreateResult[]>} - A promise that resolves to an array of `CreateResult` objects representing the outcome of each insert operation.
    */
 
+
   public static async insertRecords(
     conn: Connection,
     object: string,
@@ -975,20 +1125,26 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
     const sObjectName = Array.isArray(object) ? object[0] : object;
     const results: CreateResult[] = [];
-    let failedcount = 0;
+    let failedCount = 0;
     const errorCountMap: Map<string, number> = new Map();
     if (!dataArray.length) return results;
+
     const BATCH_SIZE = 100;
+
     // Helper function to map results
     const mapResults = (insertResults: any): CreateResult[] =>
       (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result) => {
         if (!result.success) {
-          failedcount++;
+          failedCount++;
           if (result.errors && Array.isArray(result.errors)) {
             result.errors.forEach((err: any) => {
-              const errString = JSON.stringify(err);
-              const currentCount = errorCountMap.get(errString) ?? 0;
-              errorCountMap.set(errString, currentCount + 1);
+              const errorCode = err.statusCode;
+              const humanReadableMessage =
+                errorCode && salesforceErrorMap[errorCode]
+                  ? salesforceErrorMap[errorCode]
+                  : err.message || 'Unknown error occurred during insertion.';
+              const currentCount = errorCountMap.get(humanReadableMessage) ?? 0;
+              errorCountMap.set(humanReadableMessage, currentCount + 1);
             });
           }
         }
@@ -1004,12 +1160,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       if (dataArray.length <= BATCH_SIZE) {
         const insertResults = await conn.sobject(sObjectName).create(dataArray);
         results.push(...mapResults(insertResults));
-        if (failedcount > 0) {
-          console.error(chalk.yellowBright(`Failed to insert ${failedcount} record(s) for ${sObjectName}`));
-          errorCountMap.forEach((count, error) => {
-            console.error(chalk.whiteBright(`${count} record(s) have failed with error: ${chalk.redBright(error)}`));
+
+        if (failedCount > 0) {
+          console.error(chalk.yellowBright(`Failed to insert ${failedCount} record(s) for sObject ${sObjectName}`));
+          errorCountMap.forEach((count, message) => {
+            console.error(`• Record(s) failed: ${chalk.redBright(message)}`);
           });
         }
+
         return results;
       }
 
@@ -1024,10 +1182,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
       const job = conn.bulk.createJob(sObjectName, 'insert');
       const batches: Array<Promise<void>> = [];
-      progressBar.start(100, { title: 'Test' });
+      progressBar.start(100, { title: 'Processing Records' });
 
-      // Process in parallel with controlled concurrency
-      const concurrencyLimit = 3;
+      const concurrencyLimit = 2;
       for (let i = 0; i < remainingData.length; i += BATCH_SIZE) {
         const batchData = remainingData.slice(i, i + BATCH_SIZE);
         const batch = job.createBatch();
@@ -1042,13 +1199,23 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             resolve();
           });
 
-          batch.on('error', reject);
+          batch.on('error', (err: Error) => {
+            const errorCode = (err as any).statusCode;
+            const humanReadableMessage =
+              errorCode && salesforceErrorMap[errorCode]
+                ? salesforceErrorMap[errorCode]
+                : err.message || 'Unknown error occurred during bulk insertion.';
+            const currentCount = errorCountMap.get(humanReadableMessage) ?? 0;
+            errorCountMap.set(humanReadableMessage, currentCount + batchData.length);
+            failedCount += batchData.length;
+            reject(err);
+          });
+
           batch.execute(batchData);
         });
 
         batches.push(batchPromise);
 
-        // Control concurrency
         if (batches.length >= concurrencyLimit) {
           await Promise.race(batches);
         }
@@ -1059,20 +1226,34 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       progressBar.update(100);
       progressBar.finish();
 
-      if (failedcount > 0) {
-        console.error(chalk.yellowBright(`Failed to insert ${failedcount} record(s) for ${sObjectName}`));
-        errorCountMap.forEach((count, error) => {
-          console.error(chalk.whiteBright(`${count} record(s) have failed with error: ${chalk.redBright(error)}`));
+      if (failedCount > 0) {
+        console.error(chalk.yellowBright(`❌ Failed to insert ${failedCount} record(s) for sObject: ${sObjectName}`));
+        console.error(chalk.whiteBright('Error breakdown:'));
+        errorCountMap.forEach((count, message) => {
+          console.error(`• Record(s) failed: ${chalk.redBright(message)}`);
         });
       }
     } catch (error) {
-      console.error('Error in insertRecords:\n', error);
+      const errorCode = (error as any).statusCode;
+
+      const humanReadableMessage =
+        errorCode && salesforceErrorMap[errorCode]
+          ? salesforceErrorMap[errorCode]
+          : (error as any).message || 'Unknown error occurred during insertion.';
+
       progressBar.stop();
-      throw error;
+      throw new Error(humanReadableMessage);
     }
 
     return results;
   }
+
+
+
+
+
+
+
 
   /**
    * Updates the set of created record IDs for a specified Salesforce object based on the results of an insert operation.
@@ -1136,6 +1317,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {boolean} [isParentObject=false] - Indicates whether the fields are from a parent object.
    * @returns {Promise<Partial<TargetData>[]>} - A promise that resolves to an array of processed field data.
    */
+
+
   private async processFields(
     records: Array<Record<string, any>>,
     conn: Connection,
@@ -1143,44 +1326,119 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     isParentObject: boolean = false
   ): Promise<Array<Partial<TargetData>>> {
     const processedFields: Array<Partial<TargetData>> = [];
+
     for (const item of records) {
+
       const fieldName = isParentObject ? item.QualifiedApiName : item.name;
       const dataType = isParentObject ? item.DataType : item.type;
       const isReference = dataType === 'reference';
       const isPicklist = dataType === 'picklist' || dataType === 'multipicklist';
 
+      if (item.QualifiedApiName === 'ShouldSyncWithOci') {
+        continue;
+      }
+
       if (excludeFieldsSet.has(fieldName)) continue;
 
       const details: Partial<TargetData> = { name: fieldName };
 
-      if (isReference && !['OwnerId', 'CreatedById', 'ParentId'].includes(fieldName)) {
+      // const excludedReferenceFields = ['OwnerId', 'CreatedById', 'ParentId', 'visitorAddressId', 'MessagingChannelUsageId', 'FilterCriteriaId', 'BundlePolicyId', 'DocumentVersionId', 'MessagingChannelId', 'ContentBodyId', 'AssetWarrantyId', 'ContentModifiedById', 'ContentDocumentId', 'PicklistId', 'ServiceContractId', 'EntitlementId', 'MaintenancePlanId', 'ReturnOrderLineItemId', 'OrderId', 'ProductServiceCampaignItemId', 'ServiceTerritoryId', 'ServiceReportTemplateId', 'PricebookEntryId', 'ParentWorkOrderLineItemId', 'WorkOrderLineItemId', 'RootAssetId', 'DandbCompanyId', 'CompanySignedId', 'OriginalOrderId', 'CompanyAuthorizedById', 'AssetServicedById', 'AssetProvidedById', 'CampaignMemberRecordTypeId', 'visitorAddressId', 'LogoId', 'ReferenceRecordId'];
+      const excludedReferenceFields = [
+        'OwnerId',
+        'resourceId',
+        'serviceResourceId',
+        'CreatedById',
+        'ParentId',
+        'FulfillingBusinessHoursId',
+        'DestinationLocationId',
+        'SourceLocationId',
+        'WorkOrderId',
+        'WorkOrderLineItemId',
+        'visitorAddressId',
+        'MessagingChannelUsageId',
+        'FilterCriteriaId',
+        'BundlePolicyId',
+        'DocumentVersionId',
+        'MessagingChannelId',
+        'ContentBodyId',
+        'AssetWarrantyId',
+        'ContentModifiedById',
+        'ContentDocumentId',
+        'PicklistId',
+        'ServiceContractId',
+        'EntitlementId',
+        'MaintenancePlanId',
+        'ReturnOrderLineItemId',
+        'OrderId',
+        'ProductServiceCampaignItemId',
+        'ServiceTerritoryId',
+        'ServiceReportTemplateId',
+        'PricebookEntryId',
+        'ParentWorkOrderLineItemId',
+        'WorkOrderLineItemId',
+        'RootAssetId',
+        'DandbCompanyId',
+        'CompanySignedId',
+        'OriginalOrderId',
+        'CompanyAuthorizedById',
+        'AssetServicedById',
+        'AssetProvidedById',
+        'CampaignMemberRecordTypeId',
+        'LogoId',
+        'ReferenceRecordId',
+        'ResourceId',
+        'TravelModeId',
+        'PaymentGatewayId',
+        'PaymentMethodId',
+        'ShiftTemplateId',
+        'PaymentGatewayProviderId'
+      ];
+
+
+      if (isReference && !(excludedReferenceFields.includes(fieldName) && !((object === 'address' || item.ReferenceTo === 'address' || 'productrequestlineitem') && fieldName === 'ParentId'))) {
+
         details.type = 'Custom List';
         const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
+        //  Always process AccountId and ContactId for Asset to satisfy validation
+        if (object === 'Asset' && ['AccountId', 'ContactId'].includes(fieldName)) {
+          const referenceTo = item.referenceTo ?? item.ReferenceTo?.referenceTo ?? item.ReferenceTo?.[0];
 
-        if (item.values?.length) {
+          const query = `SELECT Id FROM ${referenceTo} ORDER BY CreatedDate DESC LIMIT 1`;
+
+          const result = await conn.query(query);
+          const ids = result.records.map((record: any) => record.Id);
+          details.values = ids;
+          processedFields.push(details);
+        }
+        else if (item.values?.length) {
           details.values = item.values;
-        } else {
-          details.values = isMasterDetail
-            ? await this.fetchRelatedMasterRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo)
-            : await this.fetchRelatedRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo);
+          processedFields.push(details);
         }
 
-        if (isMasterDetail) {
-          depthForRecord++;
+        else if (isMasterDetail) {
+          if (object === 'Contract' && item.QualifiedApiName === 'AccountId' && item.RelationshipName === 'Account') {
+            continue;
+          }
+          details.values = await this.fetchRelatedMasterRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo, object);
+          if (isMasterDetail) {
+            depthForRecord++;
+          }
+          processedFields.push(details);
         }
-        processedFields.push(details);
-      } else if (isPicklist || item.values?.length > 0) {
-        details.type = 'Custom List'; // random value pick
+      }
+      else if (isPicklist || item.values?.length > 0) {
+        details.type = 'Custom List';
         details.values = await this.getPicklistValuesWithDependentValues(conn, object, fieldName, item);
         processedFields.push(details);
       } else {
-        // details value contains item .value contain
         details.type = this.getFieldType(item, isParentObject);
         if (details.type) processedFields.push(details);
       }
     }
     return processedFields;
   }
+
+
 
   /**
    * Processes the fields from Salesforce records to generate the initial JSON file data.
@@ -1207,29 +1465,32 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {string} object - The API name of the Salesforce object.
    * @returns {Promise<Partial<TargetData>[]>} - A promise that resolves to an array of processed field data.
    */
+
   private async processFieldsForParentObjects(
     records: Array<Record<string, any>>,
     conn: Connection,
     object: string
   ): Promise<Array<Partial<TargetData>>> {
-    return this.processFields(records, conn, object, true);
-  }
+    const objectDescribe = await conn.describe(object);
+    const referenceFields = objectDescribe.fields
+      .filter((field) =>
+        field.type === 'reference' &&
+        (!field.nillable || field.relationshipName) &&
+        !['OwnerId', 'CreatedById', 'LastModifiedById', 'MasterRecordId'].includes(field.name)
+      );
 
-  /**
-   * Fetches related lookup record IDs for a given reference object from Salesforce.
-   *
-   * @param {Connection} conn - The Salesforce connection object.
-   * @param {string} referenceTo - The API name of the referenced object.
-   * @returns {Promise<string[]>} - A promise that resolves to an array of related record IDs.
-   */
-
-  private async fetchRelatedRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
-    if (DataGenerate.createdRecordsIds.has(referenceTo + '')) {
-      return Array.from(DataGenerate.createdRecordsIds.get(referenceTo + '') ?? []);
+    for (const field of referenceFields) {
+      if (!records.some(record => record.QualifiedApiName === field.name)) {
+        records.push({
+          QualifiedApiName: field.name,
+          DataType: 'reference',
+          IsNillable: field.nillable,
+          ReferenceTo: { referenceTo: field.referenceTo },
+          RelationshipName: field.relationshipName
+        });
+      }
     }
-
-    const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
-    return relatedRecords.records.map((record: RecordId) => record.Id);
+    return this.processFields(records, conn, object, true);
   }
 
   /**
@@ -1244,59 +1505,70 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @throws {Error} - Throws an error if records cannot be fetched or inserted, or if maximum depth is reached.
    */
 
-  private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
-    const existingIds = DataGenerate.createdRecordsIds.get(referenceTo) ?? [];
-    if (existingIds.length > 0) {
-      return Array.from(existingIds);
+  private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string, object: string): Promise<string[]> {
+    if (depthForRecord === 7) {
+      throw new Error(`Maximum depth reached for ${referenceTo}`);
+    }
+    const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
+    const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
+      if (field.name) {
+        return {
+          ...acc,
+          [field.name]: {
+            type: field.type,
+            values: field.values ?? [],
+            label: field.label ?? field.name,
+          },
+        };
+      }
+      return acc;
+    }, {});
+
+    if (((referenceTo === 'Contact' && object === 'asset' || object === 'Asset') || (referenceTo === 'Contact' && object === 'case' || object === 'Case')) || (referenceTo === 'Asset' || referenceTo === 'asset')) {
+      const accountResult = await conn.query('SELECT Id FROM Account ORDER BY CreatedDate DESC LIMIT 1');
+      const accountIds = accountResult.records.map((record: any) => record.Id);
+      fieldMap['AccountId'] = {
+        type: 'reference',
+        values: accountIds,
+        label: 'Account ID',
+      };
+
+    }
+    // conditinal handling for Order and Contract for AccountId and Status
+    if (referenceTo === 'Contract' && object === 'order' || object === 'Order') {
+      const accountResult = await conn.query('SELECT Id FROM Account ORDER BY CreatedDate DESC LIMIT 1');
+      const accountIds = accountResult.records.map((record: any) => record.Id);
+
+      fieldMap['Status'] = {
+        type: 'Custom List',
+        values: ['Draft'],
+        label: 'Status',
+      };
+      fieldMap['AccountId'] = {
+        type: 'reference',
+        values: accountIds,
+        label: 'Account ID',
+      };
     }
 
-    const relatedRecords: QueryResult = await conn.query(`SELECT Id FROM ${referenceTo} LIMIT 100`);
+    // Getting the values for parent fields records 
+    const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
 
-    if (relatedRecords.records.length === 0) {
-      if (depthForRecord === 3) {
-        this.error(`Max Depth Reached! Please create ${referenceTo} records first.`);
-      }
-      // console.log(`No records found for ${referenceTo}. Generating data...`);
+    if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
+      throw new Error(`Failed to generate valid data for ${referenceTo}`);
+    }
+    // Enhance the JSON data with required fields
+    const enhancedJsonData = this.getJsonDataParentFields(initialJsonData, fieldMap);
+    const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
 
-      const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
+    this.updateCreatedRecordIds(referenceTo, insertResult);
 
-      // formatting the parent fields for the JSON data
-      const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
-        if (field.name) {
-          return {
-            ...acc,
-            [field.name]: {
-              type: field.type,
-              values: field.values ?? [],
-              label: field.label ?? field.name,
-            },
-          };
-        }
-        return acc;
-      }, {});
-
-      // getting the values for parent fields records
-      const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
-
-      if (!initialJsonData || (Array.isArray(initialJsonData) && initialJsonData.length === 0)) {
-        throw new Error(`Failed to generate valid data for ${referenceTo}`);
-      }
-
-      // Enhance the JSON data with required fields
-      const enhancedJsonData = this.getJsonDataParentFields(initialJsonData, fieldMap);
-
-      const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
-      this.updateCreatedRecordIds(referenceTo, insertResult);
-
-      const validIds = insertResult.filter((result) => result.success).map((result) => result.id);
-      if (validIds.length === 0) {
-        throw new Error(`Failed to insert records for ${referenceTo}`);
-      }
-
-      return validIds;
+    const validIds = insertResult.filter((result) => result.success).map((result) => result.id);
+    if (validIds.length === 0) {
+      throw new Error(`Failed to insert records for ${referenceTo}`);
     }
 
-    return relatedRecords.records.map((record: RecordId) => record.Id);
+    return validIds;
   }
 
   /**
@@ -1496,19 +1768,139 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   private enhanceDataWithSpecialFields(
     basicData: any[],
     processedFields: Array<Partial<TargetData>>,
-    count: number
+    count: number,
+    object: string
   ): any[] {
     const enhancedData = basicData.map((item) => ({ ...item }));
     this.getRandomElement = <T>(array: T[]): T | undefined => {
       const element = array[Math.floor(Math.random() * array.length)];
       return Array.isArray(element) ? element[0] : element;
     };
+
+    if (object === 'product2') {
+      enhancedData.forEach((record) => {
+        record['StockKeepingUnit'] = 'SKU-' + Math.floor(Math.random() * 1000000);
+      });
+
+    }
+
+    if (object === 'event') {
+      const date = new Date();
+      const formattedDate = date.toISOString().slice(0, 19);
+      enhancedData.forEach((record) => {
+        record['IsAllDayEvent'] = 'false';
+        record['IsPrivate'] = 'false';
+        record['ActivityDateTime'] = formattedDate;
+      });
+    }
+
+    if (object === 'warrantyterm') {
+      enhancedData.forEach((record) => {
+        record['ExpensesCoveredDuration'] = (Math.floor(Math.random() * 90) + 10);
+        record['ExpensesCovered'] = (Math.floor(Math.random() * 90) + 10);
+        record['PartsCoveredDuration'] = (Math.floor(Math.random() * 90) + 10);
+        record['PartsCovered'] = (Math.floor(Math.random() * 90) + 10);
+        record['LaborCovered'] = (Math.floor(Math.random() * 90) + 10);
+        record['WarrantyDuration'] = (Math.floor(Math.random() * 90) + 10);
+        record['LaborCoveredDuration'] = (Math.floor(Math.random() * 990) + 10);
+      });
+
+    }
+
+    if (object === 'apptbundlepolicy') {
+      enhancedData.forEach((record) => {
+        record['LimitAmountOfBundleMembers'] = (Math.floor(Math.random() * 90) + 10);
+        record['LimitDurationOfBundle'] = (Math.floor(Math.random() * 90) + 10);
+        record['ConstantTimeValue'] = (Math.floor(Math.random() * 90) + 10);
+        record['Priority'] = (Math.floor(Math.random()) + 1);
+      });
+
+    }
+
+
+    if (object === 'unitofmeasure') {
+      enhancedData.forEach((record) => {
+        record['Type'] = 'distance';
+      });
+    }
+
+    if (object === 'apptbundleaggrdurdnscale') {
+      enhancedData.forEach((record) => {
+        record['FromBundleMemberNumber'] = String(Math.floor(Math.random() * 90) + 10);
+        record['PercentageOfReduction'] = String(Math.floor(Math.random() * 90) + 10);
+      });
+    }
+
+    if (object === 'consumptionrate') {
+      enhancedData.forEach((record) => {
+        const lower = Math.floor(Math.random() * 90) + 10;
+        record['LowerBound'] = lower;
+        record['UpperBound'] = Math.floor(Math.random() * (900 - (lower - 10))) + lower + 1;
+      });
+    }
+
+    if (object === 'ConsumptionSchedule') {
+      enhancedData.forEach((record) => {
+        record['isActive'] = false;
+        record['BillingTermUnit'] = 'Year';
+        record['BillingTerm'] = Math.floor(Math.random() * 5) + 1;
+      });
+
+    }
+
+    if (object === 'individual') {
+      enhancedData.forEach((record) => {
+        record['BirthDate'] = '2001-05-10';
+        record['DeathDate'] = '2023-08-11';
+      });
+    }
+
+    if (object === 'listemail') {
+      const fromAddresses = [
+        'noreply@example.com',
+        'support@dummycorp.com',
+        'sales@fakemail.org',
+        'info@testcompany.net',
+        'admin@mocksite.io',
+        'contact@sampledomain.com',
+        'hello@myfakeemail.com',
+        'updates@notarealmail.org',
+        'service@placeholdermail.com',
+        'feedback@tempmail.dev'
+      ];
+
+      enhancedData.forEach((record) => {
+        const randomIndex = Math.floor(Math.random() * fromAddresses.length);
+        record['FromAddress'] = fromAddresses[randomIndex];
+      });
+    }
+
+    if (object === 'geolocationbasedaction') {
+      enhancedData.forEach((record) => {
+        record['Radius'] = Math.floor(Math.random() * 900) + 100;
+        delete record['ActionData'];
+
+      });
+    }
+
+    if (object === 'shifttemplate') {
+      enhancedData.forEach((record) => {
+        record['BackgroundColor'] = '#000000';
+        record['StartTime'] = '08:00:00.000Z';
+      });
+    }
+    // ---------- Resolve the Issues ----------------
     for (const field of processedFields) {
-      if (field.type === 'Custom List' && field.values) {
+      if (field.type === 'Custom List' && field.values && field.name !== 'TaskSubtype') {
         const values = Array.from({ length: count }, () => this.getRandomElement(field.values ?? []));
         values.forEach((value, index) => {
           if (field.name) {
             enhancedData[index][field.name] = value;
+          }
+          if (field.name === 'TaskSubtype') {
+            enhancedData.forEach(record => {
+              record['TaskSubtype'] = 'Task';
+            });
           }
         });
       }
@@ -1529,15 +1921,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     jsonData: any[],
     fieldMap: Record<string, { type: string; values: any[]; label: string }>
   ): any[] {
+
     if (!jsonData || jsonData.length === 0) {
       throw new Error('No JSON data found.');
     }
 
-    // Helper to pick a random value from an array
-    const getRandomValue = (values: any[]): any => {
-      if (!values || values.length === 0) return null;
-      return values[Math.floor(Math.random() * values.length)];
-    };
     // Enhance each record in the JSON data
     let enhancedData = jsonData.map((record) => ({ ...record }));
 
@@ -1553,7 +1941,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       if (type === 'Custom List' || type === 'reference') {
         enhancedData = enhancedData.map((record) => {
           if (!(fieldName in record)) {
-            return { ...record, [fieldName]: getRandomValue(values) };
+            return { ...record, [fieldName]: this.getRandomElement(values) };
           }
           return record;
         });
