@@ -1,9 +1,3 @@
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable @typescript-eslint/explicit-function-return-type */
-/* eslint-disable prefer-const */
-/* eslint-disable no-prototype-builtins */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable no-param-reassign */
 /**
  * Copyright (c) 2025 concret.io
  *
@@ -11,6 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+/* eslint-disable prefer-const */
+/* eslint-disable no-prototype-builtins */
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable no-param-reassign */
 /* eslint-disable unicorn/numeric-separators-style */
 /* eslint-disable @typescript-eslint/member-ordering */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
@@ -148,9 +148,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         throw new Error(`No configuration found for object: ${object}`);
       }
       const countofRecordsToGenerate = currentSObject.count;
-      if (object.toLowerCase() === 'location' || object.toLowerCase() === 'servicecontract' && (countofRecordsToGenerate ?? 0) > 10000) {
-        throw new Error(chalk.yellow.bold(`Salesforce allows up to 10,000 for ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
+      if ((object.toLowerCase() === 'location' || object.toLowerCase() === 'servicecontract') && (countofRecordsToGenerate ?? 1) >= 10000) {
+        throw new Error(chalk.yellow.bold(`Salesforce does not support generating 10,000 or more records for SObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
       }
+
       if (object.toLowerCase() === 'campaignmember' && (countofRecordsToGenerate ?? 0) > 1) {
         throw new Error(chalk.yellow.bold(`Currently Supports only 1 record for sObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
       }
@@ -244,9 +245,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     return itemType;
   }
 
-
-
-
   /**
    * Processes and returns the relevant Salesforce object configuration(s) from the base template.
    * If a specific `objectName` is provided, only the matching configuration is returned; otherwise, all are returned.
@@ -285,7 +283,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const missingNames = Array.from(nameSet).filter(name => !availableNames.has(name));
     if (missingNames.length > 0) {
       throw new Error(
-        `The following specified objects were not found in base-config: [${missingNames.join(', ')}]`
+        `The following specified objects were not found in template: ${chalk.yellow(missingNames.join(', '))}`
       );
     }
 
@@ -581,16 +579,15 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
               label: inputObject.Label,
             };
           }
-        
+
 
           else {
             let label = inputObject.Label;
-            if (inputObject.QualifiedApiName === 'Name') {
-              label = 'fullname';
+            if (objectName.toLowerCase() === 'campaign' && inputObject.QualifiedApiName === 'Name') {
+              label = 'Account Name';
             }
             if (
-              objectName.toLowerCase() === 'opportunity' ||
-              objectName.toLowerCase() === 'campaign'
+              objectName.toLowerCase() === 'opportunity'
             ) {
               if (inputObject.QualifiedApiName === 'Name') {
                 label = objectName + ' ' + label;
@@ -630,9 +627,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             if ((objectName === 'contract' || objectName === 'order' || objectName === 'listemail') && inputObject.QualifiedApiName === 'Status') {
               picklistValues = ['Draft'];
             }
-            // if ((objectName === 'geolocationbasedaction') && inputObject.QualifiedApiName === 'ActionType') {
-            //   picklistValues = ['PlatformAlert'];
-            // }
+           
             if ((objectName === 'alternativepaymentmethod' || objectName === 'paymentauthorization' || objectName === 'refund') && inputObject.QualifiedApiName === 'ProcessingMode') {
               picklistValues = ['External'];
             }
@@ -704,7 +699,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       try {
         let insertResult;
         if (object.toLowerCase() === 'order' || object.toLowerCase() === 'task' || object.toLowerCase() === 'productitemtransaction' || object.toLowerCase() === 'event') {
-
           insertResult = await insertRecordsspecial(conn, object, jsonData)
         }
         else {
@@ -727,14 +721,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
 
         failedCount = insertResult.length - insertedIds.length;
-
-        // if (errorMessages.size > 0) {
-        //   this.log(`\nFailed to insert ${failedCount} record(s) for '${object}' object with the following error(s):`);
-        //   errorMessages.forEach((count, message) => {
-        //     this.log(`- ${count} record(s): ${message}`);
-        //   });
-        // }
-
         this.updateCreatedRecordIds(object, insertResult);
 
         return { failedCount, insertedIds };
@@ -1323,7 +1309,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
       const details: Partial<TargetData> = { name: fieldName };
 
-      // const excludedReferenceFields = ['OwnerId', 'CreatedById', 'ParentId', 'visitorAddressId', 'MessagingChannelUsageId', 'FilterCriteriaId', 'BundlePolicyId', 'DocumentVersionId', 'MessagingChannelId', 'ContentBodyId', 'AssetWarrantyId', 'ContentModifiedById', 'ContentDocumentId', 'PicklistId', 'ServiceContractId', 'EntitlementId', 'MaintenancePlanId', 'ReturnOrderLineItemId', 'OrderId', 'ProductServiceCampaignItemId', 'ServiceTerritoryId', 'ServiceReportTemplateId', 'PricebookEntryId', 'ParentWorkOrderLineItemId', 'WorkOrderLineItemId', 'RootAssetId', 'DandbCompanyId', 'CompanySignedId', 'OriginalOrderId', 'CompanyAuthorizedById', 'AssetServicedById', 'AssetProvidedById', 'CampaignMemberRecordTypeId', 'visitorAddressId', 'LogoId', 'ReferenceRecordId'];
       const excludedReferenceFields = [
         'OwnerId',
         'resourceId',
@@ -1376,7 +1361,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       ];
 
 
-      if (isReference && !(excludedReferenceFields.includes(fieldName) && !((object === 'address' || item.ReferenceTo === 'address' || 'productrequestlineitem') && fieldName === 'ParentId'))) {
+      if (isReference && !(excludedReferenceFields.includes(fieldName) && !((object === 'address' || item.ReferenceTo === 'address' || object === 'productrequestlineitem') && fieldName === 'ParentId'))) {
 
         details.type = 'Custom List';
         const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
@@ -1488,7 +1473,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
   private async fetchRelatedMasterRecordIds(conn: Connection, referenceTo: string, object: string): Promise<string[]> {
     if (depthForRecord === 7) {
-      throw new Error(`Maximum depth reached for ${referenceTo}`);
+      throw new Error(`Too many levels of related records were followed for ${referenceTo}. Please simplify the relationship path or reduce nesting.`);
     }
     const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
     const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
@@ -1759,10 +1744,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     };
 
     if (object === 'product2') {
-      enhancedData.forEach((record) => {
-        record['StockKeepingUnit'] = 'SKU-' + Math.floor(Math.random() * 1000000);
+      enhancedData.forEach((record, i) => {
+        record['StockKeepingUnit'] = 'SKU-' + Math.floor(Math.random() * 1000000) + i;
       });
-
     }
 
     if (object === 'dandbcompany') {
@@ -1864,13 +1848,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       });
     }
 
-    if (object === 'geolocationbasedaction') {
-      enhancedData.forEach((record) => {
-        record['Radius'] = Math.floor(Math.random() * 900) + 100;
-        delete record['ActionData'];
-
-      });
-    }
 
     if (object === 'shifttemplate') {
       enhancedData.forEach((record) => {
@@ -1878,7 +1855,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         record['StartTime'] = '08:00:00.000Z';
       });
     }
-    // ---------- Resolve the Issues ----------------
+
     for (const field of processedFields) {
       if (field.type === 'Custom List' && field.values && field.name !== 'TaskSubtype') {
         const values = Array.from({ length: count }, () => this.getRandomElement(field.values ?? []));

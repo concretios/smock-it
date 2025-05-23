@@ -31,8 +31,7 @@ export default class SmockitTemplateUpsert extends SfCommand<SmockitTemplateUpse
   };
 
   public async run(): Promise<SmockitTemplateUpsertResult> {
-    console.log(chalk.yellow('⚠️   Heads up! This command is retiring soon. Switch to "sf smockit template upsert" to keep things running smoothly.'));
-    try {
+    console.log(chalk.yellow('⚠️  This command will be retired soon. Please switch to "sf smockit template upsert". Future updates will only be available there.'));     try {
       const setupInit = new SetupInit(this.argv, this.config);
       await setupInit.run();
     } catch (error) {

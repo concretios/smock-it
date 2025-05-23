@@ -224,15 +224,16 @@ export const userLicenseObjects = new Set(['resourceabsence', 'resourcepreferenc
 
 export const salesforceErrorMap: Record<string, string> = {
     REQUIRED_FIELD_MISSING: 'Some required information is missing. Please ensure all required fields are filled.',
-    INVALID_FIELD_FOR_INSERT_UPDATE: 'A field cannot be edited due to restrictions. Please verify field permissions.',
     INVALID_CROSS_REFERENCE_KEY: 'A referenced record is missing or invalid. Please ensure all related data exists.',
     INVALID_TYPE_ON_FIELD_IN_RECORD: 'Looks like the value doesn’t match the field type. Please check dates, numbers, or picklist options.',
     STRING_TOO_LONG: 'The text entered in a field is a little too long. Try shortening it to fit the allowed limit.',
+    MAXIMUM_HIERARCHY_TREE_SIZE_REACHED:'The current hierarchy exceeds the supported depth. Please simplify the structure to ensure reliable performance.',
     INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST: 'Invalid picklist value. Please use one of the allowed values.',
     INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY: 'You don’t have permission to access the record. Please reach out to your Salesforce admin for help.',
     DUPLICATES_DETECTED: 'A similar record already exists. Please review your data to avoid duplicates.',
     INVALID_OPERATION: 'The operation couldn’t be completed due to business rules. Please review your input and adjust as needed.',
     CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: 'Entity failed validation. Please contact support.',
+    STANDARD_PRICE_NOT_DEFINED: 'The standard price is missing. Please ensure the standard price is set for the product.',
     UNABLE_TO_LOCK_ROW: 'This record is currently being updated by another process , generation is paused for now. Please try again shortly.',
     LIMIT_EXCEEDED: 'You’ve reached the data processing limit. Please reduce the batch size or try again shortly',
     REQUEST_LIMIT_EXCEEDED: 'API request limit reached. Please wait a moment before trying again',
@@ -241,4 +242,8 @@ export const salesforceErrorMap: Record<string, string> = {
     INVALID_FIELD: 'The field name entered is invalid. Please verify your configuration and try again.',
     INVALID_ID_FIELD: 'The ID format you entered is incorrect. Please verify your record IDs and try again.',
     FIELD_INTEGRITY_EXCEPTION: 'One or more fields cannot be accessed due to some restrictions. Please reach out to your Salesforce admin for help.',
+    STORAGE_LIMIT_EXCEEDED: 'You have reached the current data storage limit. Consider cleaning up or upgrading to keep things running smoothly..',
+    INVALID_FIELD_IN_RECORD: 'The field name entered is invalid. Please verify your configuration and try again.',
+    INVALID_FIELD_FOR_INSERT_UPDATE: 'The field cannot be updated. Please check the field permissions and try again.',
+
 };
