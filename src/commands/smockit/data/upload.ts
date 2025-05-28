@@ -1,13 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /**
  * Copyright (c) 2025 concret.io
  *
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable no-param-reassign */
 /* eslint-disable @typescript-eslint/member-ordering */
@@ -143,6 +142,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
 
   private static processInsertResults(sobject: string, insertResults: CreateResult[]): void {
     const failedRecords: number = insertResults.filter((result) => !result.success).length;
+console.log(chalk.yellow.bold(`${failedRecords} record(s) failed to insert.`));
 
     const insertedIds: string[] = [];
 

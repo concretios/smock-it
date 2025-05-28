@@ -13,6 +13,7 @@
 /* eslint-disable no-param-reassign */
 /* eslint-disable unicorn/numeric-separators-style */
 /* eslint-disable @typescript-eslint/member-ordering */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
@@ -116,7 +117,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const hasRestrictedValue = restrictedObjectsFound.length > 0;
 
     if (hasRestrictedValue) {
-      throw new Error(`Alert restricted objects detected: ${chalk.yellow(restrictedObjectsFound.join(', '))}`);
+      throw new Error(`Smockit will not able to generate the data for the sObject ${chalk.yellow(restrictedObjectsFound.join(', '))}. Please try with different sObject(s).`);
     }
 
     // Generate fields and write generated_output.json config
@@ -583,11 +584,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
           else {
             let label = inputObject.Label;
-            if (objectName.toLowerCase() === 'campaign' && inputObject.QualifiedApiName === 'Name') {
-              label = 'Account Name';
-            }
             if (
-              objectName.toLowerCase() === 'opportunity'
+              objectName.toLowerCase() === 'opportunity' || objectName.toLowerCase() === 'campaign'
             ) {
               if (inputObject.QualifiedApiName === 'Name') {
                 label = objectName + ' ' + label;
@@ -627,7 +625,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             if ((objectName === 'contract' || objectName === 'order' || objectName === 'listemail') && inputObject.QualifiedApiName === 'Status') {
               picklistValues = ['Draft'];
             }
-           
+
             if ((objectName === 'alternativepaymentmethod' || objectName === 'paymentauthorization' || objectName === 'refund') && inputObject.QualifiedApiName === 'ProcessingMode') {
               picklistValues = ['External'];
             }
@@ -691,53 +689,72 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {GenericRecord[]} jsonData - The array of records to insert.
    * @returns {Promise<{ failedCount: number; insertedIds: string[] }>} - A promise that resolves to the count of failed inserts and the inserted record IDs.
    */
-  public async handleDirectInsert(conn: Connection, outputFormat: string[], object: string, jsonData: GenericRecord[]): Promise<{ failedCount: number; insertedIds: string[] }> {
-    if (outputFormat.includes('DI') || outputFormat.includes('di')) {
-      const errorMessages: Map<string, number> = new Map();
-      const insertedIds: string[] = [];
-      let failedCount = 0;
-      try {
-        let insertResult;
-        if (object.toLowerCase() === 'order' || object.toLowerCase() === 'task' || object.toLowerCase() === 'productitemtransaction' || object.toLowerCase() === 'event') {
-          insertResult = await insertRecordsspecial(conn, object, jsonData)
-        }
-        else {
-          insertResult = await DataGenerate.insertRecords(conn, object, jsonData,);
-        }
-        insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }) => {
-          if (result.success && result.id) {
-            insertedIds.push(result.id);
-          } else if (result.errors) {
-            result.errors.forEach((error) => {
-              const errorCode = (error as { statusCode?: string })?.statusCode;
-              const humanReadableMessage = errorCode && salesforceErrorMap[errorCode]
-                ? salesforceErrorMap[errorCode]
-                : (error as { message?: string })?.message ?? 'Unknown error occurred during insertion.';
-              const currentCount = errorMessages.get(humanReadableMessage) ?? 0;
-              errorMessages.set(humanReadableMessage, currentCount + 1);
-            });
-          }
-        });
-
-
-        failedCount = insertResult.length - insertedIds.length;
-        this.updateCreatedRecordIds(object, insertResult);
-
-        return { failedCount, insertedIds };
-      } catch (error) {
-        const errorCode = (error as any).statusCode;
-        const errorMessage = errorCode && salesforceErrorMap[errorCode]
-          ? salesforceErrorMap[errorCode]
-          : (error as any).message || 'Unknown error occurred during insertion.';
-        this.log(`Error (${failedCount}): ${errorMessage}`);
-        return { failedCount, insertedIds };
-      }
+  public async handleDirectInsert(
+    conn: Connection,
+    outputFormat: string[],
+    object: string,
+    jsonData: GenericRecord[]
+  ): Promise<{ failedCount: number; insertedIds: string[] }> {
+    if (!outputFormat.includes('DI') && !outputFormat.includes('di')) {
+      return { failedCount: 0, insertedIds: [] };
     }
 
-    return { failedCount: 0, insertedIds: [] };
+    const errorMessages: Map<string, number> = new Map();
+    const insertedIds: string[] = [];
+    let failedCount = 0;
+
+    try {
+      let insertResult;
+      if (
+        object.toLowerCase() === 'order' ||
+        object.toLowerCase() === 'task' ||
+        object.toLowerCase() === 'productitemtransaction' ||
+        object.toLowerCase() === 'event'
+      ) {
+        insertResult = await insertRecordsspecial(conn, object, jsonData);
+      } else {
+        insertResult = await DataGenerate.insertRecords(conn, object, jsonData);
+      }
+
+      insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }, index: number) => {
+        if (result.success && result.id) {
+          insertedIds.push(result.id);
+        }
+        else if (result.errors) {
+          const record = jsonData[index];
+          const possibleFields = record ? Object.keys(record).join(', ') : 'unknown field';
+          result.errors.forEach((error) => {
+            const errorCode = (error as { statusCode?: string })?.statusCode || 'UNKNOWN_ERROR';
+            const fields = (error as { fields?: string[] })?.fields || [];
+            const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
+            const errorTemplate = salesforceErrorMap[errorCode] || 'An unknown error occurred during insertion for object "{object}".'
+            const humanReadableMessage = errorTemplate
+              .replace('{field}', fieldList)
+              .replace('{object}', object)
+              .replace('{possibleFields}', possibleFields);
+            const currentCount = errorMessages.get(humanReadableMessage) ?? 0;
+            errorMessages.set(humanReadableMessage, currentCount + 1);
+            failedCount++;
+          });
+        }
+      });
+
+      this.updateCreatedRecordIds(object, insertResult);
+      return { failedCount, insertedIds };
+    } catch (error) {
+      const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
+      const fields = (error as any).fields || [];
+      const possibleFields = jsonData[0] ? Object.keys(jsonData[0]).join(', ') : 'unknown field';
+      const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
+      const errorTemplate = salesforceErrorMap[errorCode] || 'An unknown error occurred during insertion for object "{object}".';
+      const humanReadableMessage = errorTemplate
+        .replace('{field}', fieldList)
+        .replace('{object}', object)
+        .replace('{possibleFields}', possibleFields);
+      console.error(chalk.redBright(`Error (${failedCount + 1}): ${humanReadableMessage}`));
+      return { failedCount: failedCount + 1, insertedIds };
+    }
   }
-
-
 
   /**
    * Retrieves picklist values for a specified field on a Salesforce object and validates the values against the provided consideration map.
@@ -1099,17 +1116,24 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const BATCH_SIZE = 100;
 
     // Helper function to map results
-    const mapResults = (insertResults: any): CreateResult[] =>
-      (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result) => {
+    const mapResults = (insertResults: any, startIndex: number): CreateResult[] =>
+      (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result, index) => {
         if (!result.success) {
           failedCount++;
+          const record = dataArray[startIndex + index]; // Get the record that failed
+          const possibleFields = record ? Object.keys(record).join(', ') : 'unknown field';
           if (result.errors && Array.isArray(result.errors)) {
+            // console.error('line 1318', chalk.redBright(JSON.stringify(result.errors, null, 2)));
+
             result.errors.forEach((err: any) => {
-              const errorCode = err.statusCode;
-              const humanReadableMessage =
-                errorCode && salesforceErrorMap[errorCode]
-                  ? salesforceErrorMap[errorCode]
-                  : err.message || 'Unknown error occurred during insertion.';
+              const errorCode = err.statusCode || 'UNKNOWN_ERROR';
+              const fields = err.fields || [];
+              const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
+              const errorTemplate = salesforceErrorMap[errorCode] || ` ${err.message}`;
+              const humanReadableMessage = errorTemplate
+                .replace('{field}', fieldList)
+                .replace('{object}', sObjectName)
+                .replace('{possibleFields}', possibleFields);
               const currentCount = errorCountMap.get(humanReadableMessage) ?? 0;
               errorCountMap.set(humanReadableMessage, currentCount + 1);
             });
@@ -1126,10 +1150,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       // Small batch processing
       if (dataArray.length <= BATCH_SIZE) {
         const insertResults = await conn.sobject(sObjectName).create(dataArray);
-        results.push(...mapResults(insertResults));
+        results.push(...mapResults(insertResults, 0));
 
         if (failedCount > 0) {
           console.error(chalk.yellowBright(`Failed to insert ${failedCount} record(s) for sObject ${sObjectName}`));
+          console.error(chalk.whiteBright('Error breakdown:'));
           errorCountMap.forEach((count, message) => {
             console.error(`• Record(s) failed: ${chalk.redBright(message)}`);
           });
@@ -1141,7 +1166,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       // Initial batch
       const initialBatch = dataArray.splice(0, BATCH_SIZE);
       const initialResults = await conn.sobject(sObjectName).create(initialBatch);
-      results.push(...mapResults(initialResults));
+      results.push(...mapResults(initialResults, 0));
 
       // Bulk processing for remaining records
       const remainingData = dataArray;
@@ -1160,18 +1185,22 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           batch.on('queue', () => batch.poll(1000, 900_000));
 
           batch.on('response', (rets: any[]) => {
-            results.push(...mapResults(rets));
+            results.push(...mapResults(rets, i));
             const percentage = Math.ceil(((i + batchData.length + BATCH_SIZE) / dataArray.length) * 100);
             progressBar.update(percentage);
             resolve();
           });
 
           batch.on('error', (err: Error) => {
-            const errorCode = (err as any).statusCode;
-            const humanReadableMessage =
-              errorCode && salesforceErrorMap[errorCode]
-                ? salesforceErrorMap[errorCode]
-                : err.message || 'Unknown error occurred during bulk insertion.';
+            const errorCode = (err as any).statusCode || 'UNKNOWN_ERROR';
+            const fields = (err as any).fields || [];
+            const possibleFields = batchData[0] ? Object.keys(batchData[0]).join(', ') : 'unknown field';
+            const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
+            const errorTemplate = salesforceErrorMap[errorCode] || 'An unknown error occurred during bulk insertion for object "{object}".';
+            const humanReadableMessage = errorTemplate
+              .replace('{field}', fieldList)
+              .replace('{object}', sObjectName)
+              .replace('{possibleFields}', possibleFields);
             const currentCount = errorCountMap.get(humanReadableMessage) ?? 0;
             errorCountMap.set(humanReadableMessage, currentCount + batchData.length);
             failedCount += batchData.length;
@@ -1201,13 +1230,15 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         });
       }
     } catch (error) {
-      const errorCode = (error as any).statusCode;
-
-      const humanReadableMessage =
-        errorCode && salesforceErrorMap[errorCode]
-          ? salesforceErrorMap[errorCode]
-          : (error as any).message || 'Unknown error occurred during insertion.';
-
+      const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
+      const fields = (error as any).fields || [];
+      const possibleFields = dataArray[0] ? Object.keys(dataArray[0]).join(', ') : 'unknown field';
+      const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
+      const errorTemplate = salesforceErrorMap[errorCode] || 'An unknown error occurred during insertion for object "{object}".';
+      const humanReadableMessage = errorTemplate
+        .replace('{field}', fieldList)
+        .replace('{object}', sObjectName)
+        .replace('{possibleFields}', possibleFields);
       progressBar.stop();
       throw new Error(humanReadableMessage);
     }
@@ -1312,6 +1343,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const excludedReferenceFields = [
         'OwnerId',
         'resourceId',
+        'ServiceAppointmentId',
+        'ServiceContractId',
+        'SourceObjectId',
         'serviceResourceId',
         'CreatedById',
         'ParentId',
@@ -1331,11 +1365,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         'ContentModifiedById',
         'ContentDocumentId',
         'PicklistId',
-        'ServiceContractId',
+
         'EntitlementId',
         'MaintenancePlanId',
         'ReturnOrderLineItemId',
-        'OrderId',
+
         'ProductServiceCampaignItemId',
         'ServiceTerritoryId',
         'ServiceReportTemplateId',
@@ -1365,6 +1399,13 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
         details.type = 'Custom List';
         const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
+        if (item.QualifiedApiName === 'ContactId' && item.ReferenceTo.referenceTo[0] === 'Contact' && item.RelationshipName === 'Account') {
+          details.values = await this.fetchRelatedMasterRecordIds(conn, 'Account', object);
+          continue;
+        }
+        if (item.QualifiedApiName === 'ContactId' && item.ReferenceTo.referenceTo[0] === 'Contact') {
+          details.values = await this.fetchRelatedMasterRecordIds(conn, item.ReferenceTo?.referenceTo, object);
+        }
         //  Always process AccountId and ContactId for Asset to satisfy validation
         if (object === 'Asset' && ['AccountId', 'ContactId'].includes(fieldName)) {
           const referenceTo = item.referenceTo ?? item.ReferenceTo?.referenceTo ?? item.ReferenceTo?.[0];
@@ -1475,6 +1516,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     if (depthForRecord === 7) {
       throw new Error(`Too many levels of related records were followed for ${referenceTo}. Please simplify the relationship path or reduce nesting.`);
     }
+
+    if (referenceTo.toLowerCase() === 'order' || referenceTo.toLowerCase() === 'pricebookentry') {
+      throw new Error(`SmockIt will not be able to generate data for the reference sObject: ${referenceTo} Please try with different sObject(s).`);
+    }
+
     const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);
     const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
       if (field.name) {
@@ -1498,10 +1544,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         values: accountIds,
         label: 'Account ID',
       };
-
     }
     // conditinal handling for Order and Contract for AccountId and Status
-    if (referenceTo === 'Contract' && object === 'order' || object === 'Order') {
+    if (referenceTo === 'Contract' && (object === 'order' || object === 'Order')) {
       const accountResult = await conn.query('SELECT Id FROM Account ORDER BY CreatedDate DESC LIMIT 1');
       const accountIds = accountResult.records.map((record: any) => record.Id);
 
