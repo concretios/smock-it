@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
+/* eslint-disable import/no-extraneous-dependencies */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable prefer-const */
@@ -157,6 +157,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         throw new Error(chalk.yellow.bold(`Currently Supports only 1 record for sObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
       }
 
+      if (object.toLowerCase() === 'consumptionrate' && (countofRecordsToGenerate ?? 0) > 500) {
+        console.warn(chalk.blue(`You can create up to 500 records for the '${object}' object.`))
+      }
+
       const fields = sObjectFieldsMap.get(object);
 
       if (!fields) {
@@ -191,13 +195,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
     // Save created record IDs file
     saveCreatedRecordIds(outputFormat, flags.templateName);
-
     const endTime = Date.now();
     const totalTime = ((endTime - startTime) / 1000).toFixed(2);
     this.log(chalk.blue.bold(`\nResults: \x1b]8;;${outputPathDir}\x1b\\${totalTime}(s)\x1b]8;;\x1b\\`));
-
     table.printTable();
-
     return { path: flags.templateName };
   }
 
@@ -211,7 +212,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   private processFieldsToConsider(configForObject: sObjectSchemaType): Record<string, string[]> {
     const considerMap: Record<string, any> = {};
     const fieldsToConsiderKeys = Object.keys(configForObject?.['fieldsToConsider'] ?? {});
-
     for (const key of fieldsToConsiderKeys) {
       if (configForObject['fieldsToConsider']) {
         if (key.startsWith('dp-')) {
@@ -221,7 +221,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         }
       }
     }
-
     return considerMap;
   }
 
@@ -727,7 +726,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             const errorCode = (error as { statusCode?: string })?.statusCode || 'UNKNOWN_ERROR';
             const fields = (error as { fields?: string[] })?.fields || [];
             const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-            const errorTemplate = salesforceErrorMap[errorCode] || 'An unknown error occurred during insertion for object "{object}".'
+            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues.`;
             const humanReadableMessage = errorTemplate
               .replace('{field}', fieldList)
               .replace('{object}', object)
@@ -746,7 +745,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const fields = (error as any).fields || [];
       const possibleFields = jsonData[0] ? Object.keys(jsonData[0]).join(', ') : 'unknown field';
       const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-      const errorTemplate = salesforceErrorMap[errorCode] || 'An unknown error occurred during insertion for object "{object}".';
+      const errorTemplate = salesforceErrorMap[errorCode] || ` Failed to insert "${object}" records due to technical issues.`;
       const humanReadableMessage = errorTemplate
         .replace('{field}', fieldList)
         .replace('{object}', object)
@@ -1123,13 +1122,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           const record = dataArray[startIndex + index]; // Get the record that failed
           const possibleFields = record ? Object.keys(record).join(', ') : 'unknown field';
           if (result.errors && Array.isArray(result.errors)) {
-            // console.error('line 1318', chalk.redBright(JSON.stringify(result.errors, null, 2)));
-
             result.errors.forEach((err: any) => {
               const errorCode = err.statusCode || 'UNKNOWN_ERROR';
               const fields = err.fields || [];
               const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-              const errorTemplate = salesforceErrorMap[errorCode] || ` ${err.message}`;
+              const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues..`;
               const humanReadableMessage = errorTemplate
                 .replace('{field}', fieldList)
                 .replace('{object}', sObjectName)
@@ -1196,7 +1193,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             const fields = (err as any).fields || [];
             const possibleFields = batchData[0] ? Object.keys(batchData[0]).join(', ') : 'unknown field';
             const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-            const errorTemplate = salesforceErrorMap[errorCode] || 'An unknown error occurred during bulk insertion for object "{object}".';
+            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues.`;
             const humanReadableMessage = errorTemplate
               .replace('{field}', fieldList)
               .replace('{object}', sObjectName)
@@ -1234,7 +1231,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const fields = (error as any).fields || [];
       const possibleFields = dataArray[0] ? Object.keys(dataArray[0]).join(', ') : 'unknown field';
       const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-      const errorTemplate = salesforceErrorMap[errorCode] || 'An unknown error occurred during insertion for object "{object}".';
+      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues.`;
       const humanReadableMessage = errorTemplate
         .replace('{field}', fieldList)
         .replace('{object}', sObjectName)
@@ -1399,9 +1396,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
         details.type = 'Custom List';
         const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
-        if (item.QualifiedApiName === 'ContactId' && item.ReferenceTo.referenceTo[0] === 'Contact' && item.RelationshipName === 'Account') {
+        if (item.QualifiedApiName === 'ContactId' && item.ReferenceTo.referenceTo[0] === 'Contact' && item.RelationshipName === 'Contact') {
           details.values = await this.fetchRelatedMasterRecordIds(conn, 'Account', object);
-          continue;
         }
         if (item.QualifiedApiName === 'ContactId' && item.ReferenceTo.referenceTo[0] === 'Contact') {
           details.values = await this.fetchRelatedMasterRecordIds(conn, item.ReferenceTo?.referenceTo, object);
@@ -1409,9 +1405,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         //  Always process AccountId and ContactId for Asset to satisfy validation
         if (object === 'Asset' && ['AccountId', 'ContactId'].includes(fieldName)) {
           const referenceTo = item.referenceTo ?? item.ReferenceTo?.referenceTo ?? item.ReferenceTo?.[0];
-
           const query = `SELECT Id FROM ${referenceTo} ORDER BY CreatedDate DESC LIMIT 1`;
-
           const result = await conn.query(query);
           const ids = result.records.map((record: any) => record.Id);
           details.values = ids;
@@ -1517,8 +1511,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       throw new Error(`Too many levels of related records were followed for ${referenceTo}. Please simplify the relationship path or reduce nesting.`);
     }
 
-    if (referenceTo.toLowerCase() === 'order' || referenceTo.toLowerCase() === 'pricebookentry') {
-      throw new Error(`SmockIt will not be able to generate data for the reference sObject: ${referenceTo} Please try with different sObject(s).`);
+    if (referenceTo === 'Order' || referenceTo === 'Pricebookentry') {
+      throw new Error(`SmockIt cannot generate data for the reference sObject: ${chalk.blue(referenceTo)}. Please try using a different sObject.`);
     }
 
     const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true);

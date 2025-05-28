@@ -1,6 +1,11 @@
+/**
+ * Copyright (c) 2025 concret.io
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 /* eslint-disable unicorn/numeric-separators-style */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-
 /* eslint-disable import/order */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -142,7 +147,7 @@ export const salesforceErrorMap: Record<string, string> = {
     REQUIRED_FIELD_MISSING: 'Some required field on object "{object}" is missing. Please ensure it is filled.',
     INVALID_CROSS_REFERENCE_KEY: 'The referenced record for field on object "{object}" is missing or invalid. Please ensure the related data exists.',
     INVALID_TYPE_ON_FIELD_IN_RECORD: 'The value for field "{field}" on object "{object}" doesn’t match the expected type. Please check dates, numbers, or picklist options.',
-    STRING_TOO_LONG: 'The text in field "{field}" on object "{object}" is too long. Try shortening it to fit the allowed limit.',
+    STRING_TOO_LONG: 'The value in the field "{field}" on the object "{object}" exceeds the allowed length. Please shorten it or use fieldsToConsider to specify a shorter value.',
     MAXIMUM_HIERARCHY_TREE_SIZE_REACHED: 'The hierarchy for object "{object}" exceeds the supported depth. Please simplify the structure.',
     INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST: 'The value for field "{field}" on object "{object}" is invalid. Please use one of the allowed picklist values.',
     INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY: 'You don’t have permission to access the record referenced by field "{field}" on object "{object}". Please contact your Salesforce admin.',
@@ -158,7 +163,7 @@ export const salesforceErrorMap: Record<string, string> = {
     FIELD_FILTER_VALIDATION_EXCEPTION: 'The value in field "{field}" on object "{object}" doesn’t meet the filter criteria. Please review and try again.',
     INVALID_FIELD: 'The field "{field}" on object "{object}" is invalid. Please verify your configuration.',
     INVALID_ID_FIELD: 'The ID in field "{field}" on object "{object}" is incorrect. Please verify the record ID.',
-    FIELD_INTEGRITY_EXCEPTION: 'The field on object "{object}" cannot be accessed due to restrictions. Possible fields involved: {possibleFields}. Please check field-level security or contact your Salesforce admin.',
+    FIELD_INTEGRITY_EXCEPTION: 'The field on object "{object}" cannot be accessed due to restrictions. Please check field-level security or contact your Salesforce admin.',
     STORAGE_LIMIT_EXCEEDED: 'You have reached the current data storage limit. Consider cleaning up or upgrading to keep things running smoothly..',
     INVALID_FIELD_IN_RECORD: 'The field "{field}" on object "{object}" is invalid. Please verify your configuration.',
     INVALID_FIELD_FOR_INSERT_UPDATE: 'The field "{field}" on object "{object}" cannot be updated. Please check field permissions.',
