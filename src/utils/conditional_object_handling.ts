@@ -26,27 +26,34 @@ export async function insertRecordsspecial(
 ): Promise<CreateResult[]> {
     const results: CreateResult[] = [];
     const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
+    const sObjectName = Array.isArray(object) ? object[0] : object;
+
 
     const errorCountMap: Map<string, number> = new Map();
     let failedCount = 0;
 
-    const mapResults = (insertResults: any): CreateResult[] =>
-        (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result) => {
+ 
+    const mapResults = (insertResults: any, startIndex: number): CreateResult[] =>
+        (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result, index) => {
             if (!result.success) {
                 failedCount++;
-                if (Array.isArray(result.errors)) {
+                const record = dataArray[startIndex + index]; // Get the record that failed
+                const possibleFields = record ? Object.keys(record).join(', ') : 'unknown field';
+                if (result.errors && Array.isArray(result.errors)) {
                     result.errors.forEach((err: any) => {
-                        const errorCode = err.statusCode;
-                        const humanReadableMessage =
-                            errorCode && salesforceErrorMap[errorCode]
-                                ? salesforceErrorMap[errorCode]
-                                : err.message || 'Unknown error occurred during insertion.';
-                        const count = errorCountMap.get(humanReadableMessage) ?? 0;
-                        errorCountMap.set(humanReadableMessage, count + 1);
+                        const errorCode = err.statusCode || 'UNKNOWN_ERROR';
+                        const fields = err.fields || [];
+                        const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
+                        const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues..`;
+                        const humanReadableMessage = errorTemplate
+                            .replace('{field}', fieldList)
+                            .replace('{object}', sObjectName)
+                            .replace('{possibleFields}', possibleFields);
+                        const currentCount = errorCountMap.get(humanReadableMessage) ?? 0;
+                        errorCountMap.set(humanReadableMessage, currentCount + 1);
                     });
                 }
             }
-
             return {
                 id: result.id ?? '',
                 success: result.success,
@@ -57,14 +64,14 @@ export async function insertRecordsspecial(
     if (dataArray.length <= 200) {
         try {
             const insertResults = await conn.sobject(object).create(jsonData);
-            results.push(...mapResults(insertResults));
+            results.push(...mapResults(insertResults, 0));
         } catch (error) {
             console.error('Error inserting records:', error);
         }
     } else {
         const storeHere = dataArray.splice(0, 200);
         const insertResults = await conn.sobject(object).create(storeHere);
-        results.push(...mapResults(insertResults));
+        results.push(...mapResults(insertResults, 0));
 
         progressBar.start(100, { title: 'Test' });
         const totalRecords = dataArray.length;
@@ -85,7 +92,7 @@ export async function insertRecordsspecial(
                     });
 
                     batch.on('response', (rets: any[]) => {
-                        results.push(...mapResults(rets));
+                        results.push(...mapResults(rets, i));
                         processedRecords += batchData.length;
                         const percentage = Math.ceil((processedRecords / totalRecords) * 100);
                         progressBar.update(percentage);

@@ -21,7 +21,8 @@ export type SmockitTemplateInitResult = {
 
 export default class SmockitTemplateInit extends SfCommand<SmockitTemplateInitResult> {
   public async run(): Promise<SmockitTemplateInitResult> {
-    console.log(chalk.yellow('⚠️  This command will be retired soon. Please switch to "sf smockit template init". Future updates will only be available there.'));    try {
+    console.log(chalk.yellow('⚠️  Heads up! This command will be retired soon. Please start using "sf smockit template init". All new updates will be available in new command.'));
+       try {
       const setupInit = new SetupInit(this.argv, this.config);
       await setupInit.run();
     } catch (error) {
