@@ -5,54 +5,40 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-/* eslint-disable sf-plugin/flag-case */
-import fs from 'node:fs';
-import path from 'node:path';
-import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
+/* eslint-disable sf-plugin/no-missing-messages */
+/* eslint-disable import/order */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
+import SetupInit from '../smockit/template/print.js';
 import chalk from 'chalk';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('smock-it', 'template.print');
+const messages = Messages.loadMessages('smock-it', 'smockit.template.print');
 
-export type TemplatePrintResult = {
+export type SmockitTemplateInitResult = {
   path: string;
 };
 
-export default class TemplatePrint extends SfCommand<void> {
+export default class SmockitTemplateInit extends SfCommand<SmockitTemplateInitResult> {
   public static readonly summary: string = messages.getMessage('summary');
   public static readonly examples = [messages.getMessage('Examples')];
 
-  public static readonly flags = {
-    templateName: Flags.string({
-      summary: messages.getMessage('flags.templateName.summary'),
-      description: messages.getMessage('flags.templateName.description'),
-      char: 't',
-      required: true,
-    }),
-  };
-
-  public async run(): Promise<void> {
-    const { flags } = await this.parse(TemplatePrint);
-
-    let fileName = flags['templateName'];
-    if (!fileName) {
-      this.error('Error: You must specify a filename using the --template-name flag.');
-    } else if (!fileName.endsWith('.json')) {
-      fileName += '.json';
+  public async run(): Promise<SmockitTemplateInitResult> {
+    console.log(chalk.yellow('⚠️  Heads up! This command will be retired soon. Please start using "sf smockit template print". All new updates will be available in new command.'));
+        try {
+      const setupInit = new SetupInit(this.argv, this.config);
+      await setupInit.run();
+    } catch (error) {
+      if (error === '') {
+        process.exit(0);
+      }
+      throw error;
     }
-    const flagNullCheck: boolean = fileName !== undefined || fileName !== null || fileName !== '';
-    if (flagNullCheck) {
-      const cwd = process.cwd();
-      const dataGenDirPath = path.join(cwd, 'data_gen');
-      const templateDirPath = path.join(dataGenDirPath, 'templates');
-      const templatePath = path.join(templateDirPath, fileName);
-      if (fs.existsSync(templatePath)) {
-        const readTemplate = fs.readFileSync(templatePath, 'utf8');
-        console.log(chalk.magenta(readTemplate));
-      } else throw new Error(`File not present at path: ${templatePath}`);
-    } else {
-      throw new Error("Expecting value in '--template Name'");
-    }
+    return {
+      path: 'src/commands/smockit/template/print.ts',
+    };
   }
 }

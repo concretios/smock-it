@@ -8,7 +8,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Connection } from '@salesforce/core';
-import { validateConfigJson } from '../commands/template/validate.js';
+// import { validateConfigJson } from '../commands/template/validate.js';
+import { validateConfigJson } from '../commands/smockit/template/validate.js';
+
 import { getTemplateJsonPath } from '../utils/generic_function.js';
 import { templateSchema, SObjectConfigFile } from '../utils/types.js';
 
@@ -27,15 +29,13 @@ export async function loadAndValidateConfig(conn: Connection, templateName: stri
   }
 }
 
-  /**
-   * Reads and parses the SObject configuration file.
-   *
-   * @returns {Promise<SObjectConfigFile>} - A promise that resolves to the parsed SObject configuration data.
-   */
+/**
+ * Reads and parses the SObject configuration file.
+ *
+ * @returns {Promise<SObjectConfigFile>} - A promise that resolves to the parsed SObject configuration data.
+ */
 export async function readSObjectConfigFile(): Promise<SObjectConfigFile> {
-  const configPath = path.resolve(process.cwd(),  'data_gen', 'output', fieldsConfigFile);
+  const configPath = path.resolve(process.cwd(), 'data_gen', 'output', fieldsConfigFile);
   const configData = await fs.promises.readFile(configPath, 'utf-8');
   return JSON.parse(configData) as SObjectConfigFile;
 }
-
-
