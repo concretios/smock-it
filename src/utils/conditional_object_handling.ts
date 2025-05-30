@@ -173,5 +173,9 @@ export const salesforceErrorMap: Record<string, string> = {
     FIELD_INTEGRITY_EXCEPTION: 'The field on object "{object}" cannot be accessed due to restrictions. Please check field-level security or contact your Salesforce admin.',
     STORAGE_LIMIT_EXCEEDED: 'You have reached the current data storage limit. Consider cleaning up or upgrading to keep things running smoothly..',
     INVALID_FIELD_IN_RECORD: 'The field "{field}" on object "{object}" is invalid. Please verify your configuration.',
+    NUMBER_OUTSIDE_VALID_RANGE: 'The value in field "{field}" on object "{object}" is outside the valid range. Please check the value and try again.',
     INVALID_FIELD_FOR_INSERT_UPDATE: 'The field "{field}" on object "{object}" cannot be updated. Please check field permissions.',
+    UNKNOWN_EXCEPTION: 'An unknown error occurred while processing the object "{object}". Please try again later or contact support.',
+    FAILED_ACTIVATION: 'The attempt to activate this component (like a Flow, Process, or Package) failed due to a configuration error or dependency issue',
+    INSUFFICIENT_ACCESS_OR_READONLY: 'The user doesn’t have the necessary permissions to perform this action — either the record is read-only or the user does not have access to edit or view it..',
 };

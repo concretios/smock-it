@@ -1123,10 +1123,17 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           const possibleFields = record ? Object.keys(record).join(', ') : 'unknown field';
           if (result.errors && Array.isArray(result.errors)) {
             result.errors.forEach((err: any) => {
-              const errorCode = err.statusCode || 'UNKNOWN_ERROR';
+              let errorCode: string;
+              if (typeof err != 'object') {
+                errorCode = err.split(':')[0].trim().toUpperCase();
+              } else if (typeof err === 'object' && err !== null && 'statusCode' in err) {
+                errorCode = err.statusCode
+              } else {
+                errorCode = 'UNKNOWN_ERROR';
+              }
               const fields = err.fields || [];
               const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-              const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues..`;
+              const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues...${errorCode}`;
               const humanReadableMessage = errorTemplate
                 .replace('{field}', fieldList)
                 .replace('{object}', sObjectName)
@@ -1244,12 +1251,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   }
 
 
-
-
-
-
-
-
   /**
    * Updates the set of created record IDs for a specified Salesforce object based on the results of an insert operation.
    * This method filters the successful results and extracts their IDs, then updates the `createdRecordsIds` map with these IDs.
@@ -1350,6 +1351,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         'DestinationLocationId',
         'SourceLocationId',
         'WorkOrderId',
+        'OriginalOrderItemId',
         'WorkOrderLineItemId',
         'visitorAddressId',
         'MessagingChannelUsageId',
@@ -1362,11 +1364,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         'ContentModifiedById',
         'ContentDocumentId',
         'PicklistId',
-
         'EntitlementId',
         'MaintenancePlanId',
         'ReturnOrderLineItemId',
-
+        'ProductRequestLineItemId',
         'ProductServiceCampaignItemId',
         'ServiceTerritoryId',
         'ServiceReportTemplateId',
@@ -1388,7 +1389,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         'PaymentGatewayId',
         'PaymentMethodId',
         'ShiftTemplateId',
-        'PaymentGatewayProviderId'
+        'PaymentGatewayProviderId',
+        'ReturnedById',
+
       ];
 
 
@@ -1396,7 +1399,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
         details.type = 'Custom List';
         const isMasterDetail = !isParentObject ? item.relationshipType !== 'lookup' : !item.IsNillable;
-        if (item.QualifiedApiName === 'ContactId' && item.ReferenceTo.referenceTo[0] === 'Contact' && item.RelationshipName === 'Contact') {
+        // Creating new account record for the reference asset 
+        if (item.QualifiedApiName === 'ContactId' && item.ReferenceTo.referenceTo[0] === 'Contact' && item.RelationshipName === 'Account') {
           details.values = await this.fetchRelatedMasterRecordIds(conn, 'Account', object);
         }
         if (item.QualifiedApiName === 'ContactId' && item.ReferenceTo.referenceTo[0] === 'Contact') {
@@ -1417,6 +1421,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         }
 
         else if (isMasterDetail) {
+          if (item.name === 'OrderId' && item.referenceTo === 'Order') {
+            details.values = await this.fetchRelatedMasterRecordIds(conn, 'Order', object);
+            processedFields.push(details);
+            continue;
+          }
           if (object === 'Contract' && item.QualifiedApiName === 'AccountId' && item.RelationshipName === 'Account') {
             continue;
           }
@@ -1511,7 +1520,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       throw new Error(`Too many levels of related records were followed for ${referenceTo}. Please simplify the relationship path or reduce nesting.`);
     }
 
-    if (referenceTo === 'Order' || referenceTo === 'Pricebookentry') {
+    if ((referenceTo === 'Order' || referenceTo === 'Pricebookentry') && object !== 'returnorder') {
       throw new Error(`SmockIt cannot generate data for the reference sObject: ${chalk.blue(referenceTo)}. Please try using a different sObject.`);
     }
 
@@ -1555,6 +1564,23 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         label: 'Account ID',
       };
     }
+
+    if (referenceTo === 'Order') {
+      const accountResult = await conn.query('SELECT Id FROM Account ORDER BY CreatedDate DESC LIMIT 1');
+      const accountIds = accountResult.records.map((record: any) => record.Id);
+      fieldMap['Status'] = {
+        type: 'Custom List',
+        values: ['Draft'],
+        label: 'Status',
+      };
+      fieldMap['AccountId'] = {
+        type: 'reference',
+        values: accountIds,
+        label: 'Account ID',
+      };
+
+    }
+
 
     // Getting the values for parent fields records 
     const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
