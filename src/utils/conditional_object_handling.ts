@@ -41,10 +41,17 @@ export async function insertRecordsspecial(
                 const possibleFields = record ? Object.keys(record).join(', ') : 'unknown field';
                 if (result.errors && Array.isArray(result.errors)) {
                     result.errors.forEach((err: any) => {
-                        const errorCode = err.statusCode || 'UNKNOWN_ERROR';
+                        let errorCode: string;
+                        if (typeof err != 'object') {
+                            errorCode = err.split(':')[0].trim().toUpperCase();
+                        } else if (typeof err === 'object' && err !== null && 'statusCode' in err) {
+                            errorCode = err.statusCode
+                        } else {
+                            errorCode = 'UNKNOWN_ERROR';
+                        }
                         const fields = err.fields || [];
                         const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-                        const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues..`;
+                        const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues...${errorCode}`;
                         const humanReadableMessage = errorTemplate
                             .replace('{field}', fieldList)
                             .replace('{object}', sObjectName)
@@ -138,7 +145,7 @@ export async function insertRecordsspecial(
         console.error(chalk.yellowBright(`❌ Failed to insert ${failedCount} record(s) for sObject: ${object}`));
         console.error(chalk.whiteBright('Error breakdown:'));
         errorCountMap.forEach((count, message) => {
-            console.error(`• Record(s) failed with: ${chalk.redBright(message)}`);
+            console.error(`• Insertion failed with: ${chalk.redBright(message)}`);
         });
     }
 
@@ -146,36 +153,36 @@ export async function insertRecordsspecial(
 }
 
 
-export const restrictedObjects = ['accountcleaninfo', 'activity', 'timeslot', 'pricebookentry', 'paymentgatewayprovider', 'consumptionschedule', 'AppointmentTopicTimeSlot', 'approvalsubmission', 'approvalworkitem', 'approvalsubmissiondetail', 'assetaction', 'assetactionsource', 'assetstateperiod', 'contactcleaninfo', 'creditmemo', 'creditmemoinvapplication', 'creditmemoline', 'entitymilestone', 'financebalancesnapshot', 'floworchestrationinstance', 'floworchestrationlog', 'floworchestrationstageinstance', 'floworchestrationstepinstance', 'floworchestrationworkitem', 'invoice', 'invoiceline', 'leadcleaninfo', 'paymentmethod', 'serializedproducttransaction', 'serviceappointmentcapacityusage'];
+export const restrictedObjects = ['accountcleaninfo', 'activity', 'timeslot', 'pricebookentry', 'paymentgatewayprovider', 'consumptionschedule', 'AppointmentTopicTimeSlot', 'approvalsubmission', 'approvalworkitem', 'dandbcompany', 'approvalsubmissiondetail', 'assetaction', 'assetactionsource', 'assetstateperiod', 'contactcleaninfo', 'creditmemo', 'creditmemoinvapplication', 'creditmemoline', 'entitymilestone', 'financebalancesnapshot', 'floworchestrationinstance', 'floworchestrationlog', 'floworchestrationstageinstance', 'floworchestrationstepinstance', 'floworchestrationworkitem', 'invoice', 'invoiceline', 'leadcleaninfo', 'paymentmethod', 'serializedproducttransaction', 'serviceappointmentcapacityusage'];
 
 export const userLicenseObjects = new Set(['resourceabsence', 'resourcepreference', 'servicecrewmember', 'serviceresource', 'serviceresourcecapacity', 'serviceresourcepreference', 'serviceresourceskill', 'serviceterritorymember', 'timesheet', 'timesheetentry', 'user', 'userprovisioningrequest', 'workbadge', 'workthanks', 'shift']);
 
 export const salesforceErrorMap: Record<string, string> = {
-    REQUIRED_FIELD_MISSING: 'Some required field on object "{object}" is missing. Please ensure it is filled.',
-    INVALID_CROSS_REFERENCE_KEY: 'The referenced record for field on object "{object}" is missing or invalid. Please ensure the related data exists.',
-    INVALID_TYPE_ON_FIELD_IN_RECORD: 'The value for field "{field}" on object "{object}" doesn’t match the expected type. Please check dates, numbers, or picklist options.',
-    STRING_TOO_LONG: 'The value in the field "{field}" on the object "{object}" exceeds the allowed length. Please shorten it or use fieldsToConsider to specify a shorter value.',
-    MAXIMUM_HIERARCHY_TREE_SIZE_REACHED: 'The hierarchy for object "{object}" exceeds the supported depth. Please simplify the structure.',
-    INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST: 'The value for field "{field}" on object "{object}" is invalid. Please use one of the allowed picklist values.',
-    INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY: 'You don’t have permission to access the record referenced by field "{field}" on object "{object}". Please contact your Salesforce admin.',
-    DUPLICATES_DETECTED: 'A duplicate record was detected for object "{object}". Please review your data to avoid duplicates.',
-    DUPLICATE_VALUE: 'A record with the same value in field "{field}" on object "{object}" already exists. Please check for duplicates.',
+    REQUIRED_FIELD_MISSING: 'Some required fields [ {field} ] are missing on the "{object}". Please make sure to include these fields in fieldsToConsider before proceeding.',
+    INVALID_CROSS_REFERENCE_KEY: 'It appears the referenced record for "{object}" may be missing or incorrect. Kindly review your linked data to ensure all details are accurate.',
+    INVALID_TYPE_ON_FIELD_IN_RECORD: 'The value entered in [ {field} ] for "{object}" appears invalid. Kindly verify that dates, numbers, or selections are entered correctly.',
+    STRING_TOO_LONG: 'A few values in [ {field} ] for "{object}" have exceeded the ideal length. Please shorten them to ensure smooth processing, or try using  fieldsToConsider to choose shorter values.',
+    MAXIMUM_HIERARCHY_TREE_SIZE_REACHED: 'The hierarchy for "{object}" is deeper than supported. Please consider simplifying the structure to proceed smoothly.',
+    INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST: 'The value you entered in [ {field} ] for "{object}" is not valid. Please use one of the allowed picklist values.',
+    INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY: 'You don’t have permission to access the record referenced by field [ {field} ] on object "{object}". Please contact your Salesforce admin.',
+    DUPLICATES_DETECTED: 'Some duplicate information has been found for "{object}". Please take a moment to review your data .',
+    DUPLICATE_VALUE: 'A record with the same value in field [ {field} ] on object "{object}" already exists. Kindly review and adjust to ensure data accuracy.',
     INVALID_OPERATION: 'The operation on object "{object}" couldn’t be completed due to business rules. Please review your input.',
-    CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: 'The record for object "{object}" failed validation. Please contact support.',
+    CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: 'The record for "{object}" did not pass validation due to certain criteria not being met.Please contact support.',
     STANDARD_PRICE_NOT_DEFINED: 'SmockIt will not be able to generate the data for the sObject "{object}". Please try for the supported sObject!',
     UNABLE_TO_LOCK_ROW: 'The record for object "{object}" is currently locked by another process. Please try again shortly.',
     LIMIT_EXCEEDED: 'The data processing limit has been reached. Please reduce the size or try again later.',
     REQUEST_LIMIT_EXCEEDED: 'The API request limit for object "{object}" has been reached. Please wait and try again.',
-    FIELD_CUSTOM_VALIDATION_EXCEPTION: 'The field "{field}" on object "{object}" doesn’t meet validation criteria. Please review and try again.',
-    FIELD_FILTER_VALIDATION_EXCEPTION: 'The value in field "{field}" on object "{object}" doesn’t meet the filter criteria. Please review and try again.',
-    INVALID_FIELD: 'The field "{field}" on object "{object}" is invalid. Please verify your configuration.',
-    INVALID_ID_FIELD: 'The ID in field "{field}" on object "{object}" is incorrect. Please verify the record ID.',
+    FIELD_CUSTOM_VALIDATION_EXCEPTION: 'The field [ {field} ] on object "{object}" doesn’t meet validation criteria. Please review and try again.',
+    FIELD_FILTER_VALIDATION_EXCEPTION: 'The value in field [ {field} ] on object "{object}" doesn’t meet the filter criteria. Please review and try again.',
+    INVALID_FIELD: 'The field [ {field} ] on object "{object}" is invalid. Please verify your configuration.',
+    INVALID_ID_FIELD: 'The ID in field [ {field} ] on object "{object}" is incorrect. Please verify the record ID.',
     FIELD_INTEGRITY_EXCEPTION: 'The field on object "{object}" cannot be accessed due to restrictions. Please check field-level security or contact your Salesforce admin.',
     STORAGE_LIMIT_EXCEEDED: 'You have reached the current data storage limit. Consider cleaning up or upgrading to keep things running smoothly..',
-    INVALID_FIELD_IN_RECORD: 'The field "{field}" on object "{object}" is invalid. Please verify your configuration.',
+    INVALID_FIELD_IN_RECORD: 'The field [ {field} ] on object "{object}" is invalid. Please verify your configuration.',
     NUMBER_OUTSIDE_VALID_RANGE: 'The value in field "{field}" on object "{object}" is outside the valid range. Please check the value and try again.',
-    INVALID_FIELD_FOR_INSERT_UPDATE: 'The field "{field}" on object "{object}" cannot be updated. Please check field permissions.',
+    INVALID_FIELD_FOR_INSERT_UPDATE: 'The field [ {field} ] on object "{object}" cannot be updated. Please check field permissions.',
     UNKNOWN_EXCEPTION: 'An unknown error occurred while processing the object "{object}". Please try again later or contact support.',
-    FAILED_ACTIVATION: 'The attempt to activate this component (like a Flow, Process, or Package) failed due to a configuration error or dependency issue',
+    FAILED_ACTIVATION: 'The input provided isn’t compatible with the field’s required type. Kindly verify and adjust the value.',
     INSUFFICIENT_ACCESS_OR_READONLY: 'The user doesn’t have the necessary permissions to perform this action — either the record is read-only or the user does not have access to edit or view it..',
 };

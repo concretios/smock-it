@@ -189,8 +189,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       );
       failedCount = failedInsertions; // Update the failed count
 
-      const resultEntry = createResultEntryTable(object, outputFormat, failedCount);
-      // adding values to the result output table
+      const resultEntry = createResultEntryTable(object, outputFormat, failedCount, countofRecordsToGenerate);      // adding values to the result output table
       table.addRow(resultEntry);
     }
     // Save created record IDs file
@@ -720,17 +719,21 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           insertedIds.push(result.id);
         }
         else if (result.errors) {
-          const record = jsonData[index];
-          const possibleFields = record ? Object.keys(record).join(', ') : 'unknown field';
           result.errors.forEach((error) => {
-            const errorCode = (error as { statusCode?: string })?.statusCode || 'UNKNOWN_ERROR';
+            let errorCode: string;
+            if (typeof error != 'object') {
+              errorCode = error.split(':')[0].trim().toUpperCase();
+            } else if (typeof error === 'object' && error !== null && 'statusCode' in error) {
+              errorCode = error.statusCode;
+            } else {
+              errorCode = 'UNKNOWN_ERROR';
+            }
             const fields = (error as { fields?: string[] })?.fields || [];
-            const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues.`;
+            const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
+            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
             const humanReadableMessage = errorTemplate
               .replace('{field}', fieldList)
-              .replace('{object}', object)
-              .replace('{possibleFields}', possibleFields);
+              .replace('{object}', object);
             const currentCount = errorMessages.get(humanReadableMessage) ?? 0;
             errorMessages.set(humanReadableMessage, currentCount + 1);
             failedCount++;
@@ -743,13 +746,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     } catch (error) {
       const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
       const fields = (error as any).fields || [];
-      const possibleFields = jsonData[0] ? Object.keys(jsonData[0]).join(', ') : 'unknown field';
-      const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-      const errorTemplate = salesforceErrorMap[errorCode] || ` Failed to insert "${object}" records due to technical issues.`;
+      const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
+      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
       const humanReadableMessage = errorTemplate
         .replace('{field}', fieldList)
-        .replace('{object}', object)
-        .replace('{possibleFields}', possibleFields);
+        .replace('{object}', object);
       console.error(chalk.redBright(`Error (${failedCount + 1}): ${humanReadableMessage}`));
       return { failedCount: failedCount + 1, insertedIds };
     }
@@ -1025,7 +1026,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     return mergedFields;
   }
 
-  /* createRecord starts here*/
 
   /**
    * Reads and processes fields from the initial JSON file for the specified Salesforce object
@@ -1119,25 +1119,23 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       (Array.isArray(insertResults) ? insertResults : [insertResults]).map((result, index) => {
         if (!result.success) {
           failedCount++;
-          const record = dataArray[startIndex + index]; // Get the record that failed
-          const possibleFields = record ? Object.keys(record).join(', ') : 'unknown field';
+
           if (result.errors && Array.isArray(result.errors)) {
             result.errors.forEach((err: any) => {
               let errorCode: string;
               if (typeof err != 'object') {
                 errorCode = err.split(':')[0].trim().toUpperCase();
               } else if (typeof err === 'object' && err !== null && 'statusCode' in err) {
-                errorCode = err.statusCode
+                errorCode = err.statusCode;
               } else {
                 errorCode = 'UNKNOWN_ERROR';
               }
               const fields = err.fields || [];
-              const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-              const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues...${errorCode}`;
+              const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
+              const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
               const humanReadableMessage = errorTemplate
                 .replace('{field}', fieldList)
-                .replace('{object}', sObjectName)
-                .replace('{possibleFields}', possibleFields);
+                .replace('{object}', sObjectName);
               const currentCount = errorCountMap.get(humanReadableMessage) ?? 0;
               errorCountMap.set(humanReadableMessage, currentCount + 1);
             });
@@ -1157,10 +1155,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         results.push(...mapResults(insertResults, 0));
 
         if (failedCount > 0) {
-          console.error(chalk.yellowBright(`Failed to insert ${failedCount} record(s) for sObject ${sObjectName}`));
+          console.error(chalk.yellowBright(`❌ Failed to insert ${failedCount} record(s) for sObject ${sObjectName}`));
           console.error(chalk.whiteBright('Error breakdown:'));
           errorCountMap.forEach((count, message) => {
-            console.error(`• Record(s) failed: ${chalk.redBright(message)}`);
+            console.error(`• Insertion failed: ${chalk.redBright(message)}`);
           });
         }
 
@@ -1198,13 +1196,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           batch.on('error', (err: Error) => {
             const errorCode = (err as any).statusCode || 'UNKNOWN_ERROR';
             const fields = (err as any).fields || [];
-            const possibleFields = batchData[0] ? Object.keys(batchData[0]).join(', ') : 'unknown field';
-            const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues.`;
+            const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
+            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
             const humanReadableMessage = errorTemplate
               .replace('{field}', fieldList)
-              .replace('{object}', sObjectName)
-              .replace('{possibleFields}', possibleFields);
+              .replace('{object}', sObjectName);
             const currentCount = errorCountMap.get(humanReadableMessage) ?? 0;
             errorCountMap.set(humanReadableMessage, currentCount + batchData.length);
             failedCount += batchData.length;
@@ -1230,26 +1226,23 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         console.error(chalk.yellowBright(`❌ Failed to insert ${failedCount} record(s) for sObject: ${sObjectName}`));
         console.error(chalk.whiteBright('Error breakdown:'));
         errorCountMap.forEach((count, message) => {
-          console.error(`• Record(s) failed: ${chalk.redBright(message)}`);
+          console.error(`• Insertion failed: ${chalk.redBright(message)}`);
         });
       }
     } catch (error) {
       const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
       const fields = (error as any).fields || [];
-      const possibleFields = dataArray[0] ? Object.keys(dataArray[0]).join(', ') : 'unknown field';
-      const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues.`;
+      const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN FIELD';
+      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
       const humanReadableMessage = errorTemplate
         .replace('{field}', fieldList)
-        .replace('{object}', sObjectName)
-        .replace('{possibleFields}', possibleFields);
+        .replace('{object}', sObjectName);
       progressBar.stop();
       throw new Error(humanReadableMessage);
     }
 
     return results;
   }
-
 
   /**
    * Updates the set of created record IDs for a specified Salesforce object based on the results of an insert operation.

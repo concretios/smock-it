@@ -49,13 +49,19 @@ export function createTable(): Table {
   });
 }
 
-export function createResultEntryTable(object: string, outputFormat: string[], failedCount: number): ResultEntry {
+export function createResultEntryTable(object: string, outputFormat: string[], failedCount: number, count: number): ResultEntry {
   return {
     'SObject(s)': object.toUpperCase(),
     JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
     CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
     DI:
-      outputFormat.includes('di') || outputFormat.includes('DI') ? (failedCount > 0 ? chalk.red('X') : '\u2714') : '-',
+      outputFormat.includes('di') || outputFormat.includes('DI')
+        ? failedCount === count
+          ? chalk.red('X')
+          : failedCount > 0
+            ? chalk.red('X(Partially Failed)')
+            : '\u2714'
+        : '-',
     'Failed(DI)': failedCount,
   };
 }
