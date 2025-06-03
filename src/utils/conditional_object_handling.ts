@@ -51,7 +51,7 @@ export async function insertRecordsspecial(
                         }
                         const fields = err.fields || [];
                         const fieldList = fields.length > 0 ? fields.join(', ') : possibleFields;
-                        const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues...${errorCode}`;
+                        const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues: ${errorCode}`;
                         const humanReadableMessage = errorTemplate
                             .replace('{field}', fieldList)
                             .replace('{object}', sObjectName)
@@ -185,4 +185,5 @@ export const salesforceErrorMap: Record<string, string> = {
     UNKNOWN_EXCEPTION: 'An unknown error occurred while processing the object "{object}". Please try again later or contact support.',
     FAILED_ACTIVATION: 'The input provided isn’t compatible with the field’s required type. Kindly verify and adjust the value.',
     INSUFFICIENT_ACCESS_OR_READONLY: 'The user doesn’t have the necessary permissions to perform this action — either the record is read-only or the user does not have access to edit or view it..',
+    INVALID_INPUT:'Some of the input values for the object "{object}" seems to be incorrect. Please check the details and try again.',
 };

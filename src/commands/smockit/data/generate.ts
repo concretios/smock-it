@@ -730,7 +730,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             }
             const fields = (error as { fields?: string[] })?.fields || [];
             const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
-            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
+            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
             const humanReadableMessage = errorTemplate
               .replace('{field}', fieldList)
               .replace('{object}', object);
@@ -747,7 +747,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
       const fields = (error as any).fields || [];
       const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
-      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
+      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
       const humanReadableMessage = errorTemplate
         .replace('{field}', fieldList)
         .replace('{object}', object);
@@ -1132,7 +1132,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
               }
               const fields = err.fields || [];
               const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
-              const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
+              const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues: ${errorCode}`;
               const humanReadableMessage = errorTemplate
                 .replace('{field}', fieldList)
                 .replace('{object}', sObjectName);
@@ -1197,7 +1197,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             const errorCode = (err as any).statusCode || 'UNKNOWN_ERROR';
             const fields = (err as any).fields || [];
             const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
-            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
+            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues: ${errorCode}`;
             const humanReadableMessage = errorTemplate
               .replace('{field}', fieldList)
               .replace('{object}', sObjectName);
@@ -1233,7 +1233,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
       const fields = (error as any).fields || [];
       const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN FIELD';
-      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to technical issues. ${errorCode}`;
+      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues: ${errorCode}`;
       const humanReadableMessage = errorTemplate
         .replace('{field}', fieldList)
         .replace('{object}', sObjectName);

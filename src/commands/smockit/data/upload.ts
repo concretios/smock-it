@@ -142,8 +142,6 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
 
   private static processInsertResults(sobject: string, insertResults: CreateResult[]): void {
     const failedRecords: number = insertResults.filter((result) => !result.success).length;
-console.log(chalk.yellow.bold(`${failedRecords} record(s) failed to insert.`));
-
     const insertedIds: string[] = [];
 
     insertResults.forEach((result, index) => {

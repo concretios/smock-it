@@ -59,7 +59,7 @@ export function createResultEntryTable(object: string, outputFormat: string[], f
         ? failedCount === count
           ? chalk.red('X')
           : failedCount > 0
-            ? chalk.red('X(Partially Failed)')
+            ? chalk.red('X (Partially Failed)')
             : '\u2714'
         : '-',
     'Failed(DI)': failedCount,

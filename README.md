@@ -145,7 +145,9 @@ Smock-it generates output based on the format provided in the template configura
 Create fresh template for data generation. [Read more](https://github.com/concretios/smock-it/wiki/Template-Init-Command)
 
 ``` 
-sf template init [--default]
+⚠️ Warning: The template create command 'sf template init [--default]' will be deprecated soon. Use
+
+sf smockit template init [--default]
 ```
 
 #### 2\. Validate Template
@@ -153,7 +155,9 @@ sf template init [--default]
 Check data generation template for correctness. [Read more](https://github.com/concretios/smock-it/wiki/Template-Validate-Command)
 
 ``` 
-sf template validate -t <templateFileName> -a <aliasorUsername>
+⚠️ Warning: The template validate command 'sf template validate' will be deprecated soon. Use
+
+sf smockit template validate -t <templateFileName> -a <aliasorUsername>
 ```
 
 #### 3\. Generate Data
@@ -161,7 +165,9 @@ sf template validate -t <templateFileName> -a <aliasorUsername>
 Generate and/or insert data based on the objects and settings defined within the template. [Read more](https://github.com/concretios/smock-it/wiki/Data-Generate-Command)
 
 ``` 
-sf data generate -t <templateFileName> -a <aliasorUsername>
+⚠️ Warning: The template generate command 'sf template generate' will be deprecated soon. Use
+
+sf smockit data generate -t <templateFileName> -a <aliasorUsername>
 ```
 
 **Note:** The alias name or username of the Salesforce Org is required.
@@ -171,7 +177,9 @@ sf data generate -t <templateFileName> -a <aliasorUsername>
 Upload generated data (CSV, JSON) to multiple orgs. [Read more](https://github.com/concretios/smock-it/wiki/Data-Upload-Command)
 
 ``` 
-sf data upload -u <filename.json|filename.csv> -a <alias_or_username> -s <sObject>
+⚠️ Warning: The template upload command 'sf data upload' will be deprecated soon. Use
+
+sf smockit data upload -u <filename.json|filename.csv> -a <alias_or_username> -s <sObject>
 ```
 
 **Note**: Make sure to append the filename with .json or .csv to upload the data.
@@ -181,7 +189,9 @@ sf data upload -u <filename.json|filename.csv> -a <alias_or_username> -s <sObjec
 Review the template configuration before using it to generate data in read-only. [Read more](https://github.com/concretios/smock-it/wiki/Template-Print-Command)
 
 ``` 
-sf template print -t <templateFileName>
+⚠️ Warning: The template print command 'sf template print' will be deprecated soon. Use
+
+sf smockit template print -t <templateFileName>
 ```
 
 #### 6\. Upsert Configurations
@@ -189,7 +199,9 @@ sf template print -t <templateFileName>
 Modify or add configuration to an existing template. [Read more](https://github.com/concretios/smock-it/wiki/Template-Upsert-Command)
 
 ``` 
-sf template upsert -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
+⚠️ Warning: The template upsert command 'sf template upsert' will be deprecated soon. Use
+
+sf smockit template upsert -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
 ```
 
 #### 7\. Remove Configurations
@@ -197,7 +209,9 @@ sf template upsert -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <
 Remove specific configurations from an existing data generation template. [Read more](https://github.com/concretios/smock-it/wiki/Template-Remove-Command)
 
 ``` 
-sf template remove -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
+⚠️ Warning: The template remove command 'sf template remove' will be deprecated soon. Use
+
+sf smockit template remove -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
 ```
 
 ## Flags
@@ -210,6 +224,7 @@ sf template remove -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <
 | `--namespaceToExclude` | `-x` | Namespace to Exclude | Exclude specific namespaces from generating record data for namespace fields. Multiple namespaces can be separated by commas. |
 | `--outputFormat` | `-f` | Output Format | Define the output format(s) for generated data (e.g., CSV, JSON, DI). Multiple formats can be specified, separated by commas. |
 | `--sObject` | `-s` | Specific Object | Target a specific object and override its existing settings. If not found in the template, an "add object" prompt will appear. |
+| `--upload` | `-u` | Upload |The -u command is used to upload the generated JSON or CSV data into the target Salesforce org. |
 | `--fieldsToExclude` | `-e` | Fields to Exclude | Exclude specific fields from test data generation for a given object. Applies only at the object level. |
 | `--fieldsToConsider` | `-i` | Fields to Consider | Include specific fields from test data generation for a given object. This applies only at the object level, with the specified values. |
 | `--pickLeftFields` | `-p` | Pick Left Fields | If true, generates data for all fields except those listed in `FieldsToExclude`. If false, generates data only for the fields specified in `FieldsToConsider`. |
