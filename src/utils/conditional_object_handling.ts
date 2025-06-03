@@ -165,7 +165,7 @@ export const salesforceErrorMap: Record<string, string> = {
     MAXIMUM_HIERARCHY_TREE_SIZE_REACHED: 'The hierarchy for "{object}" is deeper than supported. Please consider simplifying the structure to proceed smoothly.',
     INVALID_OR_NULL_FOR_RESTRICTED_PICKLIST: 'The value you entered in [ {field} ] for "{object}" is not valid. Please use one of the allowed picklist values.',
     INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY: 'You don’t have permission to access the record referenced by field [ {field} ] on object "{object}". Please contact your Salesforce admin.',
-    DUPLICATES_DETECTED: 'Some duplicate information has been found for "{object}". Please take a moment to review your data .',
+    DUPLICATES_DETECTED: 'Duplicate records were found for "{object}". Please review and remove them from the org.',
     DUPLICATE_VALUE: 'A record with the same value in field [ {field} ] on object "{object}" already exists. Kindly review and adjust to ensure data accuracy.',
     INVALID_OPERATION: 'The operation on object "{object}" couldn’t be completed due to business rules. Please review your input.',
     CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY: 'The record for "{object}" did not pass validation due to certain criteria not being met.Please contact support.',
