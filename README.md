@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/SF--Plugin--Test%20Data%20Generator-blue" />
 </p>
 
-# Smock-it (v3.0.0)
+# Smock-it (v3.0.1)
 
 Smock-it is a powerful CLI plugin, a tool for generating mock data for Salesforce testing. It simplifies the creation of compliant, relationship-aware test data, allowing developers, QA teams, and admins to quickly generate and use unique datasets directly within their Salesforce orgs.
 
