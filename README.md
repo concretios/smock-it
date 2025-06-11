@@ -144,9 +144,9 @@ Smock-it generates output based on the format provided in the template configura
 
 Create fresh template for data generation. [Read more](https://github.com/concretios/smock-it/wiki/Template-Init-Command)
 
-``` 
 ⚠️ Warning: The template create command 'sf template init [--default]' will be deprecated soon. Use
 
+``` 
 sf smockit template init [--default]
 ```
 
@@ -154,9 +154,9 @@ sf smockit template init [--default]
 
 Check data generation template for correctness. [Read more](https://github.com/concretios/smock-it/wiki/Template-Validate-Command)
 
-``` 
 ⚠️ Warning: The template validate command 'sf template validate' will be deprecated soon. Use
 
+``` 
 sf smockit template validate -t <templateFileName> -a <aliasorUsername>
 ```
 
@@ -164,9 +164,9 @@ sf smockit template validate -t <templateFileName> -a <aliasorUsername>
 
 Generate and/or insert data based on the objects and settings defined within the template. [Read more](https://github.com/concretios/smock-it/wiki/Data-Generate-Command)
 
-``` 
 ⚠️ Warning: The template generate command 'sf template generate' will be deprecated soon. Use
 
+``` 
 sf smockit data generate -t <templateFileName> -a <aliasorUsername>
 ```
 
@@ -176,9 +176,9 @@ sf smockit data generate -t <templateFileName> -a <aliasorUsername>
 
 Upload generated data (CSV, JSON) to multiple orgs. [Read more](https://github.com/concretios/smock-it/wiki/Data-Upload-Command)
 
-``` 
 ⚠️ Warning: The template upload command 'sf data upload' will be deprecated soon. Use
 
+``` 
 sf smockit data upload -u <filename.json|filename.csv> -a <alias_or_username> -s <sObject>
 ```
 
@@ -188,9 +188,9 @@ sf smockit data upload -u <filename.json|filename.csv> -a <alias_or_username> -s
 
 Review the template configuration before using it to generate data in read-only. [Read more](https://github.com/concretios/smock-it/wiki/Template-Print-Command)
 
-``` 
 ⚠️ Warning: The template print command 'sf template print' will be deprecated soon. Use
 
+``` 
 sf smockit template print -t <templateFileName>
 ```
 
@@ -198,9 +198,9 @@ sf smockit template print -t <templateFileName>
 
 Modify or add configuration to an existing template. [Read more](https://github.com/concretios/smock-it/wiki/Template-Upsert-Command)
 
-``` 
 ⚠️ Warning: The template upsert command 'sf template upsert' will be deprecated soon. Use
 
+``` 
 sf smockit template upsert -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
 ```
 
@@ -208,9 +208,9 @@ sf smockit template upsert -t <templateFileName> [-s <sObject>] [-c <recordCount
 
 Remove specific configurations from an existing data generation template. [Read more](https://github.com/concretios/smock-it/wiki/Template-Remove-Command)
 
-``` 
 ⚠️ Warning: The template remove command 'sf template remove' will be deprecated soon. Use
 
+``` 
 sf smockit template remove -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
 ```
 
