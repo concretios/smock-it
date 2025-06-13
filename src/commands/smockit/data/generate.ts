@@ -101,57 +101,51 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    *
    * @returns {Promise<DataGenerateResult>} - The result of the data generation, including the path to the template file.
    */
+public async run(): Promise<DataGenerateResult> {
+  const { flags } = await this.parse(DataGenerate);
+  const conn = await connectToSalesforceOrg(flags.alias);
+  const baseConfig = await loadAndValidateConfig(conn, flags.templateName);
+  const objectsToProcess = this.processObjectConfiguration(baseConfig, flags.sObject);
 
-  public async run(): Promise<DataGenerateResult> {
-    const { flags } = await this.parse(DataGenerate);
-    const conn = await connectToSalesforceOrg(flags.alias);
-    // load and validate template baseConfig file
-    const baseConfig = await loadAndValidateConfig(conn, flags.templateName);
+  const restrictedObjectsFound = objectsToProcess
+    .map(obj => Object.keys(obj)[0])
+    .filter(key => restrictedObjects.includes(key));
+  const hasRestrictedValue = restrictedObjectsFound.length > 0;
 
-    // Process specific object configuration
-    const objectsToProcess = this.processObjectConfiguration(baseConfig, flags.sObject);
+  if (hasRestrictedValue) {
+    throw new Error(`Smockit will not able to generate the data for the sObject ${chalk.yellow(restrictedObjectsFound.join(', '))}. Please try with different sObject(s).`);
+  }
 
-    const restrictedObjectsFound = objectsToProcess
-      .map(obj => Object.keys(obj)[0])
-      .filter(key => restrictedObjects.includes(key));
-    const hasRestrictedValue = restrictedObjectsFound.length > 0;
+  await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig);
 
-    if (hasRestrictedValue) {
-      throw new Error(`Smockit will not able to generate the data for the sObject ${chalk.yellow(restrictedObjectsFound.join(', '))}. Please try with different sObject(s).`);
+  excludeFieldsSet.clear();
+
+  let sObjectFieldsMap: Map<string, any[]> = new Map();
+  sObjectFieldsMap = await this.getProcessedFields();
+  const generateOutputconfigPath = path.join(process.cwd(), 'data_gen', 'output', fieldsConfigFile);
+  const generatedOutputconfigData = fs.readFileSync(generateOutputconfigPath, 'utf8');
+  const jsonDataForObjectNames: jsonConfig = JSON.parse(generatedOutputconfigData) as jsonConfig;
+  const outputFormat = jsonDataForObjectNames.outputFormat ?? [];
+  const sObjectNames = jsonDataForObjectNames.sObjects.map((sObject: { sObject: string }) => sObject.sObject);
+
+  const outputPathDir = `${path.join(process.cwd())}/data_gen/output/`;
+
+  const table = createTable();
+
+  const startTime = Date.now();
+  for (const object of sObjectNames) {
+    depthForRecord = 0;
+    const currentSObject = jsonDataForObjectNames.sObjects.find(
+      (sObject: { sObject: string }) => sObject.sObject === object
+    );
+    if (!currentSObject) {
+      throw new Error(`No configuration found for object: ${object}`);
     }
-
-    // Generate fields and write generated_output.json config
-    await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig);
-
-    excludeFieldsSet.clear();
-
-    let sObjectFieldsMap: Map<string, any[]> = new Map();
-    sObjectFieldsMap = await this.getProcessedFields();
-    const generateOutputconfigPath = path.join(process.cwd(), 'data_gen', 'output', fieldsConfigFile);
-    const generatedOutputconfigData = fs.readFileSync(generateOutputconfigPath, 'utf8');
-    const jsonDataForObjectNames: jsonConfig = JSON.parse(generatedOutputconfigData) as jsonConfig;
-
-    const outputFormat = jsonDataForObjectNames.outputFormat ?? [];
-    const sObjectNames = jsonDataForObjectNames.sObjects.map((sObject: { sObject: string }) => sObject.sObject);
-
-    const outputPathDir = `${path.join(process.cwd())}/data_gen/output/`;
-
-    const table = createTable();
-
-    let failedCount = 0;
-    const startTime = Date.now();
-    for (const object of sObjectNames) {
-      depthForRecord = 0;
-      const currentSObject = jsonDataForObjectNames.sObjects.find(
-        (sObject: { sObject: string }) => sObject.sObject === object
-      );
-      if (!currentSObject) {
-        throw new Error(`No configuration found for object: ${object}`);
-      }
-      const countofRecordsToGenerate = currentSObject.count;
-      if ((object.toLowerCase() === 'location' || object.toLowerCase() === 'servicecontract') && (countofRecordsToGenerate ?? 1) >= 10000) {
-        throw new Error(chalk.yellow.bold(`Salesforce does not support generating 10,000 or more records for SObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
-      }
+    const countofRecordsToGenerate = currentSObject.count;
+    console.log('countofRecordsToGenerate------>>>', countofRecordsToGenerate);
+    if ((object.toLowerCase() === 'location' || object.toLowerCase() === 'servicecontract') && (countofRecordsToGenerate ?? 1) >= 10000) {
+      throw new Error(chalk.yellow.bold(`Salesforce does not support generating 10,000 or more records for SObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
+    }
 
       if (object.toLowerCase() === 'campaignmember' && (countofRecordsToGenerate ?? 0) > 1) {
         throw new Error(chalk.yellow.bold(`Currently Supports only 1 record for sObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
@@ -180,27 +174,27 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       // save the output file in json and csv format
       saveOutputFileOfJsonAndCsv(jsonData as GenericRecord[], object, outputFormat, flags.templateName);
 
-      // handling failedCount and insertedRecordIds
-      const { failedCount: failedInsertions } = await this.handleDirectInsert(
-        conn,
-        outputFormat,
-        object,
-        jsonData as GenericRecord[]
-      );
-      failedCount = failedInsertions; // Update the failed count
+    // Handle direct insert and get the failed count for this specific object
+    const { failedCount: failedInsertions } = await this.handleDirectInsert(
+      conn,
+      outputFormat,
+      object,
+      jsonData as GenericRecord[]
+    );
+    console.log(`Failed insertions for ${object} ---->> ${failedInsertions}`);
 
-      const resultEntry = createResultEntryTable(object, outputFormat, failedCount, countofRecordsToGenerate);      // adding values to the result output table
-      table.addRow(resultEntry);
-    }
-    // Save created record IDs file
-    saveCreatedRecordIds(outputFormat, flags.templateName);
-    const endTime = Date.now();
-    const totalTime = ((endTime - startTime) / 1000).toFixed(2);
-    this.log(chalk.blue.bold(`\nResults: \x1b]8;;${outputPathDir}\x1b\\${totalTime}(s)\x1b]8;;\x1b\\`));
-    table.printTable();
-    return { path: flags.templateName };
+    // Pass the per-object failedInsertions directly to the table
+    const resultEntry = createResultEntryTable(object, outputFormat, failedInsertions, countofRecordsToGenerate);
+    table.addRow(resultEntry);
   }
 
+  saveCreatedRecordIds(outputFormat, flags.templateName);
+  const endTime = Date.now();
+  const totalTime = ((endTime - startTime) / 1000).toFixed(2);
+  this.log(chalk.blue.bold(`\nResults: \x1b]8;;${outputPathDir}\x1b\\${totalTime}(s)\x1b]8;;\x1b\\`));
+  table.printTable();
+  return { path: flags.templateName };
+}
   /**
    * Processes the `fieldsToConsider` configuration for a given Salesforce object, normalizing key names.
    * If a key starts with `'dp-'`, the prefix is removed before adding it to the result map.
@@ -214,15 +208,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     for (const key of fieldsToConsiderKeys) {
       if (configForObject['fieldsToConsider']) {
         if (key.startsWith('dp-')) {
-          considerMap[key.substring(3)] = configForObject['fieldsToConsider'][key];
+          considerMap[key.substring(3).toLowerCase()] = configForObject['fieldsToConsider'][key];
         } else {
-          considerMap[key] = configForObject['fieldsToConsider'][key];
+          considerMap[key.toLowerCase()] = configForObject['fieldsToConsider'][key];
         }
       }
     }
     return considerMap;
   }
-
   /**
    * Determines the normalized field type based on the input item and whether it belongs to a parent object.
    * Maps certain Salesforce field types like 'string' and 'textarea' to a generalized 'text' type.
@@ -243,7 +236,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
     return itemType;
   }
-
   /**
    * Processes and returns the relevant Salesforce object configuration(s) from the base template.
    * If a specific `objectName` is provided, only the matching configuration is returned; otherwise, all are returned.
@@ -253,63 +245,70 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {string | undefined} objectName - The optional name of a specific object to filter for.
    * @returns {sObjectSchemaType[]} - An array of processed sObject configurations to be used.
    */
-
-  private processObjectConfiguration(baseConfig: templateSchema, objectNames?: string): sObjectSchemaType[] {
+private processObjectConfiguration(baseConfig: templateSchema, objectNames?: string): sObjectSchemaType[] {
     const allObjects = baseConfig.sObjects;
-    if (!objectNames) {
-      const result = allObjects.map(obj => {
+    // console.log('LINE 275 ALLOBJECT', allObjects);
+    console.log('count in baseconfig--->>LINE 483',baseConfig.count);
+    // Define mapping for known keys to their expected case
+    const keyMapping: { [key: string]: string } = {
+        count: 'count',
+        pickleftfields: 'pickLeftFields',
+        fieldstoconsider: 'fieldsToConsider',
+        fieldstoexclude: 'fieldsToExclude'
+    };
+
+    // Helper function to normalize an object
+    const normalizeObject = (obj: any): sObjectSchemaType => {
         const key = Object.keys(obj)[0];
-        return { [key.toLowerCase()]: obj[key] };
-      });
+        const value = obj[key];
+        const lowerKey = key.toLowerCase();
+        const normalizedValue: any = { pickLeftFields: true }; // Default pickLeftFields to true
 
-      // Check for unsupported objects
-      const foundUnsupported = result
-        .map(obj => Object.keys(obj)[0])
-        .filter(key => userLicenseObjects.has(key));
+        for (const [k, v] of Object.entries(value)) {
+            const normalizedKey = k.toLowerCase();
+            const mappedKey = keyMapping[normalizedKey] || normalizedKey;
+            normalizedValue[mappedKey] = mappedKey === 'fieldsToExclude' && Array.isArray(v)
+                ? v.map((field: string) => field.toLowerCase())
+                : v;
+        }
 
-      if (foundUnsupported.length > 0) {
-        throw new Error(`Action blocked for SObjects ${chalk.yellow(foundUnsupported.join(', '))}! Requires Salesforce user license.`);
+        return { [lowerKey]: normalizedValue };
+    };
 
-      }
-      return result;
+    // Helper function to check for unsupported objects
+    const checkUnsupportedObjects = (objects: sObjectSchemaType[]): void => {
+        const foundUnsupported = objects
+            .map(obj => Object.keys(obj)[0])
+            .filter(key => userLicenseObjects.has(key));
+
+        if (foundUnsupported.length > 0) {
+            console.log(`Action blocked for SObjects ${chalk.yellow(foundUnsupported.join(', '))}! Requires Salesforce user license.`);
+        }
+    };
+
+    if (!objectNames) {
+        const result = allObjects.map(normalizeObject);
+        checkUnsupportedObjects(result);
+        return result;
     }
 
     const nameSet = new Set(objectNames.split(',').map(name => name.trim().toLowerCase()));
-    const availableNames = new Set(
-      allObjects.map((obj: any) => Object.keys(obj)[0]?.toLowerCase())
-    );
+    const availableNames = new Set(allObjects.map((obj: any) => Object.keys(obj)[0].toLowerCase()));
 
     const missingNames = Array.from(nameSet).filter(name => !availableNames.has(name));
     if (missingNames.length > 0) {
-      throw new Error(
-        `The following specified objects were not found in template: ${chalk.yellow(missingNames.join(', '))}`
-      );
+        throw new Error(
+            `The following specified objects were not found in template: ${chalk.yellow(missingNames.join(', '))}`
+        );
     }
 
     const matchedObjects = allObjects
-      .map((object: any) => {
-        const key = Object.keys(object)[0];
-        const value = object[key];
-        const lowerKey = key.toLowerCase();
-        if (nameSet.has(lowerKey)) {
-          return { [lowerKey]: value };
-        }
-        return null;
-      })
-      .filter((obj): obj is sObjectSchemaType => obj !== null);
+        .map(obj => nameSet.has(Object.keys(obj)[0].toLowerCase()) ? normalizeObject(obj) : null)
+        .filter((obj): obj is sObjectSchemaType => obj !== null);
 
-    // Check for unsupported objects in matched objects
-    const foundUnsupported = matchedObjects
-      .map(obj => Object.keys(obj)[0])
-      .filter(key => userLicenseObjects.has(key));
-
-    if (foundUnsupported.length > 0) {
-      throw new Error(`Action blocked for ${foundUnsupported.join(', ')}: Requires Salesforce user license.`);
-    }
-
+    checkUnsupportedObjects(matchedObjects);
     return matchedObjects;
-  }
-
+}
   /**
    * Determines the default set of fields to include for processing when no specific field configuration is provided.
    * Filters out fields that are listed in `fieldsToIgnore`, and only returns fields if no `fieldsToConsider`,
@@ -338,6 +337,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         (record) => !fieldsToIgnore.includes(record.QualifiedApiName.toLowerCase())
       );
     }
+    console.log('fieldsToPass-------line 495------>>>',fieldsToPass)
     return fieldsToPass;
   }
 
@@ -434,9 +434,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const outputData: any[] = [];
 
     for (const objectConfig of objectsToProcess) {
+     // console.log('objectConfig------>>',objectConfig);
       const objectName = Object.keys(objectConfig as Record<string, any>)[0];
       const configForObject: sObjectSchemaType = (objectConfig as Record<string, any>)[objectName] as sObjectSchemaType;
-
+     // console.log('configForObject--->>',configForObject);
+      console.log('--------------------LINE 673',objectConfig.count);
       const namespacePrefixToExclude =
         baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
 
@@ -451,7 +453,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const requiredFields = this.getRequiredFields(allFields.records as FieldRecord[]);
       const requiredFieldNames = requiredFields.map((field) => field.QualifiedApiName.toLowerCase());
 
-      let fieldsToExclude = configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
+      let fieldsToExclude= configForObject['fieldsToExclude']?.map((field: string) => field.toLowerCase()) ?? [];
+      console.log('fieldsToExclude------------------->>>',fieldsToExclude);
+
       const fieldsToIgnore = [
         'jigsaw',
         'endtime',
@@ -482,9 +486,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       fieldsToExclude = fieldsToExclude.filter(
         (field: string) => !fieldsToIgnore.includes(field) && !requiredFieldNames.includes(field.toLowerCase())
       );
+      // console.log('fieldsToExclude-----=======>>>',fieldsToExclude);
       fieldsToExclude = [...fieldsToIgnore, ...fieldsToExclude];
-
+      // console.log('fieldsToExclude------>>>',fieldsToExclude);
       const getPickLeftFields = configForObject.pickLeftFields;
+     // console.log('getPickLeftFields---------->>',getPickLeftFields);
       const considerMap = this.processFieldsToConsider(configForObject);
       const fieldsToConsider = Object.keys(considerMap);
 
@@ -578,8 +584,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
               label: inputObject.Label,
             };
           }
-
-
           else {
             let label = inputObject.Label;
             if (
@@ -599,7 +603,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             };
           }
           break;
-
         case 'reference':
           fieldConfig = {
             type: 'reference',
@@ -624,11 +627,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
               picklistValues = ['Draft'];
             }
 
-            if ((objectName === 'alternativepaymentmethod' || objectName === 'paymentauthorization' || objectName === 'refund') && inputObject.QualifiedApiName === 'ProcessingMode') {
+            if ((objectName === 'alternativepaymentmethod' || objectName === 'paymentauthorization' || objectName === 'refund' || objectName === 'digitalwallet') && inputObject.QualifiedApiName === 'ProcessingMode') {
               picklistValues = ['External'];
             }
             if ((objectName === 'paymentauthadjustment' || objectName === 'paymentauthorization' || objectName === 'refund') && inputObject.QualifiedApiName === 'Status') {
               picklistValues = ['Processed'];
+            }
+            if(objectName === 'unitofmeasure' && inputObject.QualifiedApiName === 'Type'){
+              picklistValues = ['distance'];
             }
             fieldConfig = {
               type: 'picklist',
@@ -687,75 +693,101 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {GenericRecord[]} jsonData - The array of records to insert.
    * @returns {Promise<{ failedCount: number; insertedIds: string[] }>} - A promise that resolves to the count of failed inserts and the inserted record IDs.
    */
-  public async handleDirectInsert(
-    conn: Connection,
-    outputFormat: string[],
-    object: string,
-    jsonData: GenericRecord[]
-  ): Promise<{ failedCount: number; insertedIds: string[] }> {
-    if (!outputFormat.includes('DI') && !outputFormat.includes('di')) {
-      return { failedCount: 0, insertedIds: [] };
-    }
-
-    const errorMessages: Map<string, number> = new Map();
-    const insertedIds: string[] = [];
-    let failedCount = 0;
-
-    try {
-      let insertResult;
-      if (
-        object.toLowerCase() === 'order' ||
-        object.toLowerCase() === 'task' ||
-        object.toLowerCase() === 'productitemtransaction' ||
-        object.toLowerCase() === 'event'
-      ) {
-        insertResult = await insertRecordsspecial(conn, object, jsonData);
-      } else {
-        insertResult = await DataGenerate.insertRecords(conn, object, jsonData);
-      }
-
-      insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }, index: number) => {
-        if (result.success && result.id) {
-          insertedIds.push(result.id);
-        }
-        else if (result.errors) {
-          result.errors.forEach((error) => {
-            let errorCode: string;
-            if (typeof error != 'object') {
-              errorCode = error.split(':')[0].trim().toUpperCase();
-            } else if (typeof error === 'object' && error !== null && 'statusCode' in error) {
-              errorCode = error.statusCode;
-            } else {
-              errorCode = 'UNKNOWN_ERROR';
-            }
-            const fields = (error as { fields?: string[] })?.fields || [];
-            const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
-            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
-            const humanReadableMessage = errorTemplate
-              .replace('{field}', fieldList)
-              .replace('{object}', object);
-            const currentCount = errorMessages.get(humanReadableMessage) ?? 0;
-            errorMessages.set(humanReadableMessage, currentCount + 1);
-            failedCount++;
-          });
-        }
-      });
-
-      this.updateCreatedRecordIds(object, insertResult);
-      return { failedCount, insertedIds };
-    } catch (error) {
-      const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
-      const fields = (error as any).fields || [];
-      const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
-      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
-      const humanReadableMessage = errorTemplate
-        .replace('{field}', fieldList)
-        .replace('{object}', object);
-      console.error(chalk.redBright(`Error (${failedCount + 1}): ${humanReadableMessage}`));
-      return { failedCount: failedCount + 1, insertedIds };
-    }
+public async handleDirectInsert(
+  conn: Connection,
+  outputFormat: string[],
+  object: string,
+  jsonData: GenericRecord[]
+): Promise<{ failedCount: number; insertedIds: string[] }> {
+  if (!outputFormat.includes('DI') && !outputFormat.includes('di')) {
+    return { failedCount: 0, insertedIds: [] };
   }
 
+  const errorMessages: Map<string, number> = new Map();
+  const insertedIds: string[] = [];
+  let failedCount = 0;
+
+  // Step 1: Log the input jsonData to verify the number of records being inserted
+ // console.log(`handleDirectInsert: Inserting ${jsonData.length} record(s) for sObject ${object}`);
+ // console.log('jsonData:', JSON.stringify(jsonData));
+
+  try {
+    let insertResult;
+    if (
+      object.toLowerCase() === 'order' ||
+      object.toLowerCase() === 'task' ||
+      object.toLowerCase() === 'productitemtransaction' ||
+      object.toLowerCase() === 'event'
+    ) {
+      insertResult = await insertRecordsspecial(conn, object, jsonData);
+    } else {
+      insertResult = await DataGenerate.insertRecords(conn, object, jsonData);
+    }
+
+    // Step 2: Log the insertResult to verify the number of results
+    // console.log(`handleDirectInsert: insertResult length for ${object}: ${insertResult.length}`);
+    // console.log('insertResult:', JSON.stringify(insertResult));
+
+    // Step 3: Process each result and count failures correctly
+    insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }, index: number) => {
+     // console.log(`Processing result ${index} for ${object}:`, JSON.stringify(result));
+      
+      if (result.success && result.id) {
+        insertedIds.push(result.id);
+       // console.log(`Record ${index} succeeded with ID: ${result.id}`);
+      } else if (result.errors) {
+       // console.log(`Record ${index} failed with ${result.errors.length} errors:`, JSON.stringify(result.errors));
+        failedCount++; // Increment once per failed record
+        
+        // Log errors for diagnostics
+        result.errors.forEach((error) => {
+          let errorCode: string;
+          if (typeof error != 'object') {
+            errorCode = error.split(':')[0].trim().toUpperCase();
+          } else if (typeof error === 'object' && error !== null && 'statusCode' in error) {
+            errorCode = error.statusCode;
+          } else {
+            errorCode = 'UNKNOWN_ERROR';
+          }
+          const fields = (error as { fields?: string[] })?.fields || [];
+          const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
+          const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
+          const humanReadableMessage = errorTemplate
+            .replace('{field}', fieldList)
+            .replace('{object}', object);
+          const currentCount = errorMessages.get(humanReadableMessage) ?? 0;
+         // console.log(`Error message (count ${currentCount + 1}): ${humanReadableMessage}`);
+          errorMessages.set(humanReadableMessage, currentCount + 1);
+        });
+      } else {
+        // Handle cases where result.success is false but no errors are present
+       // console.log(`Record ${index} failed without errors specified`);
+        failedCount++;
+      }
+    });
+
+    // Step 4: Log the final failedCount
+    // console.log(`Total failed records for ${object} in handleDirectInsert: ${failedCount}`);
+    this.updateCreatedRecordIds(object, insertResult);
+    return { failedCount, insertedIds };
+  } catch (error) {
+    const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
+    const fields = (error as any).fields || [];
+    const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
+    const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
+    const humanReadableMessage = errorTemplate
+      .replace('{field}', fieldList)
+      .replace('{object}', object);
+    console.error(chalk.redBright(`Error in handleDirectInsert (${failedCount + 1}): ${humanReadableMessage}`));
+    
+    // Only increment failedCount if no records were processed successfully
+    if (insertedIds.length === 0) {
+      failedCount++;
+    }
+   // console.log(`Final failedCount after catch for ${object}: ${failedCount}`);
+    return { failedCount, insertedIds };
+  }
+} 
   /**
    * Retrieves picklist values for a specified field on a Salesforce object and validates the values against the provided consideration map.
    * Throws an error if any value in the consideration map is missing from the picklist.
@@ -1137,6 +1169,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
                 .replace('{field}', fieldList)
                 .replace('{object}', sObjectName);
               const currentCount = errorCountMap.get(humanReadableMessage) ?? 0;
+             // console.log('current count LINE 1291----->',currentCount)
               errorCountMap.set(humanReadableMessage, currentCount + 1);
             });
           }
@@ -1333,6 +1366,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
       const excludedReferenceFields = [
         'OwnerId',
+        'RecordTypeId',
         'resourceId',
         'ServiceAppointmentId',
         'ServiceContractId',
@@ -1348,8 +1382,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         'WorkOrderLineItemId',
         'visitorAddressId',
         'MessagingChannelUsageId',
-        'FilterCriteriaId',
-        'BundlePolicyId',
+        'FilterCriteriaId', 
         'DocumentVersionId',
         'MessagingChannelId',
         'ContentBodyId',
@@ -1386,8 +1419,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         'ReturnedById',
 
       ];
-
-
       if (isReference && !(excludedReferenceFields.includes(fieldName) && !((object === 'address' || item.ReferenceTo === 'address' || object === 'productrequestlineitem') && fieldName === 'ParentId'))) {
 
         details.type = 'Custom List';
@@ -1440,9 +1471,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
     return processedFields;
   }
-
-
-
   /**
    * Processes the fields from Salesforce records to generate the initial JSON file data.
    * This method delegates the processing to `processFields`.
@@ -1800,20 +1828,21 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const element = array[Math.floor(Math.random() * array.length)];
       return Array.isArray(element) ? element[0] : element;
     };
+// -----product2 handle in data library-----------------\
 
-    if (object === 'product2') {
-      enhancedData.forEach((record, i) => {
-        record['StockKeepingUnit'] = 'SKU-' + Math.floor(Math.random() * 1000000) + i;
-      });
-    }
+    // if (object === 'product2') {
+    //   enhancedData.forEach((record, i) => {
+    //     record['StockKeepingUnit'] = 'SKU-' + Math.floor(Math.random() * 1000000) + i;
+    //   });
+    // }
 
-    if (object === 'dandbcompany') {
-      enhancedData.forEach((record) => {
-        record['DunsNumber'] = Math.floor(Math.random() * 1000000);
-        record['StockExchange'] = 'NYSE';
-      });
+    // if (object === 'dandbcompany') {
+    //   enhancedData.forEach((record) => {
+    //     record['DunsNumber'] = Math.floor(Math.random() * 1000000);
+    //     record['StockExchange'] = 'NYSE';
+    //   });
 
-    }
+    // }
 
     if (object === 'event') {
       const date = new Date();
@@ -1825,43 +1854,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       });
     }
 
-    if (object === 'warrantyterm') {
-      enhancedData.forEach((record) => {
-        record['ExpensesCoveredDuration'] = (Math.floor(Math.random() * 90) + 10);
-        record['ExpensesCovered'] = (Math.floor(Math.random() * 90) + 10);
-        record['PartsCoveredDuration'] = (Math.floor(Math.random() * 90) + 10);
-        record['PartsCovered'] = (Math.floor(Math.random() * 90) + 10);
-        record['LaborCovered'] = (Math.floor(Math.random() * 90) + 10);
-        record['WarrantyDuration'] = (Math.floor(Math.random() * 90) + 10);
-        record['LaborCoveredDuration'] = (Math.floor(Math.random() * 990) + 10);
-      });
-
-    }
-
-    if (object === 'apptbundlepolicy') {
-      enhancedData.forEach((record) => {
-        record['LimitAmountOfBundleMembers'] = (Math.floor(Math.random() * 90) + 10);
-        record['LimitDurationOfBundle'] = (Math.floor(Math.random() * 90) + 10);
-        record['ConstantTimeValue'] = (Math.floor(Math.random() * 90) + 10);
-        record['Priority'] = (Math.floor(Math.random()) + 1);
-      });
-
-    }
-
-
-    if (object === 'unitofmeasure') {
-      enhancedData.forEach((record) => {
-        record['Type'] = 'distance';
-      });
-    }
-
     if (object === 'apptbundleaggrdurdnscale') {
       enhancedData.forEach((record) => {
         record['FromBundleMemberNumber'] = String(Math.floor(Math.random() * 90) + 10);
         record['PercentageOfReduction'] = String(Math.floor(Math.random() * 90) + 10);
       });
     }
-
     if (object === 'consumptionrate') {
       enhancedData.forEach((record) => {
         const lower = Math.floor(Math.random() * 90) + 10;
@@ -1869,44 +1867,18 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         record['UpperBound'] = Math.floor(Math.random() * (900 - (lower - 10))) + lower + 1;
       });
     }
-
     if (object === 'ConsumptionSchedule') {
       enhancedData.forEach((record) => {
-        record['isActive'] = false;
-        record['BillingTermUnit'] = 'Year';
-        record['BillingTerm'] = Math.floor(Math.random() * 5) + 1;
+       record['isActive'] = false;
       });
 
     }
-
     if (object === 'individual') {
       enhancedData.forEach((record) => {
         record['BirthDate'] = '2001-05-10';
-        record['DeathDate'] = '2023-08-11';
+      record['DeathDate'] = '2023-05-10';
       });
     }
-
-    if (object === 'listemail') {
-      const fromAddresses = [
-        'noreply@example.com',
-        'support@dummycorp.com',
-        'sales@fakemail.org',
-        'info@testcompany.net',
-        'admin@mocksite.io',
-        'contact@sampledomain.com',
-        'hello@myfakeemail.com',
-        'updates@notarealmail.org',
-        'service@placeholdermail.com',
-        'feedback@tempmail.dev'
-      ];
-
-      enhancedData.forEach((record) => {
-        const randomIndex = Math.floor(Math.random() * fromAddresses.length);
-        record['FromAddress'] = fromAddresses[randomIndex];
-      });
-    }
-
-
     if (object === 'shifttemplate') {
       enhancedData.forEach((record) => {
         record['BackgroundColor'] = '#000000';
