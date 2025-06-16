@@ -9,6 +9,15 @@ For getting the alias details
 # flags.alias.description
 
 For alias details 
+
+# flags.recordType.summary
+
+For getting the recordType details
+
+# flags.recordType.description
+
+For recordType details 
+
 # flags.sObject.summary
 
 summary

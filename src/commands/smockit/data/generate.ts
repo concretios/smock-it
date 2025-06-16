@@ -27,7 +27,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-import GenerateTestData from 'smockit-data-engine';
+// import GenerateTestData from 'smockit-data-engine';
+import GenerateTestData from 'sf-mock-data';
+
 
 import { Flags, Progress, SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages, Connection } from '@salesforce/core';
@@ -88,6 +90,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       description: messages.getMessage('flags.alias.description'),
       required: true,
     }),
+      recordType: Flags.string({
+      char: 'r',
+      summary: messages.getMessage('flags.recordType.summary'),
+      description: messages.getMessage('flags.recordType.description'),
+      required: false,
+    }),
   };
 
   public dependentPicklistResults: Record<
@@ -121,7 +129,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
 
     // Generate fields and write generated_output.json config
-    await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig);
+    await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig, flags.recordType?.toLowerCase(), flags.sObject);
 
     excludeFieldsSet.clear();
 
@@ -131,8 +139,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const generatedOutputconfigData = fs.readFileSync(generateOutputconfigPath, 'utf8');
     const jsonDataForObjectNames: jsonConfig = JSON.parse(generatedOutputconfigData) as jsonConfig;
 
-    const outputFormat = jsonDataForObjectNames.outputFormat ?? [];
-    const sObjectNames = jsonDataForObjectNames.sObjects.map((sObject: { sObject: string }) => sObject.sObject);
+    const outputFormat = (jsonDataForObjectNames.outputFormat ?? []).map(f => f.toLowerCase());
+
 
     const outputPathDir = `${path.join(process.cwd())}/data_gen/output/`;
 
@@ -140,15 +148,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     let failedCount = 0;
     const startTime = Date.now();
-    for (const object of sObjectNames) {
+    const sObjectCounter: { [key: string]: number } = {};
+    for (const [index, currentSObject] of jsonDataForObjectNames.sObjects.entries()) {
       depthForRecord = 0;
-      const currentSObject = jsonDataForObjectNames.sObjects.find(
-        (sObject: { sObject: string }) => sObject.sObject === object
-      );
-      if (!currentSObject) {
-        throw new Error(`No configuration found for object: ${object}`);
-      }
+      const object = currentSObject.sObject;
+      const localIndex = sObjectCounter[object] ?? 0;
+      sObjectCounter[object] = localIndex + 1;
       const countofRecordsToGenerate = currentSObject.count;
+   
       if ((object.toLowerCase() === 'location' || object.toLowerCase() === 'servicecontract') && (countofRecordsToGenerate ?? 1) >= 10000) {
         throw new Error(chalk.yellow.bold(`Salesforce does not support generating 10,000 or more records for SObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
       }
@@ -160,19 +167,20 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       if (object.toLowerCase() === 'consumptionrate' && (countofRecordsToGenerate ?? 0) > 500) {
         console.warn(chalk.blue(`You can create up to 500 records for the '${object}' object.`))
       }
-
-      const fields = sObjectFieldsMap.get(object);
+      const mapKey = `${object}_${index}`;
+      const fields = sObjectFieldsMap.get(mapKey)
 
       if (!fields) {
         this.log(`No fields found for object: ${object}`);
         continue;
       }
-      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
+      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn,fields, object);
+
       if (countofRecordsToGenerate === undefined) {
         throw new Error(`Count for object "${object}" is undefined.`);
       }
       // fetching the basic fields data from the Data Library
-      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object);
+      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object,localIndex);
 
       // adding all fields to the json data
       const jsonData = this.enhanceDataWithSpecialFields(basicJsonData, processedFields, countofRecordsToGenerate, object);
@@ -189,7 +197,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       );
       failedCount = failedInsertions; // Update the failed count
 
-      const resultEntry = createResultEntryTable(object, outputFormat, failedCount, countofRecordsToGenerate);      // adding values to the result output table
+      const resultEntry = createResultEntryTable(object, outputFormat, failedCount, countofRecordsToGenerate); 
       table.addRow(resultEntry);
     }
     // Save created record IDs file
@@ -429,14 +437,19 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   private async generateFieldsAndWriteConfig(
     conn: Connection,
     objectsToProcess: any[],
-    baseConfig: templateSchema
+    baseConfig: templateSchema,
+    recordTypeName: string | undefined,
+    sObjectName: string | undefined
   ): Promise<void> {
     const outputData: any[] = [];
-
+    if (recordTypeName && !sObjectName) {
+        throw new Error('sObjectName is required to generate data for recordType!');
+    }
+  
     for (const objectConfig of objectsToProcess) {
+
       const objectName = Object.keys(objectConfig as Record<string, any>)[0];
       const configForObject: sObjectSchemaType = (objectConfig as Record<string, any>)[objectName] as sObjectSchemaType;
-
       const namespacePrefixToExclude =
         baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
 
@@ -447,6 +460,54 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
        AND IsCreatable = true
        AND NamespacePrefix NOT IN (${namespacePrefixToExclude})`
       );
+        let fieldsDataRt: string[] = [];
+
+      if(recordTypeName && sObjectName) {
+        
+        const objectDescribe = await conn.describe(objectName);
+
+        const getRecordTypeName = objectDescribe.recordTypeInfos.find(
+        (rt: any) => rt.name.toLowerCase() === recordTypeName || rt.developerName.toLowerCase() === recordTypeName
+      );
+
+
+      if (!getRecordTypeName) {
+          throw new Error(`Record Type "${recordTypeName}" not found for sObject "${objectName}".`);
+      }
+
+      if (getRecordTypeName && getRecordTypeName.available) {
+        const recordTypeId = getRecordTypeName.recordTypeId;
+     if (recordTypeId) {
+      const endpoint = `/services/data/v59.0/sobjects/${objectName}/describe/layouts/${recordTypeId}`;
+      const fieldData: any = await conn.requestGet(endpoint);
+
+    fieldData.editLayoutSections?.forEach((section: any) => {
+    section.layoutRows?.forEach((row: any) => {
+      row.layoutItems?.forEach((item: any) => {
+        item.layoutComponents?.forEach((component: any) => {
+          const name = component?.details?.name;
+          console.log('name',name)
+          if (name) {
+            fieldsDataRt.push(name); 
+          }
+          // Check if the component has subfields (e.g., for address fields)
+          if (component?.components && component.components.length > 0) {
+            component.components.forEach((subComponent: any) => {
+              const subFieldName = subComponent?.details?.name;
+              console.log('subFields',subFieldName)
+              if (subFieldName) {
+                fieldsDataRt.push(subFieldName); 
+              }
+            });
+          }
+        });
+      });
+    });
+  });
+}
+    }
+   
+  }
 
       const requiredFields = this.getRequiredFields(allFields.records as FieldRecord[]);
       const requiredFieldNames = requiredFields.map((field) => field.QualifiedApiName.toLowerCase());
@@ -487,8 +548,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const getPickLeftFields = configForObject.pickLeftFields;
       const considerMap = this.processFieldsToConsider(configForObject);
       const fieldsToConsider = Object.keys(considerMap);
-
-      const fieldsToPass = this.filterFieldsByPickLeftConfig(
+   
+      let fieldsToPass = this.filterFieldsByPickLeftConfig(
         getPickLeftFields,
         configForObject,
         fieldsToConsider,
@@ -496,6 +557,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         fieldsToIgnore,
         allFields
       );
+      if (fieldsDataRt.length > 0) {
+            fieldsToPass = fieldsToPass.filter((field: any) =>
+              fieldsDataRt.includes(field.QualifiedApiName)
+            );
+      }
 
       const fieldsObject = await this.processFieldsWithFieldsValues(conn, fieldsToPass, objectName, considerMap);
 
@@ -1253,9 +1319,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @returns {void} - This method does not return any value.
    */
   private updateCreatedRecordIds(object: string, results: CreateResult[]): void {
-    const ids = results.filter((result) => result.success).map((result) => result.id);
-    DataGenerate.createdRecordsIds.set(object, ids);
-  }
+  const ids = results.filter(r => r.success).map(r => r.id);
+  const existing = DataGenerate.createdRecordsIds.get(object) || [];
+  DataGenerate.createdRecordsIds.set(object, existing.concat(ids));
+}
 
   /**
    * Handles the processing of fields for generating the initial JSON file based on the provided configuration.
@@ -1334,6 +1401,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const excludedReferenceFields = [
         'OwnerId',
         'resourceId',
+        'RecordTypeId',
         'ServiceAppointmentId',
         'ServiceContractId',
         'SourceObjectId',
@@ -1627,44 +1695,47 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @returns {Promise<Map<string, any[]>>} - A promise that resolves to a map of SObject names to field objects.
    */
   private async getProcessedFields(): Promise<Map<string, any[]>> {
-    const config = await readSObjectConfigFile();
-    const sObjectFieldsMap: Map<string, any[]> = new Map();
-    config.sObjects.forEach((sObject) => {
-      if (sObject.fields) {
-        const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObject
-        for (const [fieldName, fieldDetails] of Object.entries(sObject.fields)) {
-          if (fieldDetails.type === 'dependent-picklist') {
-            this.processDependentPicklists(fieldName, fieldDetails, fieldsArray);
-            continue;
-          }
-          let fieldObject: any = {
+  const config = await readSObjectConfigFile();
+  const sObjectFieldsMap: Map<string, any[]> = new Map();
+  
+  config.sObjects.forEach((sObject, index) => {
+    if (sObject.fields) {
+      const fieldsArray: any[] = []; // Temporary array to accumulate fields for each SObject
+      for (const [fieldName, fieldDetails] of Object.entries(sObject.fields)) {
+        if (fieldDetails.type === 'dependent-picklist') {
+          this.processDependentPicklists(fieldName, fieldDetails, fieldsArray);
+          continue;
+        }
+        let fieldObject: any = {
+          name: fieldName,
+          type: this.mapFieldType(fieldDetails.type),
+        };
+
+        if (fieldDetails.values?.length && fieldDetails.values?.length > 0) {
+          fieldObject = {
             name: fieldName,
-            type: this.mapFieldType(fieldDetails.type),
+            values: fieldDetails.values,
           };
-
-          if (fieldDetails.values?.length && fieldDetails.values?.length > 0) {
-            fieldObject = {
-              name: fieldName,
-              values: fieldDetails.values,
-            };
-          }
-
-          if (fieldDetails.type === 'picklist' || fieldDetails.type === 'reference') {
-            fieldObject.values = fieldDetails.values ?? [];
-            fieldObject.referenceTo = fieldDetails.referenceTo;
-            fieldObject.relationshipType = fieldDetails.relationshipType;
-          }
-
-          fieldsArray.push(fieldObject);
         }
 
-        if (fieldsArray.length > 0) {
-          sObjectFieldsMap.set(sObject.sObject, fieldsArray);
+        if (fieldDetails.type === 'picklist' || fieldDetails.type === 'reference') {
+          fieldObject.values = fieldDetails.values ?? [];
+          fieldObject.referenceTo = fieldDetails.referenceTo;
+          fieldObject.relationshipType = fieldDetails.relationshipType;
         }
+
+        fieldsArray.push(fieldObject);
       }
-    });
-    return sObjectFieldsMap;
-  }
+
+      if (fieldsArray.length > 0) {
+        const key = `${sObject.sObject}_${index}`;
+        sObjectFieldsMap.set(key, fieldsArray);
+      }
+    }
+  });
+  
+  return sObjectFieldsMap;
+}
 
   /**
    * Maps field types from custom logic to predefined types.
