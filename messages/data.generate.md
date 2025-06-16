@@ -18,6 +18,14 @@ For getting the recordType details
 
 For recordType details 
 
+# flags.excludeSObjects.summary
+
+For getting the excludeSObjects details
+
+# flags.excludeSObjects.description
+
+For excludeSObjects details 
+
 # flags.sObject.summary
 
 summary
