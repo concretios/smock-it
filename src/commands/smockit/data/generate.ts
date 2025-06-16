@@ -1,4 +1,3 @@
-
 /**
  * Copyright (c) 2025 concret.io
  *
@@ -105,6 +104,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       required: false,
     }),
   };
+
   public dependentPicklistResults: Record<
     string,
     Array<{ parentFieldValue: string; childFieldName: string; childValues: string[] }>
@@ -152,17 +152,18 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     const table = createTable();
 
-    let failedCount = 0;
-    const startTime = Date.now();
-    const sObjectCounter: { [key: string]: number } = {};
+  const startTime = Date.now();
+  const sObjectCounter: { [key: string]: number } = {};
     for (const [index, currentSObject] of jsonDataForObjectNames.sObjects.entries()) {
-      const object = currentSObject.sObject;
+  
+       const object = currentSObject.sObject;
       const localIndex = sObjectCounter[object] ?? 0;
       sObjectCounter[object] = localIndex + 1;
       const countofRecordsToGenerate = currentSObject.count;
-      if ((object.toLowerCase() === 'location' || object.toLowerCase() === 'servicecontract') && (countofRecordsToGenerate ?? 1) >= 10000) {
-        throw new Error(chalk.yellow.bold(`Salesforce does not support generating 10,000 or more records for SObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
-      }
+
+    if ((object.toLowerCase() === 'location' || object.toLowerCase() === 'servicecontract') && (countofRecordsToGenerate ?? 1) >= 10000) {
+      throw new Error(chalk.yellow.bold(`Salesforce does not support generating 10,000 or more records for SObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
+    }
 
       if (object.toLowerCase() === 'campaignmember' && (countofRecordsToGenerate ?? 0) > 1) {
         throw new Error(chalk.yellow.bold(`Currently Supports only 1 record for sObject ${chalk.blue(object)} — Kindly review and adjust to stay within this limit!`));
@@ -192,27 +193,25 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       // save the output file in json and csv format
       saveOutputFileOfJsonAndCsv(jsonData as GenericRecord[], object, outputFormat, flags.templateName);
 
-      // handling failedCount and insertedRecordIds
-      const { failedCount: failedInsertions } = await this.handleDirectInsert(
-        conn,
-        outputFormat,
-        object,
-        jsonData as GenericRecord[]
-      );
-      failedCount = failedInsertions; // Update the failed count
-
-      const resultEntry = createResultEntryTable(object, outputFormat, failedCount, countofRecordsToGenerate);
-      table.addRow(resultEntry);
-    }
-    // Save created record IDs file
-    saveCreatedRecordIds(outputFormat, flags.templateName);
-    const endTime = Date.now();
-    const totalTime = ((endTime - startTime) / 1000).toFixed(2);
-    this.log(chalk.blue.bold(`\nResults: \x1b]8;;${outputPathDir}\x1b\\${totalTime}(s)\x1b]8;;\x1b\\`));
-    table.printTable();
-    return { path: flags.templateName };
+    // Handle direct insert and get the failed count for this specific object
+    const { failedCount: failedInsertions } = await this.handleDirectInsert(
+      conn,
+      outputFormat,
+      object,
+      jsonData as GenericRecord[]
+    );
+    
+    const resultEntry = createResultEntryTable(object, outputFormat, failedInsertions, countofRecordsToGenerate);
+    table.addRow(resultEntry);
   }
 
+  saveCreatedRecordIds(outputFormat, flags.templateName);
+  const endTime = Date.now();
+  const totalTime = ((endTime - startTime) / 1000).toFixed(2);
+  this.log(chalk.blue.bold(`\nResults: \x1b]8;;${outputPathDir}\x1b\\${totalTime}(s)\x1b]8;;\x1b\\`));
+  table.printTable();
+  return { path: flags.templateName };
+}
   /**
    * Processes the `fieldsToConsider` configuration for a given Salesforce object, normalizing key names.
    * If a key starts with `'dp-'`, the prefix is removed before adding it to the result map.
@@ -226,9 +225,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     for (const key of fieldsToConsiderKeys) {
       if (configForObject['fieldsToConsider']) {
         if (key.startsWith('dp-')) {
-          considerMap[key.substring(3)] = configForObject['fieldsToConsider'][key];
+          considerMap[key.substring(3).toLowerCase()] = configForObject['fieldsToConsider'][key];
         } else {
-          considerMap[key] = configForObject['fieldsToConsider'][key];
+          considerMap[key.toLowerCase()] = configForObject['fieldsToConsider'][key];
         }
       }
     }
@@ -265,68 +264,73 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {string | undefined} objectName - The optional name of a specific object to filter for.
    * @returns {sObjectSchemaType[]} - An array of processed sObject configurations to be used.
    */
-
   private processObjectConfiguration(baseConfig: templateSchema, objectNames?: string, excludeSObjects?: string | undefined): sObjectSchemaType[] {
-    const allObjectss = baseConfig.sObjects;
-    const allObjects = allObjectss.filter(obj => {
+    const allSObjects = baseConfig.sObjects;
+    const allObjects = allSObjects.filter(obj => {
       const objectName = Object.keys(obj)[0]; // Extract the object name
       return !(excludeSObjects ?? '').includes(objectName);
     });
 
-    if (!objectNames) {
-      const result = allObjects.map(obj => {
+    // Define mapping for known keys to their expected case
+    const keyMapping: { [key: string]: string } = {
+        count: 'count',
+        pickleftfields: 'pickLeftFields',
+        fieldstoconsider: 'fieldsToConsider',
+        fieldstoexclude: 'fieldsToExclude'
+    };
+
+    // Helper function to normalize an object
+    const normalizeObject = (obj: any): sObjectSchemaType => {
         const key = Object.keys(obj)[0];
-        return { [key.toLowerCase()]: obj[key] };
-      });
+        const value = obj[key];
+        const lowerKey = key.toLowerCase();
+        const normalizedValue: any = { pickLeftFields: true }; // Default pickLeftFields to true
 
-      // Check for unsupported objects
-      const foundUnsupported = result
-        .map(obj => Object.keys(obj)[0])
-        .filter(key => userLicenseObjects.has(key));
+        for (const [k, v] of Object.entries(value)) {
+            const normalizedKey = k.toLowerCase();
+            const mappedKey = keyMapping[normalizedKey] || normalizedKey;
+            normalizedValue[mappedKey] = mappedKey === 'fieldsToExclude' && Array.isArray(v)
+                ? v.map((field: string) => field.toLowerCase())
+                : v;
+        }
 
-      if (foundUnsupported.length > 0) {
-        throw new Error(`Action blocked for SObjects ${chalk.yellow(foundUnsupported.join(', '))}! Requires Salesforce user license.`);
+        return { [lowerKey]: normalizedValue };
+    };
 
-      }
-      return result;
+    // Helper function to check for unsupported objects
+    const checkUnsupportedObjects = (objects: sObjectSchemaType[]): void => {
+        const foundUnsupported = objects
+            .map(obj => Object.keys(obj)[0])
+            .filter(key => userLicenseObjects.has(key));
+
+        if (foundUnsupported.length > 0) {
+            console.log(`Action blocked for SObjects ${chalk.yellow(foundUnsupported.join(', '))}! Requires Salesforce user license.`);
+        }
+    };
+
+    if (!objectNames) {
+        const result = allObjects.map(normalizeObject);
+        checkUnsupportedObjects(result);
+        return result;
     }
 
     const nameSet = new Set(objectNames.split(',').map(name => name.trim().toLowerCase()));
-    const availableNames = new Set(
-      allObjects.map((obj: any) => Object.keys(obj)[0]?.toLowerCase())
-    );
+    const availableNames = new Set(allObjects.map((obj: any) => Object.keys(obj)[0].toLowerCase()));
 
     const missingNames = Array.from(nameSet).filter(name => !availableNames.has(name));
     if (missingNames.length > 0) {
-      throw new Error(
-        `The following specified objects were not found in template: ${chalk.yellow(missingNames.join(', '))}`
-      );
+        throw new Error(
+            `The following specified objects were not found in template: ${chalk.yellow(missingNames.join(', '))}`
+        );
     }
 
     const matchedObjects = allObjects
-      .map((object: any) => {
-        const key = Object.keys(object)[0];
-        const value = object[key];
-        const lowerKey = key.toLowerCase();
-        if (nameSet.has(lowerKey)) {
-          return { [lowerKey]: value };
-        }
-        return null;
-      })
-      .filter((obj): obj is sObjectSchemaType => obj !== null);
+        .map(obj => nameSet.has(Object.keys(obj)[0].toLowerCase()) ? normalizeObject(obj) : null)
+        .filter((obj): obj is sObjectSchemaType => obj !== null);
 
-    // Check for unsupported objects in matched objects
-    const foundUnsupported = matchedObjects
-      .map(obj => Object.keys(obj)[0])
-      .filter(key => userLicenseObjects.has(key));
-
-    if (foundUnsupported.length > 0) {
-      throw new Error(`Action blocked for ${foundUnsupported.join(', ')}: Requires Salesforce user license.`);
-    }
-
+    checkUnsupportedObjects(matchedObjects);
     return matchedObjects;
-  }
-
+}
   /**
    * Determines the default set of fields to include for processing when no specific field configuration is provided.
    * Filters out fields that are listed in `fieldsToIgnore`, and only returns fields if no `fieldsToConsider`,
@@ -707,6 +711,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             if ((objectName === 'paymentauthadjustment' || objectName === 'paymentauthorization' || objectName === 'refund') && inputObject.QualifiedApiName === 'Status') {
               picklistValues = ['Processed'];
             }
+            if(objectName === 'unitofmeasure' && inputObject.QualifiedApiName === 'Type'){
+              picklistValues = ['distance'];
+            }
             fieldConfig = {
               type: 'picklist',
               values: (considerMap?.[inputObject.QualifiedApiName.toLowerCase()])
@@ -764,75 +771,82 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {GenericRecord[]} jsonData - The array of records to insert.
    * @returns {Promise<{ failedCount: number; insertedIds: string[] }>} - A promise that resolves to the count of failed inserts and the inserted record IDs.
    */
-  public async handleDirectInsert(
-    conn: Connection,
-    outputFormat: string[],
-    object: string,
-    jsonData: GenericRecord[]
-  ): Promise<{ failedCount: number; insertedIds: string[] }> {
-    if (!outputFormat.includes('DI') && !outputFormat.includes('di')) {
-      return { failedCount: 0, insertedIds: [] };
-    }
-
-    const errorMessages: Map<string, number> = new Map();
-    const insertedIds: string[] = [];
-    let failedCount = 0;
-
-    try {
-      let insertResult;
-      if (
-        object.toLowerCase() === 'order' ||
-        object.toLowerCase() === 'task' ||
-        object.toLowerCase() === 'productitemtransaction' ||
-        object.toLowerCase() === 'event'
-      ) {
-        insertResult = await insertRecordsspecial(conn, object, jsonData);
-      } else {
-        insertResult = await DataGenerate.insertRecords(conn, object, jsonData);
-      }
-
-      insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }, index: number) => {
-        if (result.success && result.id) {
-          insertedIds.push(result.id);
-        }
-        else if (result.errors) {
-          result.errors.forEach((error) => {
-            let errorCode: string;
-            if (typeof error != 'object') {
-              errorCode = error.split(':')[0].trim().toUpperCase();
-            } else if (typeof error === 'object' && error !== null && 'statusCode' in error) {
-              errorCode = error.statusCode;
-            } else {
-              errorCode = 'UNKNOWN_ERROR';
-            }
-            const fields = (error as { fields?: string[] })?.fields || [];
-            const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
-            const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
-            const humanReadableMessage = errorTemplate
-              .replace('{field}', fieldList)
-              .replace('{object}', object);
-            const currentCount = errorMessages.get(humanReadableMessage) ?? 0;
-            errorMessages.set(humanReadableMessage, currentCount + 1);
-            failedCount++;
-          });
-        }
-      });
-
-      this.updateCreatedRecordIds(object, insertResult);
-      return { failedCount, insertedIds };
-    } catch (error) {
-      const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
-      const fields = (error as any).fields || [];
-      const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
-      const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
-      const humanReadableMessage = errorTemplate
-        .replace('{field}', fieldList)
-        .replace('{object}', object);
-      console.error(chalk.redBright(`Error (${failedCount + 1}): ${humanReadableMessage}`));
-      return { failedCount: failedCount + 1, insertedIds };
-    }
+public async handleDirectInsert(
+  conn: Connection,
+  outputFormat: string[],
+  object: string,
+  jsonData: GenericRecord[]
+): Promise<{ failedCount: number; insertedIds: string[] }> {
+  if (!outputFormat.includes('DI') && !outputFormat.includes('di')) {
+    return { failedCount: 0, insertedIds: [] };
   }
 
+  const errorMessages: Map<string, number> = new Map();
+  const insertedIds: string[] = [];
+  let failedCount = 0;
+
+  try {
+    let insertResult;
+    if (
+      object.toLowerCase() === 'order' ||
+      object.toLowerCase() === 'task' ||
+      object.toLowerCase() === 'productitemtransaction' ||
+      object.toLowerCase() === 'event'
+    ) {
+      insertResult = await insertRecordsspecial(conn, object, jsonData);
+    } else {
+      insertResult = await DataGenerate.insertRecords(conn, object, jsonData);
+    }
+    // Step 3: Process each result and count failures correctly
+    insertResult.forEach((result: { id?: string; success: boolean; errors?: any[] }, index: number) => {
+      
+      if (result.success && result.id) {
+        insertedIds.push(result.id);
+      } else if (result.errors) {
+        failedCount++; // Increment once per failed record
+        
+        result.errors.forEach((error) => {
+          let errorCode: string;
+          if (typeof error != 'object') {
+            errorCode = error.split(':')[0].trim().toUpperCase();
+          } else if (typeof error === 'object' && error !== null && 'statusCode' in error) {
+            errorCode = error.statusCode;
+          } else {
+            errorCode = 'UNKNOWN_ERROR';
+          }
+          const fields = (error as { fields?: string[] })?.fields || [];
+          const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
+          const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
+          const humanReadableMessage = errorTemplate
+            .replace('{field}', fieldList)
+            .replace('{object}', object);
+          const currentCount = errorMessages.get(humanReadableMessage) ?? 0;
+          errorMessages.set(humanReadableMessage, currentCount + 1);
+        });
+      } else {
+      
+        failedCount++;
+      }
+    });
+
+    this.updateCreatedRecordIds(object, insertResult);
+    return { failedCount, insertedIds };
+  } catch (error) {
+    const errorCode = (error as any).statusCode || 'UNKNOWN_ERROR';
+    const fields = (error as any).fields || [];
+    const fieldList = fields.length > 0 ? fields.join(', ') : 'UNKNOWN_FIELD';
+    const errorTemplate = salesforceErrorMap[errorCode] || `Failed to insert "${object}" records due to some issues:  ${errorCode}`;
+    const humanReadableMessage = errorTemplate
+      .replace('{field}', fieldList)
+      .replace('{object}', object);
+    console.error(chalk.redBright(`Error in handleDirectInsert (${failedCount + 1}): ${humanReadableMessage}`));
+    
+    if (insertedIds.length === 0) {
+      failedCount++;
+    }
+    return { failedCount, insertedIds };
+  }
+} 
   /**
    * Retrieves picklist values for a specified field on a Salesforce object and validates the values against the provided consideration map.
    * Throws an error if any value in the consideration map is missing from the picklist.
@@ -1421,6 +1435,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         'OwnerId',
         'resourceId',
         'RecordTypeId',
+        'resourceId',
         'ServiceAppointmentId',
         'ServiceContractId',
         'SourceObjectId',
@@ -1900,13 +1915,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       });
     }
 
-    if (object === 'dandbcompany') {
-      enhancedData.forEach((record) => {
-        record['DunsNumber'] = Math.floor(Math.random() * 1000000);
-        record['StockExchange'] = 'NYSE';
-      });
 
-    }
 
     if (object === 'event') {
       const date = new Date();
@@ -1915,36 +1924,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         record['IsAllDayEvent'] = 'false';
         record['IsPrivate'] = 'false';
         record['ActivityDateTime'] = formattedDate;
-      });
-    }
-
-    if (object === 'warrantyterm') {
-      enhancedData.forEach((record) => {
-        record['ExpensesCoveredDuration'] = (Math.floor(Math.random() * 90) + 10);
-        record['ExpensesCovered'] = (Math.floor(Math.random() * 90) + 10);
-        record['PartsCoveredDuration'] = (Math.floor(Math.random() * 90) + 10);
-        record['PartsCovered'] = (Math.floor(Math.random() * 90) + 10);
-        record['LaborCovered'] = (Math.floor(Math.random() * 90) + 10);
-        record['WarrantyDuration'] = (Math.floor(Math.random() * 90) + 10);
-        record['LaborCoveredDuration'] = (Math.floor(Math.random() * 990) + 10);
-      });
-
-    }
-
-    if (object === 'apptbundlepolicy') {
-      enhancedData.forEach((record) => {
-        record['LimitAmountOfBundleMembers'] = (Math.floor(Math.random() * 90) + 10);
-        record['LimitDurationOfBundle'] = (Math.floor(Math.random() * 90) + 10);
-        record['ConstantTimeValue'] = (Math.floor(Math.random() * 90) + 10);
-        record['Priority'] = (Math.floor(Math.random()) + 1);
-      });
-
-    }
-
-
-    if (object === 'unitofmeasure') {
-      enhancedData.forEach((record) => {
-        record['Type'] = 'distance';
       });
     }
 
@@ -1975,31 +1954,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     if (object === 'individual') {
       enhancedData.forEach((record) => {
         record['BirthDate'] = '2001-05-10';
-        record['DeathDate'] = '2023-08-11';
+        record['DeathDate'] = '2023-05-10';
       });
     }
-
-    if (object === 'listemail') {
-      const fromAddresses = [
-        'noreply@example.com',
-        'support@dummycorp.com',
-        'sales@fakemail.org',
-        'info@testcompany.net',
-        'admin@mocksite.io',
-        'contact@sampledomain.com',
-        'hello@myfakeemail.com',
-        'updates@notarealmail.org',
-        'service@placeholdermail.com',
-        'feedback@tempmail.dev'
-      ];
-
-      enhancedData.forEach((record) => {
-        const randomIndex = Math.floor(Math.random() * fromAddresses.length);
-        record['FromAddress'] = fromAddresses[randomIndex];
-      });
-    }
-
-
     if (object === 'shifttemplate') {
       enhancedData.forEach((record) => {
         record['BackgroundColor'] = '#000000';

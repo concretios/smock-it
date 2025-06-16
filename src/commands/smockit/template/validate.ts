@@ -53,7 +53,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
       continue;
     }
 
-    const fieldsToExclude = sObjectData['fieldsToExclude'] ?? [];
+    const fieldsToExclude = (sObjectData['fieldsToExclude'] ?? []).map(f => f.toLowerCase());
     const fieldsToConsider = sObjectData['fieldsToConsider'] ?? {};
 
     // validated the fieldsToConsider and fieldsToExclude doesn't contain the same fields, if so it will throw an error
