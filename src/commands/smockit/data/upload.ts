@@ -4,6 +4,16 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
+/* eslint-disable @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
+/* eslint-disable guard-for-in */
+/* eslint-disable @typescript-eslint/prefer-nullish-coalescing */
+/* eslint-disable jsdoc/tag-lines */
+/* eslint-disable no-case-declarations */
+/* eslint-disable @typescript-eslint/explicit-member-accessibility */
+/* eslint-disable import/order */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
@@ -21,52 +31,49 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
-import main from 'smockit-data-engine';
+import GenerateTestData from 'sf-mock-data';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
-import { Messages, Connection } from '@salesforce/core';
+import { Messages, Connection, SfError } from '@salesforce/core';
 import chalk from 'chalk';
 import { connectToSalesforceOrg } from '../../../utils/generic_function.js';
 import DataGenerate from './generate.js';
+import { GenericRecord, CreateResult, FieldRecord } from '../../../utils/types.js';
+import { insertRecordsspecial } from '../../../utils/conditional_object_handling.js';
+
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('smock-it', 'data.upload');
 
-type DataUploadResult = { path: string };
-type GenericRecord = Record<string, unknown>;
-type FieldRecord = {
-  QualifiedApiName: string;
-  DataType: string;
-  IsNillable: boolean;
-  ReferenceTo: string[] | { referenceTo: string[] };
-};
-type TargetData = { name: string; type: string; values?: string[]; label?: string };
-type CreateResult = { id: string; success: boolean; errors: any[] };
+const MAX_RECURSION_DEPTH = 4;
 
-const createdRecordsIds: Map<string, string[]> = new Map();
-const metadataCache: Map<string, FieldRecord[]> = new Map();
-const referenceIdCache: Map<string, string[]> = new Map();
-let depthForRecord = 0;
+type DataUploadResult = { path: string };
 
 export default class DataUpload extends SfCommand<DataUploadResult> {
   public static readonly summary = messages.getMessage('summary');
-  public static readonly Examples = messages.getMessage('Examples');
+  public static readonly examples = messages.getMessages('Examples');
+
+  private static createdRecordsIds: Map<string, string[]> = new Map();
+  private static metadataCache: Map<string, FieldRecord[]> = new Map();
+  private static currentDepth = 0; // Tracks the current depth in the hierarchy
 
   public static readonly flags = {
     uploadFile: Flags.string({
       summary: messages.getMessage('flags.uploadFile.summary'),
       description: messages.getMessage('flags.uploadFile.description'),
       char: 'u',
+      required: true,
     }),
     alias: Flags.string({
       summary: messages.getMessage('flags.alias.summary'),
       description: messages.getMessage('flags.alias.description'),
       char: 'a',
+      required: true,
     }),
     sObject: Flags.string({
       char: 's',
       summary: messages.getMessage('flags.sObject.summary'),
       description: messages.getMessage('flags.sObject.description'),
-      required: false,
+      required: true,
     }),
   };
 
@@ -88,402 +95,403 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
           records.push(record);
         }
       });
-
-      rl.on('close', () => {
-        resolve(records);
-      });
-      rl.on('error', (err) => {
-        console.error(`Error reading CSV: ${err}`);
-        reject(err);
-      });
+      rl.on('close', () => resolve(records));
+      rl.on('error', (err) => reject(new SfError(`Error reading CSV file: ${err.message}`, 'CsvParseError')));
     });
   }
 
-  private static async parseFile(filePath: string, fileType: 'json' | 'csv'): Promise<GenericRecord[]> {
+  private static async parseFile(filePath: string): Promise<GenericRecord[]> {
+    const fileExtension = path.extname(filePath).toLowerCase();
     try {
-      if (fileType === 'json') {
+      if (fileExtension === '.json') {
         const data = await fs.promises.readFile(filePath, 'utf-8');
-        return JSON.parse(data) as GenericRecord[];
+        const parsedData = JSON.parse(data);
+        return Array.isArray(parsedData) ? parsedData : [parsedData];
       }
-      if (fileType === 'csv') {
+      if (fileExtension === '.csv') {
         return await this.csvToJsonPromise(filePath);
       }
-      throw new Error('Unsupported file type. Please provide a .json or .csv file.');
-    } catch (error) {
-      throw new Error(`Failed to parse file: ${String(error)}`);
+      throw new SfError('Unsupported file type. Please provide a .json or .csv file.', 'UnsupportedFileTypeError');
+    } catch (error: any) {
+      throw new SfError(`Failed to parse file: ${error.message}`, 'FileParseError', [], error);
     }
   }
 
-  private static checkFileType(filename: string): 'json' | 'csv' {
+  private static checkFile(filename: string): string {
     if (!filename.includes('.'))
-      throw new Error(
-        "File type missing from '-u' or '--upload' flag. Please provide a filename with .json or .csv extension."
+      throw new SfError(
+        "File type missing from '-u' or '--upload-file' flag. Please provide a filename with .json or .csv extension.",
+        'MissingFileExtension'
       );
     const fileExtension = path.extname(filename).toLowerCase();
     if (fileExtension !== '.json' && fileExtension !== '.csv')
-      throw new Error("Unsupported file type in '-u' or '--upload' flag. Please provide a .json or .csv file.");
+      throw new SfError(
+        "Unsupported file type in '-u' or '--upload-file' flag. Please provide a .json or .csv file.",
+        'UnsupportedFileTypeError'
+      );
     const filePath = path.join(process.cwd(), 'data_gen/output', filename);
-    if (!fs.existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
-    return fileExtension === '.json' ? 'json' : 'csv';
+    if (!fs.existsSync(filePath)) throw new SfError(`File not found: ${filePath}`, 'FileNotFound');
+    return filePath;
   }
 
-  private static saveCreatedRecordIds(): void {
+  private static saveCreatedRecordIds(log: (message: string) => void): void {
     const outputDir = path.join(process.cwd(), 'data_gen', 'output');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
-    const fileName = `createdRecords_${new Date().toISOString().replace('T', '_').replace(/[:.]/g, '-').split('.')[0]
-      }.json`;
+    const fileName = `upload_createdRecords_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
     const resultObject: Record<string, string[]> = {};
-    createdRecordsIds.forEach((ids, objectName) => (resultObject[objectName] = ids));
+    this.createdRecordsIds.forEach((ids, objectName) => (resultObject[objectName] = ids));
     fs.writeFileSync(path.join(outputDir, fileName), JSON.stringify(resultObject, null, 2), 'utf-8');
-    console.log(
-      chalk.green.bold(`The IDs of the created records have been saved to: ${path.join(outputDir, fileName)}`)
-    );
+    log(chalk.green(`\n👍 Success! Created record IDs saved to: ${chalk.cyan(path.join(outputDir, fileName))}`));
   }
 
-  private static processInsertResults(sobject: string, insertResults: CreateResult[]): void {
-    const failedRecords: number = insertResults.filter((result) => !result.success).length;
-    const insertedIds: string[] = [];
-
-    insertResults.forEach((result, index) => {
-      if (result.success && result.id) {
-        insertedIds.push(result.id);
-      }
-    });
-
-    if (failedRecords > 0) {
-      const errorMessage = `${failedRecords} record(s) failed to insert.`;
-      throw new Error(errorMessage); // Throw a single error message
+  private static processInsertResults(
+    sobject: string,
+    results: CreateResult[],
+    totalRecords: number,
+    log: (message: string) => void
+  ): void {
+    const successfulInserts = results.filter((r) => r.success);
+    const failedInserts = results.filter((r) => !r.success);
+    if (failedInserts.length > 0) {
+      log(chalk.red(`Failed to insert ${failedInserts.length} ${sobject} records.`));
+      const errorSummary = new Map<string, number>();
+      failedInserts.forEach((res) => {
+        const errorMessage = res.errors?.[0]?.message || 'Unknown error';
+        errorSummary.set(errorMessage, (errorSummary.get(errorMessage) ?? 0) + 1);
+      });
+      log(chalk.red('Error summary:'));
+      errorSummary.forEach((count, message) => {
+        log(chalk.red(`- ${message} (${count} times)`));
+      });
     }
-    if (insertedIds.length > 0) {
-      createdRecordsIds.set(sobject, insertedIds);
-    } else {
-      throw new Error('No records were inserted. Some fields may not be valid or no data provided.');
+
+    if (successfulInserts.length === 0 && totalRecords > 0) {
+      throw new SfError(`No records were inserted for sObject: ${sobject}.`, 'InsertFailed');
     }
   }
 
-  private async fetchObjectMetadata(conn: Connection, sobject: string): Promise<FieldRecord[]> {
-    if (metadataCache.has(sobject)) return metadataCache.get(sobject)!;
-    const query = `
-      SELECT QualifiedApiName, DataType, IsNillable, ReferenceTo
-      FROM EntityParticle
-      WHERE EntityDefinition.QualifiedApiName = '${sobject}' AND IsCreatable = true
-    `;
+  private async fetchObjectMetadata(conn: Connection, sobject: string, onlyRequired = false): Promise<FieldRecord[]> {
+    if (!onlyRequired && DataUpload.metadataCache.has(sobject)) {
+      return DataUpload.metadataCache.get(sobject)!;
+    }
+    let query = `SELECT QualifiedApiName, DataType, IsNillable, ReferenceTo, RelationshipName, IsDependentPicklist FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${sobject}' AND IsCreatable = true`;
+    if (onlyRequired) {
+      query += ' AND IsNillable = false';
+    }
     try {
       const result = await conn.tooling.query<FieldRecord>(query);
-      metadataCache.set(sobject, result.records);
+      if (!onlyRequired) {
+        DataUpload.metadataCache.set(sobject, result.records);
+      }
       return result.records;
-    } catch (error) {
-      throw new Error(`Failed to fetch metadata for ${sobject}: ${String(error)}`);
+    } catch (error: any) {
+      throw new SfError(`Failed to fetch metadata for ${sobject}: ${error.message}`, 'MetadataError', [], error);
     }
   }
 
-  private async processFieldsForParentObjects(
-    fields: FieldRecord[],
-    conn: Connection,
-    object: string
-  ): Promise<Array<Partial<TargetData>>> {
-    const processedFields: Array<Partial<TargetData>> = [];
-    const picklistFields = fields.filter((f) => f.DataType === 'picklist' || f.DataType === 'multipicklist');
-    const picklistValues =
-      picklistFields.length > 0
-        ? await this.getPicklistValuesBulk(
-          conn,
-          object,
-          picklistFields.map((f) => f.QualifiedApiName)
-        )
-        : {};
-
-    for (const item of fields) {
-      const fieldName = item.QualifiedApiName;
-      const dataType = item.DataType;
-      const isReference = dataType === 'reference' && !['OwnerId', 'CreatedById', 'ParentId'].includes(fieldName);
-      const isPicklist = dataType === 'picklist' || dataType === 'multipicklist';
-
-      const details: Partial<TargetData> = { name: fieldName };
-
-      if (isReference) {
-        details.type = 'Custom List';
-        if (!item.IsNillable) depthForRecord++;
-        const referenceTo = Array.isArray(item.ReferenceTo) ? item.ReferenceTo[0] : item.ReferenceTo?.referenceTo?.[0];
-        if (referenceTo) {
-          details.values = await this.fetchRelatedRecordIds(conn, referenceTo);
-          processedFields.push(details);
-        }
-      } else if (isPicklist) {
-        details.type = 'Custom List';
-        details.values = picklistValues[fieldName] || [];
-        processedFields.push(details);
-      } else {
-        const fieldType = this.getFieldType(item);
-        if (fieldType) {
-          details.type = fieldType;
-          processedFields.push(details);
-        }
-      }
+  private static coerceValue(value: any, dataType: string): any {
+    if (value === null || value === undefined || value === '') {
+      return undefined;
     }
-    return processedFields;
+    const lowerDataType = dataType.toLowerCase();
+    switch (lowerDataType) {
+      case 'boolean':
+        if (typeof value === 'boolean') return value;
+        const strValue = String(value).toLowerCase();
+        return strValue === 'true' || strValue === '1';
+      case 'double':
+      case 'currency':
+      case 'percent':
+      case 'int':
+        const num = parseFloat(String(value));
+        return isNaN(num) ? undefined : num;
+      case 'picklist':
+        return String(value);
+      default:
+        return value;
+    }
   }
 
-  private getFieldType(item: FieldRecord): string {
-    const itemType = item.DataType;
-    if (itemType === 'string' || itemType === 'textarea') return 'text';
-    if (itemType === 'picklist' || itemType === 'multipicklist') return 'picklist';
-    return itemType;
-  }
-
-  private async getPicklistValuesBulk(
-    conn: Connection,
-    object: string,
-    fields: string[]
-  ): Promise<Record<string, string[]>> {
+  private async getPicklistValues(conn: Connection, object: string, field: string): Promise<string[]> {
     try {
-      const describe = await conn.describe(object);
-      const result: Record<string, string[]> = {};
-      for (const fieldName of fields) {
-        const fieldDetails = describe.fields.find((f: any) => f.name === fieldName);
-        result[fieldName] = fieldDetails?.picklistValues?.map((pv: { value: string }) => pv.value) ?? [];
-      }
-      return result;
-    } catch (error) {
-      throw new Error(`Failed to fetch picklist values for ${object}: ${String(error)}`);
+      const result = await conn.describe(object);
+      const fieldDetails = result.fields.find((f: Record<string, any>) => f.name === field);
+      const picklistValues: string[] =
+        fieldDetails?.picklistValues?.map((pv: Record<string, any>) => pv.value as string) ?? [];
+      return picklistValues;
+    } catch (error: any) {
+      throw new SfError(
+        `Failed to fetch picklist values for field ${field} on object ${object}: ${error.message}`,
+        'PicklistFetchError',
+        [],
+        error
+      );
     }
   }
 
-  private async fetchRelatedRecordIds(conn: Connection, referenceTo: string): Promise<string[]> {
-    if (referenceIdCache.has(referenceTo)) return referenceIdCache.get(referenceTo) ?? [];
-    if (createdRecordsIds.has(referenceTo)) {
-      const ids = createdRecordsIds.get(referenceTo) ?? [];
-      referenceIdCache.set(referenceTo, ids);
-      return ids;
-    }
-    try {
-      const relatedRecords = await conn.query<{ Id: string }>(`SELECT Id FROM ${referenceTo} LIMIT 1`);
-      const ids = relatedRecords.records.map((record) => record.Id);
-      referenceIdCache.set(referenceTo, ids);
-      return ids;
-    } catch (error) {
-      throw new Error(`Failed to fetch related record IDs for ${referenceTo}:${String(error)}`);
-    }
+
+  private getRandomPicklistValue(values: string[]): string | undefined {
+    if (!values.length) return undefined;
+    return values[Math.floor(Math.random() * values.length)];
   }
 
-  private async enhanceJsonDataWithRequiredFields(
-    jsonData: GenericRecord[],
-    fieldMap: Record<string, { type: string; values: any[]; label: string }>,
+  private async ensureParentRecordExists(
     conn: Connection,
+    referenceTo: string,
     sobject: string
-  ): Promise<GenericRecord[]> {
-    if (!jsonData?.length) return jsonData;
-    const getRandomValue = (values: any[]): any =>
-      values.length ? values[Math.floor(Math.random() * values.length)] : null;
-
-    const referenceFields = (await this.fetchObjectMetadata(conn, sobject)).filter(
-      (f) => f.DataType === 'reference' && f.QualifiedApiName !== 'OwnerId'
-    );
-
-    const refIdValidations: Map<string, Set<string>> = new Map();
-    for (const [fieldName, fieldDetails] of Object.entries(fieldMap)) {
-      if (fieldDetails.type !== 'Custom List' || !fieldDetails.values.length) continue;
-      const refField = referenceFields.find((f) => f.QualifiedApiName === fieldName);
-      const refObject =
-        refField &&
-        (Array.isArray(refField.ReferenceTo) ? refField.ReferenceTo[0] : refField.ReferenceTo?.referenceTo?.[0]);
-      if (!refObject) continue;
-
-      const idsToValidate = new Set<string>();
-      jsonData.forEach((record) => {
-        const value = record[fieldName];
-        if (value && typeof value === 'string') idsToValidate.add(value);
-      });
-      refIdValidations.set(fieldName, idsToValidate);
-    }
-
-    const enhancedData = jsonData.map((record) => ({ ...record }));
-    for (const [fieldName, fieldDetails] of Object.entries(fieldMap)) {
-      if (fieldDetails.type !== 'Custom List' || !fieldDetails.values.length) continue;
-      const refField = referenceFields.find((f) => f.QualifiedApiName === fieldName);
-      const refObject =
-        refField &&
-        (Array.isArray(refField.ReferenceTo) ? refField.ReferenceTo[0] : refField.ReferenceTo?.referenceTo?.[0]);
-      if (!refObject) continue;
-
-      const validIds = refIdValidations.get(fieldName)?.size
-        ? await this.validateReferenceIds(conn, refObject, Array.from(refIdValidations.get(fieldName)!))
-        : new Set<string>();
-
-      for (const record of enhancedData) {
-        const providedValue = record[fieldName];
-        if (providedValue && validIds.has(providedValue as string)) continue;
-        record[fieldName] = getRandomValue(fieldDetails.values);
-      }
-    }
-    return enhancedData;
-  }
-
-  private async validateReferenceIds(conn: Connection, sobject: string, ids: string[]): Promise<Set<string>> {
-    if (!ids.length) return new Set();
-    try {
-      const query = `SELECT Id FROM ${sobject} WHERE Id IN ('${ids.join("','")}')`;
-      const result = await conn.query<{ Id: string }>(query);
-      return new Set(result.records.map((r) => r.Id));
-    } catch (error) {
-      console.warn(`Failed to validate IDs for ${sobject}: ${String(error)}`);
-      return new Set();
-    }
-  }
-
-  private async ensureParentRecordsExist(
-    conn: Connection,
-    referencedObject: string,
-    isRequired: boolean,
-    hierarchyLevel: number = 0,
-    parentChain: string[] = []
   ): Promise<string> {
-    const MAX_DEPTH = 2;
-    if (hierarchyLevel >= MAX_DEPTH) {
-      throw new Error(
-        `Max depth of ${MAX_DEPTH} reached at ${referencedObject}. Reference chain: ${parentChain.join(' -> ')}.`
+    if (!referenceTo) {
+      throw new SfError(
+        'Internal Error: ensureParentRecordExists was called with an undefined object name.',
+        'InvalidInput'
       );
     }
 
-    if (!referencedObject) throw new Error('Referenced object is undefined or invalid.');
-    const currentChain = [...parentChain, referencedObject];
+    // Check if parent record already exists
+    if (DataUpload.createdRecordsIds.has(referenceTo)) {
+      return DataUpload.createdRecordsIds.get(referenceTo)![0];
+    }
 
-    if (createdRecordsIds.has(referencedObject)) {
-      const ids = createdRecordsIds.get(referencedObject) ?? [];
-      if (ids.length > 0) return ids[0];
+    // Check depth before proceeding
+    if (DataUpload.currentDepth >= MAX_RECURSION_DEPTH) {
+      throw new SfError(
+        `Maximum hierarchy depth of ${MAX_RECURSION_DEPTH} reached while creating parent for ${referenceTo}. Simplify the relationship path or reduce nesting.`,
+        'MaxHierarchyDepth'
+      );
+    }
+
+    DataUpload.currentDepth++; // Increment depth for this level
+
+    // Handle special case for Contact when sobject is Asset
+    if (referenceTo === 'Contact' && sobject.toLowerCase() === 'asset') {
+      const contactResult = await conn.query(
+        'SELECT Id FROM Contact WHERE AccountId != NULL ORDER BY CreatedDate DESC LIMIT 1'
+      );
+      if (contactResult.records.length > 0) {
+        const contactId = contactResult.records[0].Id;
+        if (contactId) {
+          DataUpload.createdRecordsIds.set(referenceTo, [contactId]);
+          DataUpload.currentDepth--; // Decrement depth before returning
+          return contactId;
+        } else {
+          throw new SfError('Contact ID is undefined.', 'UndefinedContactIdError');
+        }
+      }
     }
 
     try {
-      const existingRecords = await conn.query<{ Id: string }>(`SELECT Id FROM ${referencedObject} LIMIT 1`);
-      if (existingRecords.records.length > 0) {
-        const id = existingRecords.records[0].Id;
-        createdRecordsIds.set(referencedObject, [id]);
-        return id;
+      const requiredFields = await this.fetchObjectMetadata(conn, referenceTo, true);
+      const recordToCreate: GenericRecord = {};
+      const fieldMap: Record<string, { type: string; values: any[]; label: string }> = {};
+
+      // Define fields to exclude
+      const excludedFields = new Set([
+        'OwnerId',
+        'IsStopped',
+        'HasOptedOutOfEmail',
+        'HasOptedOutOfFax',
+        'DoNotCall',
+        'ForecastCategoryName',
+        'ShouldSyncWithOci',
+      ]);
+
+      // Map Salesforce DataType to fieldMap type
+      const fieldTypeMap: Record<string, string> = {
+        string: 'text',
+        reference: 'reference',
+        picklist: 'picklist',
+      };
+
+      // Transform requiredFields into fieldMap and handle recursive references
+      for (const field of requiredFields) {
+        const fieldName = field.QualifiedApiName;
+        if (excludedFields.has(fieldName)) continue;
+
+        // Handle special cases
+        if (referenceTo === 'Order' && fieldName === 'Status') {
+          recordToCreate.Status = 'Draft';
+          continue;
+        }
+        if (referenceTo === 'Contract' && fieldName === 'Status') {
+          recordToCreate.Status = 'Draft';
+          continue;
+        }
+
+        const fieldType = fieldTypeMap[field.DataType.toLowerCase()] || field.DataType.toLowerCase();
+
+        if (field.DataType === 'reference') {
+          const parentOfParentName = (field.ReferenceTo as any)?.referenceTo?.[0];
+          if (parentOfParentName) {
+            // Recursive call to create grandparent
+            const grandParentId = await this.ensureParentRecordExists(conn, parentOfParentName, referenceTo);
+            recordToCreate[fieldName] = grandParentId;
+          }
+        } else if (field.DataType === 'picklist') {
+          const picklistValues = await this.getPicklistValues(conn, referenceTo, fieldName);
+          if (picklistValues.length > 0) {
+            const randomValue = this.getRandomPicklistValue(picklistValues);
+            if (randomValue) {
+              recordToCreate[fieldName] = randomValue;
+            }
+          } else {
+            console.warn(`No picklist values found for field ${fieldName} on ${referenceTo}`);
+          }
+        } else {
+          fieldMap[fieldName] = {
+            type: fieldType,
+            values: [],
+            label: fieldName,
+          };
+        }
       }
-    } catch (error) {
-      throw new Error(`Failed to query ${referencedObject}: ${String(error)}`);
-    }
 
-    depthForRecord++;
-    const fields = await this.fetchObjectMetadata(conn, referencedObject);
-    const referenceFields = fields.filter((f) => f.DataType === 'reference' && f.QualifiedApiName !== 'OwnerId');
-    const requiredReferenceFields = referenceFields.filter((f) => !f.IsNillable);
-
-    const parentIds: Map<string, string> = new Map();
-    for (const refField of requiredReferenceFields) {
-      const fieldName = refField.QualifiedApiName;
-      const refObject = Array.isArray(refField.ReferenceTo)
-        ? refField.ReferenceTo[0]
-        : refField.ReferenceTo?.referenceTo?.[0];
-      if (!refObject || refObject === referencedObject) continue;
-
-      const parentId = await this.ensureParentRecordsExist(conn, refObject, true, hierarchyLevel + 1, currentChain);
-      parentIds.set(fieldName, parentId);
-    }
-
-    const processFields = await this.processFieldsForParentObjects(fields, conn, referencedObject);
-    const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
-      if (field.name) {
-        acc[field.name] = { type: field.type, values: field.values ?? [], label: field.label ?? field.name };
+      // Generate data for non-reference and non-picklist fields
+      if (Object.keys(fieldMap).length > 0) {
+        const generatedData = await GenerateTestData.getFieldsData(fieldMap, 1);
+        Object.assign(recordToCreate, generatedData[0]);
       }
-      return acc;
-    }, {});
 
-    const jsonData = await main.getFieldsData(fieldMap, 1);
-    if (!jsonData?.length) throw new Error(`Failed to generate valid data for ${referencedObject}`);
+      // Ensure Asset has at least AccountId if not already set
+      if (referenceTo === 'Asset' && !recordToCreate.AccountId && !recordToCreate.ContactId) {
+        const accountId = await this.ensureParentRecordExists(conn, 'Account', referenceTo);
+        recordToCreate.AccountId = accountId;
+      }
 
-    const enhancedData = await this.enhanceJsonDataWithRequiredFields(jsonData, fieldMap, conn, referencedObject);
-    const cleanedData = enhancedData.map((record) => {
-      const cleaned = { ...record };
-      parentIds.forEach((id, field) => (cleaned[field] = id));
-      delete cleaned['OwnerId'];
-      return cleaned;
-    });
+      // Insert the new record
+      const insertResult = await DataGenerate.insertRecords(conn, referenceTo, [recordToCreate]);
+      const newId = insertResult[0]?.id;
 
-    const insertResults: CreateResult[] = (await DataGenerate.insertRecords(
-      conn,
-      referencedObject,
-      cleanedData
-    )) as CreateResult[];
-    const newIds = insertResults.filter((r) => r.success && r.id).map((r) => r.id);
-    if (!newIds.length)
-      throw new Error(
-        `Failed to create ${referencedObject}: ${JSON.stringify(insertResults.map((r) => r.errors ?? []).flat())}`
+      if (!insertResult[0]?.success || !newId) {
+        const errorMsg = insertResult[0]?.errors?.[0]?.message ?? 'Unknown error';
+        throw new SfError(`Failed to create parent record for ${referenceTo}: ${errorMsg}`, 'ParentInsertFailed');
+      }
+
+      DataUpload.createdRecordsIds.set(referenceTo, [newId]);
+      return newId;
+    } catch (err: any) {
+      this.spinner.stop('Error');
+      if (err instanceof SfError) {
+        throw err;
+      }
+      throw new SfError(
+        `An unexpected error occurred while creating parent for ${referenceTo}: ${err.message}`,
+        'ParentCreationUnexpectedError',
+        [],
+        err
       );
-
-    createdRecordsIds.set(referencedObject, newIds);
-    depthForRecord--;
-    return newIds[0];
+    } finally {
+      DataUpload.currentDepth--;
+    }
   }
 
   public async run(): Promise<DataUploadResult> {
+    DataUpload.createdRecordsIds.clear();
+    DataUpload.metadataCache.clear();
+    DataUpload.currentDepth = 0;
+
     const { flags } = await this.parse(DataUpload);
-    const filename = flags.uploadFile ?? 'err';
-    const aliasOrUsername = flags.alias ?? 'err';
     const sobject = flags.sObject ?? 'err';
-    if (!flags.sObject) {
-      throw new Error(
-        "Data can't be uploaded without a sObject. Please provide a valid sObject name in the command using '-s' or '--sObject' flag."
-      );
-    }
-    const fileType = DataUpload.checkFileType(filename);
-    const filePath = path.join(process.cwd(), 'data_gen/output', filename);
-
-    try {
-      const conn = await connectToSalesforceOrg(aliasOrUsername);
-      let records = await DataUpload.parseFile(filePath, fileType);
-
-
-      if (!Array.isArray(records)) records = [records];
-
-      const fields = await this.fetchObjectMetadata(conn, sobject);
+    const fileName = flags.uploadFile ?? 'err';
+    const filePath = DataUpload.checkFile(fileName);
 
 
 
-      const referenceFields = fields.filter((f) => f.DataType === 'reference' && f.QualifiedApiName !== 'OwnerId');
+    const conn = await connectToSalesforceOrg(flags.alias);
 
-      const parentRecordIds: Map<string, string> = new Map();
-      depthForRecord = 0;
-      for (const field of referenceFields) {
-        const fieldName = field.QualifiedApiName;
-        const refObject = Array.isArray(field.ReferenceTo) ? field.ReferenceTo[0] : field.ReferenceTo?.referenceTo?.[0];
-        if (!refObject) continue;
-        const isFieldInJson = records.some((r) => r[fieldName] !== undefined);
-        const isRequired = !field.IsNillable;
-        if (isFieldInJson || isRequired) {
-          parentRecordIds.set(
-            fieldName,
-            await this.ensureParentRecordsExist(conn, refObject, isRequired, 0, [sobject])
-          );
-        }
-      }
+    const recordsFromFile = await DataUpload.parseFile(filePath);
+    const sObjectMeta = await this.fetchObjectMetadata(conn, sobject);
+    const allReferenceFieldsMeta = sObjectMeta.filter((f) => f.DataType === 'reference');
+    const parentTypesToCreate = new Set<string>();
 
-      const processFields = await this.processFieldsForParentObjects(fields, conn, sobject);
-      const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
-        if (field.name) {
-          acc[field.name] = { type: field.type, values: field.values ?? [], label: field.label ?? field.name };
-        }
-        return acc;
-      }, {});
-
-      records = await this.enhanceJsonDataWithRequiredFields(records, fieldMap, conn, sobject);
-      const finalRecords = records.map((record) => {
-        const cleaned = { ...record };
-        referenceFields.forEach((field) => {
-          const fieldName = field.QualifiedApiName;
-          if (parentRecordIds.has(fieldName)) cleaned[fieldName] = parentRecordIds.get(fieldName);
-        });
-        delete cleaned['OwnerId'];
-        return cleaned;
+    // Identify parent types for reference fields
+    allReferenceFieldsMeta
+      .filter((f) => !f.IsNillable && !['OwnerId', 'CreatedById', 'LastModifiedById'].includes(f.QualifiedApiName))
+      .forEach((refField) => {
+        const parentObjectName = (refField.ReferenceTo as any)?.referenceTo?.[0];
+        if (parentObjectName) parentTypesToCreate.add(parentObjectName);
       });
 
-      const insertResults = await DataGenerate.insertRecords(conn, sobject, finalRecords);
-      DataUpload.processInsertResults(sobject, insertResults);
-      DataUpload.saveCreatedRecordIds();
+    recordsFromFile.forEach((record) => {
+      for (const key in record) {
+        const meta = allReferenceFieldsMeta.find((f) => f.QualifiedApiName === key);
+        if (meta) {
+          const parentObjectName = (meta.ReferenceTo as any)?.referenceTo?.[0];
+          if (parentObjectName) parentTypesToCreate.add(parentObjectName);
+        }
+      }
+    });
 
-      return { path: filePath };
-    } catch (error) {
-      throw new Error(`${String(error)}`);
+    const parentIdMap = new Map<string, string>();
+    for (const parentObjectName of parentTypesToCreate) {
+      const parentId = await this.ensureParentRecordExists(conn, parentObjectName, sobject);
+      parentIdMap.set(parentObjectName, parentId);
     }
+
+    // this.spinner.start(`Uploading data to Salesforce org: ${flags.alias}. Please wait...`);
+
+    const fieldMetaMap = new Map(sObjectMeta.map((f) => [f.QualifiedApiName, f]));
+
+    const finalRecordsToInsert = await Promise.all(
+      recordsFromFile.map(async (fileRecord) => {
+        const finalRecord: GenericRecord = {};
+
+        for (const key in fileRecord) {
+          const meta = fieldMetaMap.get(key);
+          if (!meta) continue;
+
+          else if (meta.DataType !== 'reference') {
+            const coercedValue = DataUpload.coerceValue(fileRecord[key], meta.DataType);
+            if (coercedValue !== undefined) {
+              finalRecord[key] = coercedValue;
+            }
+          }
+        }
+
+        // Assign parent IDs for required reference fields
+        allReferenceFieldsMeta.forEach((refField) => {
+          const parentObjectName = (refField.ReferenceTo as any)?.referenceTo?.[0];
+          if (parentObjectName && parentIdMap.has(parentObjectName)) {
+            finalRecord[refField.QualifiedApiName] = parentIdMap.get(parentObjectName);
+          }
+        });
+
+        return finalRecord;
+      })
+    );
+
+
+    this.log(chalk.blueBright('📦 Uploading Data into SF Org...'));
+    this.log(
+      chalk.blue(
+        `   • sObject      : ${chalk.bold(sobject)}\n` +
+        `   • Record Count : ${chalk.bold(finalRecordsToInsert.length.toString())}\n` +
+        `   • Target Org   : ${chalk.yellowBright(flags.alias)}\n`
+      )
+    );
+    this.log(chalk.blueBright('⏳ Please wait while records are being processed...\n'));
+
+    let insertResults;
+    if (
+      sobject.toLowerCase() === 'order' ||
+      sobject.toLowerCase() === 'task' ||
+      sobject.toLowerCase() === 'productitemtransaction' ||
+      sobject.toLowerCase() === 'event'
+    ) {
+      insertResults = await insertRecordsspecial(conn, sobject, finalRecordsToInsert);
+    } else {
+      insertResults = await DataGenerate.insertRecords(conn, sobject, finalRecordsToInsert);
+    }
+
+    DataUpload.processInsertResults(sobject, insertResults, finalRecordsToInsert.length, this.log.bind(this));
+
+    const successfulMainRecordIds = insertResults.filter((r) => r.success).map((r) => r.id as string);
+    if (successfulMainRecordIds.length > 0) {
+      const existingIds = DataUpload.createdRecordsIds.get(sobject) || [];
+      DataUpload.createdRecordsIds.set(sobject, [...existingIds, ...successfulMainRecordIds]);
+    }
+
+    DataUpload.saveCreatedRecordIds(this.log.bind(this));
+
+    return { path: filePath };
   }
 }

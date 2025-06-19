@@ -74,11 +74,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     sObject: Flags.string({
       char: 's',
       summary: messages.getMessage('flags.sObject.summary'),
+      multiple: true, 
       required: false,
     }),
 
     excludeSObjects: Flags.string({
-      char: 'v',
+      char: 'z',
       summary: messages.getMessage('flags.excludeSObjects.summary'),
       description: messages.getMessage('flags.excludeSObjects.description'),
       multiple: true, 
@@ -123,7 +124,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     // load and validate template baseConfig file
     const baseConfig = await loadAndValidateConfig(conn, flags.templateName);
     const excludeSObjectsString = flags.excludeSObjects?.join(',') ?? undefined;
-    const objectsToProcess = this.processObjectConfiguration(baseConfig, flags.sObject, excludeSObjectsString);
+    const includeSObject = flags.sObject?.join(',') ?? undefined
+    const objectsToProcess = this.processObjectConfiguration(baseConfig, includeSObject, excludeSObjectsString);
 
     const restrictedObjectsFound = objectsToProcess
       .map(obj => Object.keys(obj)[0])
@@ -135,7 +137,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
 
     // Generate fields and write generated_output.json config
-    await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig, flags.recordType?.toLowerCase(), flags.sObject);
+    await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig, flags.recordType?.toLowerCase(), includeSObject);
 
     excludeFieldsSet.clear();
 
@@ -264,54 +266,71 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * @param {string | undefined} objectName - The optional name of a specific object to filter for.
    * @returns {sObjectSchemaType[]} - An array of processed sObject configurations to be used.
    */
-  private processObjectConfiguration(baseConfig: templateSchema, objectNames?: string, excludeSObjects?: string | undefined): sObjectSchemaType[] {
-    const allSObjects = baseConfig.sObjects;
-    const allObjects = allSObjects.filter(obj => {
-      const objectName = Object.keys(obj)[0]; // Extract the object name
-      return !(excludeSObjects ?? '').includes(objectName);
+ private processObjectConfiguration(baseConfig: templateSchema, objectNames?: string, excludeSObjects?: string | undefined): sObjectSchemaType[] {
+    const allSObjectss = baseConfig.sObjects;
+    const excludeSet = new Set(
+      (excludeSObjects ?? '')
+        .split(',')
+        .map(name => name.trim().toLowerCase())
+        .filter(Boolean)
+    );
+
+    const availableObjectNames = new Set(
+      allSObjectss.map(obj => Object.keys(obj)[0].toLowerCase())
+    );
+
+    const invalidExcludes = Array.from(excludeSet).filter(name => !availableObjectNames.has(name));
+
+    if (invalidExcludes.length > 0) {
+      throw new Error(
+        `Invalid excludeSObjects:[ ${invalidExcludes.join(', ')} ] not found in template.`
+      );
+    }
+    const allObjects = allSObjectss.filter(obj => {
+      const objectName = Object.keys(obj)[0].toLowerCase();
+      return !excludeSet.has(objectName);
     });
 
-    // Define mapping for known keys to their expected case
     const keyMapping: { [key: string]: string } = {
-        count: 'count',
-        pickleftfields: 'pickLeftFields',
-        fieldstoconsider: 'fieldsToConsider',
-        fieldstoexclude: 'fieldsToExclude'
+      count: 'count',
+      pickleftfields: 'pickLeftFields',
+      fieldstoconsider: 'fieldsToConsider',
+      fieldstoexclude: 'fieldsToExclude'
     };
 
     // Helper function to normalize an object
     const normalizeObject = (obj: any): sObjectSchemaType => {
-        const key = Object.keys(obj)[0];
-        const value = obj[key];
-        const lowerKey = key.toLowerCase();
-        const normalizedValue: any = { pickLeftFields: true }; // Default pickLeftFields to true
+      const key = Object.keys(obj)[0];
+      const value = obj[key];
+      const lowerKey = key.toLowerCase();
+      const normalizedValue: any = { pickLeftFields: true }; // Default pickLeftFields to true
 
-        for (const [k, v] of Object.entries(value)) {
-            const normalizedKey = k.toLowerCase();
-            const mappedKey = keyMapping[normalizedKey] || normalizedKey;
-            normalizedValue[mappedKey] = mappedKey === 'fieldsToExclude' && Array.isArray(v)
-                ? v.map((field: string) => field.toLowerCase())
-                : v;
-        }
+      for (const [k, v] of Object.entries(value)) {
+        const normalizedKey = k.toLowerCase();
+        const mappedKey = keyMapping[normalizedKey] || normalizedKey;
+        normalizedValue[mappedKey] = mappedKey === 'fieldsToExclude' && Array.isArray(v)
+          ? v.map((field: string) => field.toLowerCase())
+          : v;
+      }
 
-        return { [lowerKey]: normalizedValue };
+      return { [lowerKey]: normalizedValue };
     };
 
     // Helper function to check for unsupported objects
     const checkUnsupportedObjects = (objects: sObjectSchemaType[]): void => {
-        const foundUnsupported = objects
-            .map(obj => Object.keys(obj)[0])
-            .filter(key => userLicenseObjects.has(key));
+      const foundUnsupported = objects
+        .map(obj => Object.keys(obj)[0])
+        .filter(key => userLicenseObjects.has(key));
 
-        if (foundUnsupported.length > 0) {
-            console.log(`Action blocked for SObjects ${chalk.yellow(foundUnsupported.join(', '))}! Requires Salesforce user license.`);
-        }
+      if (foundUnsupported.length > 0) {
+        console.log(`Action blocked for SObjects ${chalk.yellow(foundUnsupported.join(', '))}! Requires Salesforce user license.`);
+      }
     };
 
     if (!objectNames) {
-        const result = allObjects.map(normalizeObject);
-        checkUnsupportedObjects(result);
-        return result;
+      const result = allObjects.map(normalizeObject);
+      checkUnsupportedObjects(result);
+      return result;
     }
 
     const nameSet = new Set(objectNames.split(',').map(name => name.trim().toLowerCase()));
@@ -319,18 +338,18 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     const missingNames = Array.from(nameSet).filter(name => !availableNames.has(name));
     if (missingNames.length > 0) {
-        throw new Error(
-            `The following specified objects were not found in template: ${chalk.yellow(missingNames.join(', '))}`
-        );
+      throw new Error(
+        `The following specified objects were not found in template: ${chalk.yellow(missingNames.join(', '))}`
+      );
     }
 
     const matchedObjects = allObjects
-        .map(obj => nameSet.has(Object.keys(obj)[0].toLowerCase()) ? normalizeObject(obj) : null)
-        .filter((obj): obj is sObjectSchemaType => obj !== null);
+      .map(obj => nameSet.has(Object.keys(obj)[0].toLowerCase()) ? normalizeObject(obj) : null)
+      .filter((obj): obj is sObjectSchemaType => obj !== null);
 
     checkUnsupportedObjects(matchedObjects);
     return matchedObjects;
-}
+  }
   /**
    * Determines the default set of fields to include for processing when no specific field configuration is provided.
    * Filters out fields that are listed in `fieldsToIgnore`, and only returns fields if no `fieldsToConsider`,
@@ -515,8 +534,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       });
     });
   });
-}
-    }
+  }
+  }
    
   }
 
@@ -839,7 +858,7 @@ public async handleDirectInsert(
     const humanReadableMessage = errorTemplate
       .replace('{field}', fieldList)
       .replace('{object}', object);
-    console.error(chalk.redBright(`Error in handleDirectInsert (${failedCount + 1}): ${humanReadableMessage}`));
+    console.error(chalk.redBright(`Error (${failedCount + 1}): ${humanReadableMessage}`));
     
     if (insertedIds.length === 0) {
       failedCount++;
