@@ -96,13 +96,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       summary: messages.getMessage('flags.alias.summary'),
       description: messages.getMessage('flags.alias.description'),
       required: true,
-    }),
-     target: Flags.string({
-      char: 'p',
-      summary: messages.getMessage('flags.target.summary'),
-      description: messages.getMessage('flags.target.description'),
-      required: false,
-    }),     
+    }),   
     recordType: Flags.string({
       char: 'r',
       summary: messages.getMessage('flags.recordType.summary'),
@@ -125,15 +119,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
   public async run(): Promise<DataGenerateResult> {
     const { flags } = await this.parse(DataGenerate);
-    const validationConn = await connectToSalesforceOrg(flags.alias);
+    
+    const conn = await connectToSalesforceOrg(flags.alias);
 
-    let baseConfig;
-    let dataGenConn = validationConn;
-  if (flags.target && flags.recordType) {
-    dataGenConn = await connectToSalesforceOrg(flags.target);  
-  }
-
-  baseConfig = await loadAndValidateConfig(validationConn, flags.templateName);
+    const baseConfig = await loadAndValidateConfig(conn, flags.templateName);
 
     const excludeSObjectsString = flags.excludeSObjects?.join(',') ?? undefined;
     const includeSObject = flags.sObject?.join(',') ?? undefined
@@ -156,7 +145,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
 
     // Generate fields and write generated_output.json config
-    await this.generateFieldsAndWriteConfig(dataGenConn, objectsToProcess, baseConfig, flags.recordType?.toLowerCase(), includeSObject);
+    await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig, flags.recordType?.toLowerCase(), includeSObject);
 
     excludeFieldsSet.clear();
 
@@ -200,7 +189,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         this.log(`No fields found for object: ${object}`);
         continue;
       }
-      const processedFields = await this.processObjectFieldsForIntitalJsonFile(dataGenConn,fields, object);
+      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn,fields, object);
 
       if (countofRecordsToGenerate === undefined) {
         throw new Error(`Count for object "${object}" is undefined.`);
@@ -216,7 +205,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     // Handle direct insert and get the failed count for this specific object
     const { failedCount: failedInsertions } = await this.handleDirectInsert(
-      dataGenConn,
+      conn,
       outputFormat,
       object,
       jsonData as GenericRecord[]
@@ -352,7 +341,18 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       return result;
     }
 
-    const nameSet = new Set(objectNames.split(',').map(name => name.trim().toLowerCase()));
+    const nameSet = new Set(
+      objectNames
+        .split(',')
+        .map(name => name.trim().toLowerCase())
+        .filter(Boolean) 
+    );
+    const overlap = Array.from(nameSet).filter(name => excludeSet.has(name));
+    if (overlap.length > 0) {
+      throw new Error(
+        `The following SObjects are present in both include and exclude lists: ${chalk.yellow(overlap.join(', '))}. Please remove the conflict.`
+      );
+    }
     const availableNames = new Set(allObjects.map((obj: any) => Object.keys(obj)[0].toLowerCase()));
 
     const missingNames = Array.from(nameSet).filter(name => !availableNames.has(name));

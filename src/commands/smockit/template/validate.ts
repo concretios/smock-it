@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/* eslint-disable @typescript-eslint/restrict-template-expressions */
 /* eslint-disable no-useless-catch */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable jsdoc/tag-lines */
@@ -78,7 +79,7 @@ function normalizeAndValidateTemplate(rawConfig: any): templateSchema {
     if (invalidTopLevelKeys.length > 0) {
       errors.push(
         chalk.red('The template contains invalid keys: ') +
-        chalk.yellow("['namespdaceToExclude', 'codunt']") +
+        chalk.yellow(`[${invalidTopLevelKeys.map((key) => `'${key}'`).join(', ')}]`) +
         chalk.white('. ') +
         chalk.white('Allowed keys are: ') +
         chalk.green('namespaceToExclude, outputFormat, count, sObjects')
@@ -296,9 +297,10 @@ export async function validateConfigJson(connection: Connection, configPath: str
     }
 
     return isDataValid;
-  } catch (error) {
-    throw error; // Re-throw to ensure the error is propagated
+  } catch (error: any) {
+      throw error.name === 'Error' ? error : new Error(chalk.red(`Error: ${error.name}`));
   }
+
 }
 
 export default class TemplateValidate extends SfCommand<TemplateValidateResult> {

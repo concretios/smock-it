@@ -10,14 +10,6 @@ For getting the alias details
 
 For alias details 
 
-# flags.target.summary
-
-For getting the target user summary
-
-# flags.target.description
-
-For target user details 
-
 # flags.recordType.summary
 
 For getting the recordType details

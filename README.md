@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/SF--Plugin--Test%20Data%20Generator-blue" />
 </p>
 
-# Smock-it (v3.0.1)
+# Smock-it (v3.0.2)
 
 Smock-it is a powerful CLI plugin, a tool for generating mock data for Salesforce testing. It simplifies the creation of compliant, relationship-aware test data, allowing developers, QA teams, and admins to quickly generate and use unique datasets directly within their Salesforce orgs.
 
@@ -229,6 +229,8 @@ sf smockit template remove -t <templateFileName> [-s <sObject>] [-c <recordCount
 | `--fieldsToConsider` | `-i` | Fields to Consider | Include specific fields from test data generation for a given object. This applies only at the object level, with the specified values. |
 | `--pickLeftFields` | `-p` | Pick Left Fields | If true, generates data for all fields except those listed in `FieldsToExclude`. If false, generates data only for the fields specified in `FieldsToConsider`. |
 | `--aliasOrUserName` | `-a` | Alias Or UserName | This flag is required when using the validate and data generate commands. It accepts a username or alias name and only supports orgs listed in the Salesforce Org List. |
+| `--excludeSObjects` | `-z` | excludesObject | This flag is used to skip or exclude a specific SObject from the data generation process — even if that SObject is defined in the template file. |
+| `--recordType` | `-r` | recordType | The flag is used to create data for a specific Record Type of one SObject. Just pass the Record Type name with the -r flag, and it will be used while generating the data. |
 
 ## Smock-it GitHub Action
 

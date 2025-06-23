@@ -30,7 +30,6 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as readline from 'node:readline';
 import GenerateTestData from 'smockit-data-engine';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages, Connection, SfError } from '@salesforce/core';
@@ -77,29 +76,6 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     }),
   };
 
-  private static async csvToJsonPromise(filePath: string): Promise<GenericRecord[]> {
-    return new Promise((resolve, reject) => {
-      const records: GenericRecord[] = [];
-      const fileStream = fs.createReadStream(filePath, { encoding: 'utf-8' });
-      const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
-      let headers: string[] = [];
-      rl.on('line', (line) => {
-        const values = line.split(',').map((v) => v.trim());
-        if (!headers.length) {
-          headers = values;
-        } else {
-          const record: GenericRecord = {};
-          headers.forEach((header, index) => {
-            record[header] = values[index] || '';
-          });
-          records.push(record);
-        }
-      });
-      rl.on('close', () => resolve(records));
-      rl.on('error', (err) => reject(new SfError(`Error reading CSV file: ${err.message}`, 'CsvParseError')));
-    });
-  }
-
   private static async parseFile(filePath: string): Promise<GenericRecord[]> {
     const fileExtension = path.extname(filePath).toLowerCase();
     try {
@@ -108,10 +84,8 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
         const parsedData = JSON.parse(data);
         return Array.isArray(parsedData) ? parsedData : [parsedData];
       }
-      if (fileExtension === '.csv') {
-        return await this.csvToJsonPromise(filePath);
-      }
-      throw new SfError('Unsupported file type. Please provide a .json or .csv file.', 'UnsupportedFileTypeError');
+
+      throw new SfError('Unsupported file type. Please provide a .json file.', 'UnsupportedFileTypeError');
     } catch (error: any) {
       throw new SfError(`Failed to parse file: ${error.message}`, 'FileParseError', [], error);
     }
@@ -120,13 +94,13 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
   private static checkFile(filename: string): string {
     if (!filename.includes('.'))
       throw new SfError(
-        "File type missing from '-u' or '--upload-file' flag. Please provide a filename with .json or .csv extension.",
+        "File type missing from '-u' or '--upload-file' flag. Please provide a filename with .json",
         'MissingFileExtension'
       );
     const fileExtension = path.extname(filename).toLowerCase();
-    if (fileExtension !== '.json' && fileExtension !== '.csv')
+    if (fileExtension !== '.json')
       throw new SfError(
-        "Unsupported file type in '-u' or '--upload-file' flag. Please provide a .json or .csv file.",
+        "Unsupported file type in '-u' or '--upload-file' flag. Please provide a .json file.",
         'UnsupportedFileTypeError'
       );
     const filePath = path.join(process.cwd(), 'data_gen/output', filename);
