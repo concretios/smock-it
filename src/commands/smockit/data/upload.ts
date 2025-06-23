@@ -31,7 +31,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
-import GenerateTestData from 'sf-mock-data';
+import GenerateTestData from 'smockit-data-engine';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages, Connection, SfError } from '@salesforce/core';
 import chalk from 'chalk';
@@ -153,15 +153,10 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     const successfulInserts = results.filter((r) => r.success);
     const failedInserts = results.filter((r) => !r.success);
     if (failedInserts.length > 0) {
-      log(chalk.red(`Failed to insert ${failedInserts.length} ${sobject} records.`));
       const errorSummary = new Map<string, number>();
       failedInserts.forEach((res) => {
         const errorMessage = res.errors?.[0]?.message || 'Unknown error';
         errorSummary.set(errorMessage, (errorSummary.get(errorMessage) ?? 0) + 1);
-      });
-      log(chalk.red('Error summary:'));
-      errorSummary.forEach((count, message) => {
-        log(chalk.red(`- ${message} (${count} times)`));
       });
     }
 
@@ -426,8 +421,6 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
       const parentId = await this.ensureParentRecordExists(conn, parentObjectName, sobject);
       parentIdMap.set(parentObjectName, parentId);
     }
-
-    // this.spinner.start(`Uploading data to Salesforce org: ${flags.alias}. Please wait...`);
 
     const fieldMetaMap = new Map(sObjectMeta.map((f) => [f.QualifiedApiName, f]));
 

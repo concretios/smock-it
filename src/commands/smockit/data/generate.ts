@@ -27,8 +27,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
-// import GenerateTestData from 'smockit-data-engine';
-import GenerateTestData from 'sf-mock-data';
+import GenerateTestData from 'smockit-data-engine';
 
 
 import { Flags, Progress, SfCommand } from '@salesforce/sf-plugins-core';
@@ -97,6 +96,12 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       summary: messages.getMessage('flags.alias.summary'),
       description: messages.getMessage('flags.alias.description'),
       required: true,
+    }),
+     target: Flags.string({
+      char: 'p',
+      summary: messages.getMessage('flags.target.summary'),
+      description: messages.getMessage('flags.target.description'),
+      required: false,
     }),     
     recordType: Flags.string({
       char: 'r',
@@ -120,11 +125,25 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
   public async run(): Promise<DataGenerateResult> {
     const { flags } = await this.parse(DataGenerate);
-    const conn = await connectToSalesforceOrg(flags.alias);
-    // load and validate template baseConfig file
-    const baseConfig = await loadAndValidateConfig(conn, flags.templateName);
+    const validationConn = await connectToSalesforceOrg(flags.alias);
+
+    let baseConfig;
+    let dataGenConn = validationConn;
+  if (flags.target && flags.recordType) {
+    dataGenConn = await connectToSalesforceOrg(flags.target);  
+  }
+
+  baseConfig = await loadAndValidateConfig(validationConn, flags.templateName);
+
     const excludeSObjectsString = flags.excludeSObjects?.join(',') ?? undefined;
     const includeSObject = flags.sObject?.join(',') ?? undefined
+    if (!baseConfig) {
+      throw new Error('Base configuration is undefined. Please ensure the template is loaded correctly.');
+    }
+
+    if (typeof baseConfig.count !== 'number' || (typeof baseConfig.count === 'number' && baseConfig.count <= 0)) {
+      baseConfig.count = 1;
+    }
     const objectsToProcess = this.processObjectConfiguration(baseConfig, includeSObject, excludeSObjectsString);
 
     const restrictedObjectsFound = objectsToProcess
@@ -137,7 +156,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
 
     // Generate fields and write generated_output.json config
-    await this.generateFieldsAndWriteConfig(conn, objectsToProcess, baseConfig, flags.recordType?.toLowerCase(), includeSObject);
+    await this.generateFieldsAndWriteConfig(dataGenConn, objectsToProcess, baseConfig, flags.recordType?.toLowerCase(), includeSObject);
 
     excludeFieldsSet.clear();
 
@@ -181,7 +200,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         this.log(`No fields found for object: ${object}`);
         continue;
       }
-      const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn,fields, object);
+      const processedFields = await this.processObjectFieldsForIntitalJsonFile(dataGenConn,fields, object);
 
       if (countofRecordsToGenerate === undefined) {
         throw new Error(`Count for object "${object}" is undefined.`);
@@ -197,7 +216,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     // Handle direct insert and get the failed count for this specific object
     const { failedCount: failedInsertions } = await this.handleDirectInsert(
-      conn,
+      dataGenConn,
       outputFormat,
       object,
       jsonData as GenericRecord[]

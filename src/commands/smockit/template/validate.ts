@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/* eslint-disable no-useless-catch */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable jsdoc/tag-lines */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable guard-for-in */
@@ -36,9 +38,10 @@ dotenv.config();
 /**
  * Normalizes the keys of the template object to a consistent camelCase format
  * and validates that no unknown keys are present. This allows for case-insensitive key parsing.
+ * Collects all validation errors before throwing them, with invalid top-level keys in a single array.
  * @param rawConfig The raw object parsed from the JSON file.
  * @returns A configuration object that matches the templateSchema.
- * @throws An error if invalid or unknown keys are found in the template.
+ * @throws An error with all validation issues if any are found.
  */
 function normalizeAndValidateTemplate(rawConfig: any): templateSchema {
   // Define allowed keys at each level and their canonical camelCase form.
@@ -57,68 +60,109 @@ function normalizeAndValidateTemplate(rawConfig: any): templateSchema {
   };
 
   const normalizedConfig: { [key: string]: any } = {};
+  const errors: string[] = [];
+  const invalidTopLevelKeys: string[] = [];
 
   if (typeof rawConfig !== 'object' || rawConfig === null) {
-    throw new Error(chalk.red('Error: Template file content must be a valid JSON object.'));
-  }
-
-  // 1. Normalize and validate top-level keys
-  for (const key in rawConfig) {
-    const lowerKey = key.toLowerCase();
-    if (topLevelAllowedKeys[lowerKey]) {
-      normalizedConfig[topLevelAllowedKeys[lowerKey]] = rawConfig[key];
-    } else {
-      throw new Error(
-        chalk.red(`Error: Invalid top-level key in template: '${key}'. Valid keys are: ${Object.values(topLevelAllowedKeys).join(', ')}`)
-      );
-    }
-  }
-
-  // 2. Ensure sObjects array exists
-  const sObjects = normalizedConfig.sObjects;
-  if (sObjects === undefined) {
-    throw new Error(chalk.red("Error: The template must contain an 'sObjects' key (e.g., 'sObjects', 'SOBJECTS')."));
-  }
-  if (!Array.isArray(sObjects)) {
-    throw new Error(chalk.red("Error: The value for 'sObjects' must be an array."));
-  }
-
-  // 3. Normalize and validate the sObjects array and its contents
-  normalizedConfig.sObjects = sObjects.map((sObjectEntry: any, index: number) => {
-    if (typeof sObjectEntry !== 'object' || sObjectEntry === null || Object.keys(sObjectEntry).length !== 1) {
-      throw new Error(
-        chalk.red(
-          `Error: Invalid entry in 'sObjects' array at index ${index}. Each entry must be an object with a single SObject name as the key.`
-        )
-      );
-    }
-
-    const sObjectName = Object.keys(sObjectEntry)[0];
-    const sObjectDataRaw = sObjectEntry[sObjectName];
-
-    if (typeof sObjectDataRaw !== 'object' || sObjectDataRaw === null) {
-      throw new Error(chalk.red(`Error: The value for SObject '${sObjectName}' must be a JSON object.`));
-    }
-
-    const normalizedSObjectData: { [key: string]: any } = {};
-
-    for (const key in sObjectDataRaw) {
+    errors.push(chalk.red('Error: Template file content must be a valid JSON object.'));
+  } else {
+    for (const key in rawConfig) {
       const lowerKey = key.toLowerCase();
-      if (sObjectLevelAllowedKeys[lowerKey]) {
-        normalizedSObjectData[sObjectLevelAllowedKeys[lowerKey]] = sObjectDataRaw[key];
+      if (topLevelAllowedKeys[lowerKey]) {
+        normalizedConfig[topLevelAllowedKeys[lowerKey]] = rawConfig[key];
       } else {
-        throw new Error(
-          chalk.red(
-            `Error: Invalid key '${key}' for SObject '${sObjectName}'. Valid keys are: ${Object.values(
-              sObjectLevelAllowedKeys
-            ).join(', ')}`
-          )
-        );
+        invalidTopLevelKeys.push(key);
       }
     }
 
-    return { [sObjectName]: normalizedSObjectData };
-  });
+    if (invalidTopLevelKeys.length > 0) {
+      errors.push(
+        chalk.red('The template contains invalid keys: ') +
+        chalk.yellow("['namespdaceToExclude', 'codunt']") +
+        chalk.white('. ') +
+        chalk.white('Allowed keys are: ') +
+        chalk.green('namespaceToExclude, outputFormat, count, sObjects')
+      );
+    }
+
+    const sObjects = normalizedConfig.sObjects;
+    if (sObjects === undefined) {
+      errors.push(chalk.red("Error: The template must contain an 'sObjects' key."));
+    } else if (!Array.isArray(sObjects)) {
+      errors.push(chalk.red("Error: The value for 'sObjects' must be an array."));
+    } else {
+      const invalidKeysPerSObject: Record<string, string[]> = {};
+
+      normalizedConfig.sObjects = sObjects.map((sObjectEntry: any, index: number) => {
+        if (typeof sObjectEntry !== 'object' || sObjectEntry === null || Object.keys(sObjectEntry).length !== 1) {
+          errors.push(
+            chalk.red(`Error: Invalid entry in 'sObjects' array at index ${index}. Each entry must have a single key.`)
+          );
+          return sObjectEntry;
+        }
+
+        const sObjectName = Object.keys(sObjectEntry)[0];
+        const sObjectDataRaw = sObjectEntry[sObjectName];
+
+        if (typeof sObjectDataRaw !== 'object' || sObjectDataRaw === null) {
+          errors.push(chalk.red(`Error: The value for SObject '${sObjectName}' must be a JSON object.`));
+          return sObjectEntry;
+        }
+
+        const normalizedSObjectData: { [key: string]: any } = {};
+
+        for (const key in sObjectDataRaw) {
+          const lowerKey = key.toLowerCase();
+          if (sObjectLevelAllowedKeys[lowerKey]) {
+            normalizedSObjectData[sObjectLevelAllowedKeys[lowerKey]] = sObjectDataRaw[key];
+          } else {
+            if (!invalidKeysPerSObject[sObjectName]) {
+              invalidKeysPerSObject[sObjectName] = [];
+            }
+            invalidKeysPerSObject[sObjectName].push(key);
+          }
+        }
+
+        if (normalizedSObjectData.pickLeftFields !== undefined) {
+          const pickLeftValue = normalizedSObjectData.pickLeftFields;
+          const lowerPickLeftValue = typeof pickLeftValue === 'string' ? pickLeftValue.toLowerCase() : pickLeftValue;
+          if (lowerPickLeftValue === true) {
+            normalizedSObjectData.pickLeftFields = true;
+          } else if (lowerPickLeftValue === false) {
+            normalizedSObjectData.pickLeftFields = false;
+          } else {
+            errors.push(
+              chalk.red('Error: ') +
+              chalk.white("'") +
+              chalk.yellow('pickLeftFields') +
+              chalk.white(' for SObject ') +
+              chalk.cyan.bold(`${sObjectName}. `) +
+              chalk.white('must be a boolean value (true or false), but received: ') +
+              chalk.magentaBright(`'${pickLeftValue}'`)
+
+            );
+          }
+        }
+
+        return { [sObjectName]: normalizedSObjectData };
+      });
+
+      for (const [sObjectName, invalidKeys] of Object.entries(invalidKeysPerSObject)) {
+        errors.push(
+          chalk.red('Error: Invalid keys ') +
+          chalk.yellow(`['${invalidKeys.join("', '")}']`) +
+          chalk.red(' for SObject ') + chalk.yellow(`${sObjectName}. `) +
+          chalk.white('Valid keys are: ') + chalk.green(Object.values(sObjectLevelAllowedKeys).join(', '))
+        );
+      }
+    }
+  }
+
+
+
+  if (errors.length > 0) {
+    throw new Error(errors.join('\n'));
+  }
 
   return normalizedConfig as templateSchema;
 }
@@ -132,7 +176,6 @@ export async function validateConfigJson(connection: Connection, configPath: str
 
   try {
     const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    // Normalize and validate the structure and keys of the configuration
     const config = normalizeAndValidateTemplate(rawConfig);
 
     const invalidObjects: string[] = [];
@@ -187,15 +230,17 @@ export async function validateConfigJson(connection: Connection, configPath: str
 
       const getAllFields: string[] = sObjectMeta.fields
         ? sObjectMeta.fields
-            .filter((field: Types.Field) => field.fullName != null)
-            .map((field: Types.Field) => field.fullName!.toLowerCase())
+          .filter((field: Types.Field) => field.fullName != null)
+          .map((field: Types.Field) => field.fullName!.toLowerCase())
         : [];
 
       if (sObjectMeta.nameField) {
         getAllFields.push('name');
       }
-      getAllFields.push('lastname', 'firstname');
 
+      if (sObjectName.toLowerCase() === 'contact') {
+        getAllFields.push('lastname', 'firstname', 'salutation');
+      }
       const invalidFieldsInConisder = Object.keys(fieldsToConsider).filter((field) => {
         // checking for dependent picklist fields(dp-) in the schema
 
@@ -211,7 +256,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
         invalidFieldsMap[sObjectName] = allInvalidFields;
       }
     }
-  spinner.stop('');
+    spinner.stop('');
 
     if (isObjFieldsMissing && objectFieldsMissing.length > 0) {
       throw new Error(
@@ -252,11 +297,6 @@ export async function validateConfigJson(connection: Connection, configPath: str
 
     return isDataValid;
   } catch (error) {
-    if (error instanceof Error) {
-      console.error('In Validate Command - Error occurred:', error.message);
-    } else {
-      console.error('In Validate Command - Unknown error occurred:', error);
-    }
     throw error; // Re-throw to ensure the error is propagated
   }
 }
