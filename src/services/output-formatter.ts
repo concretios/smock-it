@@ -28,12 +28,12 @@ export function saveOutputFileOfJsonAndCsv(
   const outputPathDir = `${process.cwd()}/data_gen/output/`;
   if (!fs.existsSync(outputPathDir)) fs.mkdirSync(outputPathDir, { recursive: true });
 
-  if (outputFormat.includes('json') || outputFormat.includes('json')) {
+  if (outputFormat.includes('json') || outputFormat.includes('JSON')) {
     const jsonFilePath = `${outputPathDir}${object}_${templateName?.replace('.json', '')}_${dateTime}.json`;
     fs.writeFileSync(jsonFilePath, JSON.stringify(jsonData, null, 2));
   }
 
-  if (outputFormat.includes('csv') || outputFormat.includes('csv')) {
+  if (outputFormat.includes('csv') || outputFormat.includes('CSV')) {
     const csvData = convertJsonToCsv(jsonData);
     const csvFilePath = `${outputPathDir}${object}_${templateName?.replace('.json', '')}_${dateTime}.csv`;
     fs.writeFileSync(csvFilePath, csvData);

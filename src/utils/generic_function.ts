@@ -40,7 +40,7 @@ export async function connectToSalesforceOrg(userNameorAlias: string): Promise<C
     }
     const authInfo = await AuthInfo.create({ username: resolvedUsername });
     const connection = await Connection.create({ authInfo });
-    console.log(chalk.green(`Success: Connected to SF Org: ${resolvedUsername}`));
+    console.log(chalk.green(`Success: Connected to SF Org: ${resolvedUsername} \n`));
     return connection;
   } catch (err) {
     throw new Error(
