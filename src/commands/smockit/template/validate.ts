@@ -298,7 +298,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
 
     return isDataValid;
   } catch (error: any) {
-      throw error.name === 'Error' ? error : new Error(chalk.red(`Error: ${error.name}`));
+      throw error.name === 'Error' ? error : new Error(chalk.red(`${error.message}`));
   }
 
 }

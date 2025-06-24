@@ -94,13 +94,13 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
   private static checkFile(filename: string): string {
     if (!filename.includes('.'))
       throw new SfError(
-        "File type missing from '-u' or '--upload-file' flag. Please provide a filename with .json",
+        "File type missing from '-u' or '--uploadFile' flag. Please provide a filename with .json",
         'MissingFileExtension'
       );
     const fileExtension = path.extname(filename).toLowerCase();
     if (fileExtension !== '.json')
       throw new SfError(
-        "Unsupported file type in '-u' or '--upload-file' flag. Please provide a .json file.",
+        "Unsupported file type in '-u' or '--uploadFile' flag. Please provide a .json file.",
         'UnsupportedFileTypeError'
       );
     const filePath = path.join(process.cwd(), 'data_gen/output', filename);
@@ -202,6 +202,16 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
   private getRandomPicklistValue(values: string[]): string | undefined {
     if (!values.length) return undefined;
     return values[Math.floor(Math.random() * values.length)];
+  }
+
+  private async checkSObjectExists(conn: Connection, sobject: string): Promise<void> {
+    try {
+      await conn.describe(sobject);
+    } catch (error: any) {
+      throw new Error(
+        `The sObject ${chalk.yellow(sobject)} does not exist in the Salesforce org.`
+      );
+    }
   }
 
   private async ensureParentRecordExists(
@@ -366,6 +376,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
 
 
     const conn = await connectToSalesforceOrg(flags.alias);
+    await this.checkSObjectExists(conn, sobject);
 
     const recordsFromFile = await DataUpload.parseFile(filePath);
     const sObjectMeta = await this.fetchObjectMetadata(conn, sobject);
