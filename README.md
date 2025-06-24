@@ -241,7 +241,7 @@ sf smockit template remove -t <templateFileName> [-s <sObject>] [-c <recordCount
 | `--pickLeftFields` | `-p` | Pick Left Fields | If true, generates data for all fields except those listed in `FieldsToExclude`. If false, generates data only for the fields specified in `FieldsToConsider`. |
 | `--aliasOrUserName` | `-a` | Alias Or UserName | This flag is required when using the validate and data generate commands. It accepts a username or alias name and only supports orgs listed in the Salesforce Org List. |
 | `--excludeSObjects` | `-z` | ExcludesObjects |This flag skips a specific SObject during data generation, even if it's included in the template file. |
-| `--recordType` | `-r` | recordType | Generate data for a specific Record Type of for specified object by passing its name with the -r flag. |
+| `--recordType` | `-r` | recordType | Generate data for a specific Record Type for specified object by passing its name with the -r flag. |
 
 
 ## Smock-it GitHub Action
