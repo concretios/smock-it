@@ -224,13 +224,13 @@ sf smockit template remove -t <templateFileName> [-s <sObject>] [-c <recordCount
 > **⚠️ Deprecated Commands**  
 > The following commands are deprecated and will be removed in a future version. Please update your scripts to use the new `sf smockit` commands.
 
-| Legacy Command | New Command | 
-| ----- | ----- | ----- |
-| `sf template init` | `sf smockit template init` | 
-| `sf template validate` | `sf smockit template validate` | 
-| `sf template generate` | `sf smockit data generate` | 
+| Legacy Command | New Command |
+| :------------ | :---------- |
+| `sf template init` | `sf smockit template init` |
+| `sf template validate` | `sf smockit template validate` |
+| `sf template generate` | `sf smockit data generate` |
 | `sf data upload` | `sf smockit data upload` |
-| `sf template print` | `sf smockit template print` | 
+| `sf template print` | `sf smockit template print` |
 | `sf template upsert` | `sf smockit template upsert` |
 | `sf template remove` | `sf smockit template remove` |
 
