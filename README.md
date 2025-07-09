@@ -224,15 +224,15 @@ sf smockit template remove -t <templateFileName> [-s <sObject>] [-c <recordCount
 > **⚠️ Deprecated Commands**  
 > The following commands are deprecated and will be removed in a future version. Please update your scripts to use the new `sf smockit` commands.
 
-| Legacy Command | New Command | Remarks |
+| Legacy Command | New Command | 
 | ----- | ----- | ----- |
-| `sf template init [--default]` | `sf smockit template init [--default]` | Template creation command moved to smockit namespace |
-| `sf template validate -t <templateFileName> -a <aliasorUsername>` | `sf smockit template validate -t <templateFileName> -a <aliasorUsername>` | Template validation command moved to smockit namespace |
-| `sf template generate -t <templateFileName> -a <aliasorUsername>` | `sf smockit data generate -t <templateFileName> -a <aliasorUsername>` | Command moved to smockit namespace and reorganized under `data` subcommand |
-| `sf data upload -u <filename> -a <alias_or_username> -s <sObject>` | `sf smockit data upload -u <filename> -a <alias_or_username> -s <sObject>` | Data upload command moved to smockit namespace |
-| `sf template print -t <templateFileName>` | `sf smockit template print -t <templateFileName>` | Template print command moved to smockit namespace |
-| `sf template upsert -t <templateFileName> [options]` | `sf smockit template upsert -t <templateFileName> [options]` | Template upsert command moved to smockit namespace |
-| `sf template remove -t <templateFileName> [options]` | `sf smockit template remove -t <templateFileName> [options]` | Template remove command moved to smockit namespace |
+| `sf template init` | `sf smockit template init` | 
+| `sf template validate` | `sf smockit template validate` | 
+| `sf template generate` | `sf smockit data generate` | 
+| `sf data upload` | `sf smockit data upload` |
+| `sf template print` | `sf smockit template print` | 
+| `sf template upsert` | `sf smockit template upsert` |
+| `sf template remove` | `sf smockit template remove` |
 
 ## Smock-it GitHub Action
 
