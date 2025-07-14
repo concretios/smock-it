@@ -3,34 +3,48 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v3.0.0-brightgreen" />
+  <img src="https://img.shields.io/badge/version-v3.0.2-brightgreen" />
   <img src="https://img.shields.io/badge/mock--data-brightgreen" />
   <img src="https://img.shields.io/badge/SF--Plugin--Test%20Data%20Generator-blue" />
 </p>
 
-# Smock-it (v3.0.1)
+# Smock-it (v3.0.2)
 
 Smock-it is a powerful CLI plugin, a tool for generating mock data for Salesforce testing. It simplifies the creation of compliant, relationship-aware test data, allowing developers, QA teams, and admins to quickly generate and use unique datasets directly within their Salesforce orgs.
 
 Want to get started with Smock-it?  [**Quick Start Guide**](https://github.com/concretios/smock-it/wiki/Quick-Start-Guide).
 
-## What`s New in v3?
+## What\`s New in v3?
 
 Smock-it v3 brings smarter, faster test data generation for Salesforce, with:
 
-### 1. Native Data Library
+### 1. Exclude Specific Objects from Data Generation
 
-Smock-it has eliminated its dependency on mockaroo and now comes with its own data library. This allows it to generate 100% unique data up to 300K records for Salesforce standard duplicate rules.
+Smock-it v3.0.2 introduces the `excludeSObjects` flag (`-z`), allowing you to skip specific SObjects from data generation — even if they're defined in your saved template. This is helpful when you have a large template with multiple objects but want to generate data for only a few at a time, without modifying the original template.
 
-### 2. Realistic Address Mapping
+### 2. Record Type-Specific Data Generation 
+
+Now you can generate data for specific record types using the new `--recordType` (`-r`) flag. This is especially useful when an object like Account has multiple record types but you only want to include a few relevant fields tied to a particular type. Define the record type directly in your data generation command.
+
+>Note: Only users with the `System Administrator` profile are allowed to generate data for specific record types.
+
+### 3. Advanced Conditional Data Handling
+
+With v3.0.2, Smock-it adds greater flexibility to how data is distributed across fields. Suppose you're generating 20 records for an object like **Opportunity** — you can now apply conditional logic to split records across specific field values. For example, generate 15 records where `StageName` is set to **Closed Won** and another 5 where it's **Closed Lost**. This level of control can be applied directly at the object level within your template.
+
+### 4. Native Data Library
+
+Smock-it has removed its dependency on Mockaroo and now includes its own data library **(v0.0.3)**, enabling the generation of 100% unique data — up to 300K records — while complying with Salesforce standard duplicate rules.
+
+### 5. Realistic Address Mapping
 
 When generating location-based data, Smock-it intelligently associates countries with their respective states and cities, ensuring the data is both logical and realistic.
 
-### 3. Text & Number Generation
+### 6. Text & Number Generation
 
 Using advanced, context-aware algorithms, it generates realistic names, industries, emails, currencies, and other text-based data. This ensures that your test data closely mirrors real-world scenarios, enhancing its authenticity and reliability.
 
-### 4. Upload Generated Data to Multiple Orgs
+### 7. Upload Generated Data to Multiple Orgs
 
 The new data upload feature allows users to upload generated datasets to different orgs using the username or alias. This makes it seamless for teams to test across environments with the exact same dataset.
 
@@ -171,13 +185,13 @@ sf smockit data generate -t <templateFileName> -a <aliasorUsername>
 
 #### 4. Data Upload
 
-Upload generated data (CSV, JSON) to multiple orgs. [Read more](https://github.com/concretios/smock-it/wiki/Data-Upload-Command)
+Upload generated data (JSON) to multiple orgs. [Read more](https://github.com/concretios/smock-it/wiki/Data-Upload-Command)
 
 ```bash
 sf smockit data upload -u <filename.json|filename.csv> -a <alias_or_username> -s <sObject>
 ```
 
-**Note**: Make sure to append the filename with .json or .csv to upload the data.
+**Note**: Make sure to append the filename with .json to upload the data.
 
 #### 5. Print Template
 
@@ -213,11 +227,13 @@ sf smockit template remove -t <templateFileName> [-s <sObject>] [-c <recordCount
 | `--namespaceToExclude` | `-x` | Namespace to Exclude | Exclude specific namespaces from generating record data for namespace fields. Multiple namespaces can be separated by commas. |
 | `--outputFormat` | `-f` | Output Format | Define the output format(s) for generated data (e.g., CSV, JSON, DI). Multiple formats can be specified, separated by commas. |
 | `--sObject` | `-s` | Specific Object | Target a specific object and override its existing settings. If not found in the template, an "add object" prompt will appear. |
-| `--upload` | `-u` | Upload |The -u command is used to upload the generated JSON or CSV data into the target Salesforce org. |
+| `--upload` | `-u` | Upload |The -u command is used to upload the generated JSON data into the target Salesforce org. |
 | `--fieldsToExclude` | `-e` | Fields to Exclude | Exclude specific fields from test data generation for a given object. Applies only at the object level. |
 | `--fieldsToConsider` | `-i` | Fields to Consider | Include specific fields from test data generation for a given object. This applies only at the object level, with the specified values. |
 | `--pickLeftFields` | `-p` | Pick Left Fields | If true, generates data for all fields except those listed in `FieldsToExclude`. If false, generates data only for the fields specified in `FieldsToConsider`. |
 | `--aliasOrUserName` | `-a` | Alias Or UserName | This flag is required when using the validate and data generate commands. It accepts a username or alias name and only supports orgs listed in the Salesforce Org List. |
+| `--excludeSObjects` | `-z` | ExcludesObjects |This flag skips a specific SObject during data generation, even if it's included in the template file. |
+| `--recordType` | `-r` | recordType | Generate data for a specific Record Type for specified object by passing its name with the -r flag. |
 
 ## Legacy Command Migration
 
