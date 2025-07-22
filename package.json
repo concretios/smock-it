@@ -25,7 +25,6 @@
     "rimraf": "^6.0.1",
     "shell": "^0.12.0",
     "smockit-data-engine": "^0.0.2",
-    "smock-it": "^0.0.2",
     "yarn": "^1.22.22"
   },
   "devDependencies": {
