@@ -183,7 +183,7 @@ sf smockit promptify
 ```
 >Note: This command combines both template creation and data generation into a single step—no need to run multiple commands. Based on your requirements, you can choose to generate data immediately by answering “yes,” or save the template for future use.
 
-#### 2. Validate Template
+#### 3. Validate Template
 
 Check data generation template for correctness. [Read more](https://github.com/concretios/smock-it/wiki/Template-Validate-Command)
 
@@ -191,7 +191,7 @@ Check data generation template for correctness. [Read more](https://github.com/c
 sf smockit template validate -t <templateFileName> -a <aliasorUsername>
 ```
 
-#### 3. Generate Data
+#### 4. Generate Data
 
 Generate and/or insert data based on the objects and settings defined within the template. [Read more](https://github.com/concretios/smock-it/wiki/Data-Generate-Command)
 
@@ -201,7 +201,7 @@ sf smockit data generate -t <templateFileName> -a <aliasorUsername>
 
 **Note:** The alias name or username of the Salesforce Org is required.
 
-#### 4. Data Upload
+#### 5. Data Upload
 
 Upload generated data (JSON) to multiple orgs. [Read more](https://github.com/concretios/smock-it/wiki/Data-Upload-Command)
 
@@ -211,7 +211,7 @@ sf smockit data upload -u <filename.json|filename.csv> -a <alias_or_username> -s
 
 **Note**: Make sure to append the filename with .json to upload the data.
 
-#### 5. Print Template
+#### 6. Print Template
 
 Review the template configuration before using it to generate data in read-only. [Read more](https://github.com/concretios/smock-it/wiki/Template-Print-Command)
 
@@ -219,7 +219,7 @@ Review the template configuration before using it to generate data in read-only.
 sf smockit template print -t <templateFileName>
 ```
 
-#### 6. Upsert Configurations
+#### 7. Upsert Configurations
 
 Modify or add configuration to an existing template. [Read more](https://github.com/concretios/smock-it/wiki/Template-Upsert-Command)
 
@@ -227,7 +227,7 @@ Modify or add configuration to an existing template. [Read more](https://github.
 sf smockit template upsert -t <templateFileName> [-s <sObject>] [-c <recordCount>] [-x <namespaceToExclude>] [-f <outputFormat>] [-e <fieldsToExclude>] [-i <fieldsToConsider>] [-p <pickLeftFields>]
 ```
 
-#### 7. Remove Configurations
+#### 8. Remove Configurations
 
 Remove specific configurations from an existing data generation template. [Read more](https://github.com/concretios/smock-it/wiki/Template-Remove-Command)
 
