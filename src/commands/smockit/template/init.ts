@@ -146,7 +146,7 @@ function createDefaultTemplate(flags: flagsForInit, templatePath: string): void 
     const defaultTemplate = `
 {
   "namespaceToExclude": [],
-  "outputFormat": ["csv", "json"],
+  "outputFormat": ["csv","di","json"],
   "count": 1,
   "sObjects": [
     {"account": {}},
@@ -169,6 +169,68 @@ function createDefaultTemplate(flags: flagsForInit, templatePath: string): void 
     fs.writeFileSync(defaultTemplatePath, defaultTemplate, 'utf8');
     console.log(chalk.green(`Success: default data template created at ${defaultTemplatePath}`));
   }
+}
+// default template for the sales process
+function createSalesProcessTemplate(templatePath: string): void {
+  let defaultTemplatePath = path.join(templatePath, 'default_salesprocess_template.json');
+  let defaultTemplateNumber = 0;
+
+  while (fs.existsSync(defaultTemplatePath)) {
+    defaultTemplateNumber++;
+    defaultTemplatePath = path.join(templatePath, `default_salesprocess_template_${defaultTemplateNumber}.json`);
+  }
+
+  const salesProcessTemplate = `
+{
+  "namespaceToExclude": [],
+  "outputFormat": ["di"],
+  "Count": 1,
+  "sObjects": [
+    {
+      "Account": {
+        "count": 1,
+        "fieldsToConsider": {},
+        "fieldsToExclude": [],
+        "pickLeftFields": true,
+        "relatedSObjects": [
+          {
+            "Contact": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true,
+              "relatedSObjects": [
+                {
+                  "Opportunity": {
+                    "count": 1,
+                    "fieldsToConsider": {},
+                    "fieldsToExclude": [],
+                    "pickLeftFields":true,
+                    "relatedSObjects": [
+                      {
+                        "Quote": {
+                          "count": 1,
+                          "pickLeftFields": true,
+                          "fieldsToConsider":{},
+                          "fieldsToExclude": ["AdditionalState"]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+`;
+
+
+  fs.writeFileSync(defaultTemplatePath, salesProcessTemplate, 'utf8');
+  console.log(chalk.green(`Success: default Sales Process template created at ${defaultTemplatePath}`));
 }
 async function getJSONFileName(templatePath: string): Promise<string> {
   let fileName: string;
@@ -335,13 +397,6 @@ async function showConditionalCommand(
     }
 
     /* ---------------------New features added------------------------------*/
-
-    console.log(
-      chalk.blue.bold(
-        'Note: For dependent picklists, define values in order (e.g., dp-Country: [India], dp-State: [Goa]).'
-      )
-    );
-
     const fieldsToConsiderInput = await askQuestion(
       chalk.white.bold(`[${sObjectName} - fieldsToConsider]`) +
         ' List fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
@@ -385,6 +440,12 @@ async function showConditionalCommand(
       );
       continue;
     }
+
+    /*  NEW RELATED OBJECTS QUESTIONNAIRE */
+    const relatedSObjects = await handleRelatedSObjectsQuestionnaire(sObjectName);
+    if (relatedSObjects.length > 0) {
+        sObjectSettingsMap[sObjectName]['relatedSObjects'] = relatedSObjects;
+    }
     /* -------------------------------------------- */
 
     if (remainingObjects.length !== 0) {
@@ -407,7 +468,115 @@ export const askQuestion = async (query: string, defaultValue?: string): Promise
 
   return (response as unknown as { answer: string }).answer;
 };
+async function handleRelatedSObjectsQuestionnaire(
+  parentName: string
+): Promise<Array<{ [key: string]: typeSObjectSettingsMap }>> {
+  const relatedSObjects: Array<{ [key: string]: typeSObjectSettingsMap }> = [];
+  let continueAdding = true;
+  let sObjectSettingsMap: { [key: string]: typeSObjectSettingsMap } = {};
 
+  while (continueAdding) {
+    const addRelated = await askQuestion(
+      chalk.white.bold(`[${parentName}]`) + ' Add a related SObject (Y/n)',
+      'n'
+    );
+
+    if (addRelated.toLowerCase() === 'yes' || addRelated.toLowerCase() === 'y') {
+      const childName = await askQuestion(
+        chalk.white.bold(`[${parentName} -> Child]`) + ' Enter child SObject API name',
+        'Contact'
+      );
+
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(childName)) {
+        console.error(chalk.red('Invalid SObject name! Try again.'));
+        continue;
+      }
+
+      sObjectSettingsMap = { [childName]: {} }; // Reset for new child
+      
+      // Get Count
+      sObjectSettingsMap = await handleSObjectSettingsMap(sObjectSettingsMap, childName);
+
+      // Get Fields to Exclude
+      const fieldsToExcludeInput = await askQuestion(
+        chalk.white.bold(`[${childName} - fieldsToExclude]`) +
+          ' List fields (API names) to exclude' +
+          chalk.dim('(comma-separated)'),
+        ''
+      );
+      const fieldsToExclude: string[] = fieldsToExcludeInput
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .filter(Boolean);
+
+      if (fieldsToExclude.length > 0) {
+        sObjectSettingsMap[childName]['fieldsToExclude'] = fieldsToExclude;
+      }
+
+      const fieldsToConsiderInput = await askQuestion(
+        chalk.white.bold(`[${childName} - fieldsToConsider]`) +
+          ' List fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
+        ''
+      );
+
+      const fieldsToConsider: fieldsToConsiderMap = handleFieldsToConsider(fieldsToConsiderInput);
+
+      const conflictingFields = Object.keys(fieldsToConsider).filter((field) =>
+        fieldsToExclude.includes(field.toLowerCase())
+      );
+      if (conflictingFields.length > 0) {
+        console.log(
+          chalk.yellow(
+            `Warning: Common fields found in 'fields-to-exclude' and 'fields-to-consider' in sObject '${childName}' is '${conflictingFields.join(
+              ','
+            )}' . You must remove them!`
+          )
+        );
+      }
+
+      if (Object.keys(fieldsToConsider).length > 0) {
+        sObjectSettingsMap[childName]['fieldsToConsider'] = fieldsToConsider;
+      }
+
+      // Get pickLeftFields
+      const pickLeftFieldsChoices = [
+        { name: 'true', message: 'true', value: 'true', hint: '' },
+        { name: 'false', message: 'false', value: 'false', hint: '' },
+      ];
+      const pickLeftFieldsInput = await runSelectPrompt(
+        `[${childName} - pickLeftFields] Want to generate data for fields neither in 'fields to consider' nor in 'fields to exclude'`,
+        pickLeftFieldsChoices
+      );
+      if (pickLeftFieldsInput) {
+        sObjectSettingsMap[childName]['pickLeftFields'] = pickLeftFieldsInput === 'true';
+      }
+
+      if (Object.keys(fieldsToConsider).length === 0 && pickLeftFieldsInput === 'false') {
+        console.log(
+          chalk.red.bold(
+            "No fields found to generate data. Set 'pick-left-fields' to true or add fields to 'fields-to-consider'."
+          )
+        );
+        continue;
+      }
+      
+      // RECURSIVE CALL for nested relatedSObjects
+      const nestedRelated = await handleRelatedSObjectsQuestionnaire(childName);
+      if (nestedRelated.length > 0) {
+          sObjectSettingsMap[childName]['relatedSObjects'] = nestedRelated;
+      }
+
+      // Add the fully configured child to the list
+      relatedSObjects.push({ [childName]: sObjectSettingsMap[childName] });
+
+    } else {
+      // User chose 'n', stop adding related objects at this level
+      continueAdding = false;
+    }
+  }
+
+  return relatedSObjects;
+}
 export default class SetupInit extends SfCommand<SetupInitResult> {
   public static summary = 'Creates a default template that can be used for initial json adaption.';
   public static examples = ['sf template init --default'];
@@ -419,7 +588,14 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
       char: 't',
       required: false,
     }),
+    salesprocess: Flags.boolean({
+      summary: 'Create a default Sales Process template.',
+      description: 'Generates a pre-configured template for Sales Process automation setup.',
+      char: 's',
+      required: false,
+    })
   };
+
 
   public async run(): Promise<SetupInitResult> {
     const dirname = handleDirStruct();
@@ -435,6 +611,10 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     const { flags } = await this.parse(SetupInit);
     if (flags.default) {
       createDefaultTemplate(flags, templatePath);
+      process.exit(0);
+    }
+    if (flags.salesprocess) {
+      createSalesProcessTemplate(templatePath);
       process.exit(0);
     }
     const templateFileName = await getJSONFileName(templatePath);
@@ -520,7 +700,7 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
         const { connectToSalesforceOrg } = await import('../../../utils/generic_function.js');
         const { validateConfigJson } = await import('./validate.js');
 
-        const conn = await connectToSalesforceOrg(userAliasorUsernName);
+        const conn = await connectToSalesforceOrg(userAliasorUsernName);  
         await validateConfigJson(conn, filePath);
         console.log(chalk.green(' Validation successful!'));
       } catch (err: unknown) {

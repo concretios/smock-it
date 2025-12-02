@@ -172,6 +172,28 @@ export function updateOrInitializeConfig(
           }
           break;
 
+        case 'relatedSObjects':
+          if (configObject !== undefined) {
+            const valuesArray = value.toString().toLowerCase().split(/[\s,]+/).filter(Boolean);
+            const exists = valuesArray.some(v =>
+              configObject.relatedSObjects?.some((obj: any) => Object.keys(obj)[0].toLowerCase() === v.toLowerCase())
+            );
+            if (exists) {
+              throw new Error(
+                `One or more relatedSObjects already exist in the configuration. Please check and try again.`
+              );
+            }
+            const modifiedData = valuesArray.map(item => ({ [item]: {} }));
+
+            if (configObject.relatedSObjects && Array.isArray(configObject.relatedSObjects)) {
+              configObject.relatedSObjects.push(...modifiedData);
+            } else {
+              configObject.relatedSObjects = modifiedData;
+            }
+            log(`Setting '${key}' to: ${valuesArray.join(', ')}`);
+          }
+          break;
+
         default:
           /* if (key === 'language' && value !== 'en' && value !== 'jp') {
             throw new Error('Invalid language input. supports `en` or `jp` only');
@@ -203,12 +225,12 @@ export const templateAddFlags = {
     description: messages.getMessage('flags.templateName.description'),
     required: true,
   }),
-  /* language: Flags.string({
-    char: 'l',
-    summary: messages.getMessage('flags.language.summary'),
-    description: messages.getMessage('flags.language.description'),
+  relatedSObjects: Flags.string({
+    summary: messages.getMessage('flags.relatedSObjects.summary'),
+    description: messages.getMessage('flags.relatedSObjects.description'),
+    char: 'k',
     required: false,
-  }),*/
+  }),
   count: Flags.integer({
     char: 'c',
     summary: messages.getMessage('flags.count.summary'),
@@ -263,6 +285,50 @@ export function getTemplateJsonData(templateName: string): string {
   return configFilePath;
 }
 
+
+function getSObjectDataByPath(jsonData: any, path: string): any | null {
+  const parts = path.toLowerCase().split("/");
+  let currentLevel = jsonData.sObjects;
+  let currentPath = "sObjects";
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+
+    if (!Array.isArray(currentLevel)) {
+      throw new Error(`Invalid structure: expected an array at '${currentPath}'`);
+    }
+
+    const foundEntry = currentLevel.find(obj => {
+      const key = Object.keys(obj)[0].toLowerCase();
+      return key.toLowerCase() === part;
+    });
+
+    if (!foundEntry) {
+      throw new Error(`Object '${part}' not found at path '${currentPath}'`);
+    }
+
+    const key = Object.keys(foundEntry)[0];
+    const value = foundEntry[key];
+
+    // Last segment → return inner object
+    if (i === parts.length - 1) {
+      return value;
+    }
+
+    // Continue deeper → must have relatedSObjects
+    if (!value.relatedSObjects) {
+      throw new Error(
+        `Object '${key}' does not contain relatedSObjects while resolving path '${path}'`
+      );
+    }
+
+    currentLevel = value.relatedSObjects.flat(Infinity);
+    currentPath += `/${key}`;
+  }
+
+  return null;
+}
+
 let config: templateSchema;
 export default class TemplateAdd extends SfCommand<void> {
   public static readonly summary: string = messages.getMessage('summary');
@@ -282,27 +348,32 @@ export default class TemplateAdd extends SfCommand<void> {
     let allowedFlags = [];
 
     if (objectName) {
+      const sObjectNames = objectName?.split('/').map(n => n.toLowerCase());
       this.log(chalk.magenta.bold(`Working on the object level settings for ${objectName}`));
       if (!Array.isArray(config.sObjects)) {
         config.sObjects = [];
       }
+
       let objectConfig = config.sObjects.find(
-        (obj: SObjectItem): boolean => Object.keys(obj)[0] === objectName
+        (obj: SObjectItem): boolean => Object.keys(obj)[0].toLowerCase() === sObjectNames[0]
       ) as SObjectItem;
       if (!objectConfig) {
         const addToTemplate = await askQuestion(
-          chalk.yellow(`'${objectName}' does not exists in data template! Do you want to add?`) + chalk.dim('(Y/n)')
+          chalk.yellow(`'${sObjectNames[0]}' does not exists in data template! Do you want to add?`) + chalk.dim('(Y/n)')
         );
         if (addToTemplate.toLowerCase() === 'yes' || addToTemplate.toLowerCase() === 'y') {
-          objectConfig = { [objectName]: {} };
+          objectConfig = { [sObjectNames[0]]: {} };
           config.sObjects.push(objectConfig);
         } else {
           return;
         }
       }
-      const configFileForSobject: typeSObjectSettingsMap = objectConfig[objectName];
+
+
+      const configFileForSobject: typeSObjectSettingsMap = getSObjectDataByPath(config, objectName);
+
       checkDuplicateFields(configFileForSobject, flags);
-      allowedFlags = ['fieldsToExclude', 'language', 'count', 'pickLeftFields', 'fieldsToConsider'];
+      allowedFlags = ['fieldsToExclude', 'language', 'count', 'pickLeftFields', 'fieldsToConsider', 'relatedSObjects'];
       updateOrInitializeConfig(configFileForSobject, flags, allowedFlags, this.log.bind(this));
     } else {
       const configFile: templateSchema = config;

@@ -12,20 +12,33 @@
 export type SetupInitResult = {
   namespaceToExclude: string[];
   outputFormat: string[];
-  // language: string;
   count: number;
   sObjects: Array<{ [key: string]: typeSObjectSettingsMap }>;
 };
-  
+
+export type FieldMeta = {
+  fullName: string;
+  type?: string;
+  referenceTo?: string[];
+}
+
+export type RelatedSObject = {
+  [key: string]: {
+    count: number;
+    pickLeftFields?: boolean;
+    relatedSObjects?: RelatedSObject[];
+  };
+}
+
 export type typeSObjectSettingsMap = {
   count?: number;
-  // language?: string;
   fieldsToExclude?: string[];
   fieldsToConsider?: { [key: string]: string[] | string };
   pickLeftFields?: boolean | string | undefined;
+  relatedSObjects?: Array<{ [key: string]: typeSObjectSettingsMap  }>;
 };
 
-// types for upsert.ts file
+
 export type TemplateAddResult = {
   path: string;
 };
@@ -36,7 +49,6 @@ export type templateSchema = {
   templateFileName: string;
   namespaceToExclude: string[];
   outputFormat: string[];
-  // language: string;
   count: number;
   sObjects: SObjectItem[];
 };
@@ -45,7 +57,7 @@ export type tempAddFlags = {
   alias?: string;
   sObjects?: string;
   templateName: string;
-  // language?: string;
+  relatedSObjects?: string;
   count?: number;
   namespaceToExclude?: string;
   outputFormat?: string;
@@ -60,17 +72,16 @@ export type tempValidateFlags = {
   templateName: string;
 };
 
-// types from remove.ts file
 export type flagObj = {
   templateName: string;
   namespaceToExclude?: string[];
   outputFormat?: string[];
- //  language?: boolean;
   count?: boolean;
   sObject?: string;
   fieldsToExclude?: string[];
   pickLeftFields?: boolean;
   fieldsToConsider?: string[];
+  relatedSObjects?: string[];
 };
 export type flagsForInit = {
   default?: boolean;
@@ -83,32 +94,38 @@ export type TemplateRemoveResult = {
   path: string;
 };
 
-// types for validate.ts results
 export type TemplateValidateResult = {
   path: string;
 };
 export namespace Types {
   export type Field = {
-    fullName: string | null | undefined;
+    fullName?: string | null | undefined;
+    name?: string | null | undefined;
+    type?: string;
+    referenceTo?: string[];
+    relationshipName?: string;
+    dependentPicklist?: boolean;   
+    controllerName?: string | null;
   };
 }
 export type sObjectMetaType = {
   nameField?: { label: string; type: string };
   fields?: Types.Field[];
+  fullName: string | null | undefined;
 };
 
 export type sObjectSchemaType = {
   fieldsToExclude?: string[];
   fieldsToConsider?: fieldsToConsiderMap;
   count?: number;
-  // language?: string;
   pickLeftFields?: boolean;
+  relatedSObjects?: Array<{ [key: string]: sObjectSchemaType }>;
+  relatedsobjects?: SObjectItem[];
 };
 export type fieldsToConsiderMap = {
   [key: string]: string[] | string;
 };
 
-// output format table
 export type ResultEntry = {
   'SObject(s)': string;
   JSON: string;
@@ -122,6 +139,11 @@ export type ResultEntry = {
 export type DataGenerateResult = {
   path: string;
 };
+
+export type DataTemplates = {
+  path: string;
+};
+
 
 export type FieldRecord = {
   Label: string;
@@ -186,6 +208,7 @@ export type SObjectConfig = {
   // language: string;
   count?: number;
   fields?: { [key: string]: Field };
+  relatedSObjects?: Array<{ [key: string]: SObjectConfig }>;
 };
 
 export type SObjectConfigFile = {

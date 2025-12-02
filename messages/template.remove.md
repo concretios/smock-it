@@ -78,3 +78,12 @@ Use --fieldsToConsider or -y to remove the inclusion of specific fields for a gi
 
 - `sf template remove -t <template-name> <global flags -f[values],-x[values]>`
 - `sf template remove -t <template-name> -o <object-name> <-e[values],-c,-l>`
+
+
+# flags.relatedSObjects.summary
+
+Specify related SObjects to remove from the template.
+
+# flags.relatedSObjects.description
+
+Use --relatedSObjects or -k to remove related SObject configurations from the selected object in the template.

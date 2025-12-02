@@ -1,3 +1,4 @@
+
 /**
  * Copyright (c) 2025 concret.io
  *
@@ -414,10 +415,15 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
         const finalRecord: GenericRecord = {};
 
         for (const key in fileRecord) {
+          if (key === 'relatedSObjects') {
+            finalRecord.relatedSObjects = fileRecord.relatedSObjects;
+            continue;
+          }
+
           const meta = fieldMetaMap.get(key);
           if (!meta) continue;
 
-          else if (meta.DataType !== 'reference') {
+          if (meta.DataType !== 'reference') {
             const coercedValue = DataUpload.coerceValue(fileRecord[key], meta.DataType);
             if (coercedValue !== undefined) {
               finalRecord[key] = coercedValue;
