@@ -70,7 +70,199 @@ const SALESPROCESS_TEMPLATE = `
                           "count": 1,
                           "pickLeftFields": true,
                           "fieldsToConsider":{},
-                          "fieldsToExclude": ["AdditionalState"]
+                          "fieldsToExclude": []
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+`;
+
+const TASKRAY_TEMPLATE = `
+{
+    "namespaceToExclude": [],
+    "outputFormat": [
+        "di"
+    ],
+    "count": 1,
+    "sObjects": [
+        {
+            "TASKRAY__Project__c": {
+                "count": 1,
+                "pickLeftFields": true,
+                "fieldsToExclude": [
+                    "TASKRAY__trPrincipalVersion__c",
+                    "TASKRAY__trForecast__c",
+                    "TASKRAY__Status__c",
+                    "TASKRAY__trTemplate__c",
+                    "TASKRAY__trDraft__c",
+                    "TASKRAY__trCompleted__c",
+                    "TASKRAY__trOnHold__c"
+                ],
+                "fieldsToConsider": {},
+                "relatedSObjects": [
+                    {
+                        "TASKRAY__Project_Task__c": {
+                            "count": 1,
+                            "pickLeftFields": true,
+                            "fieldsToExclude": [
+                                "TASKRAY__trStartDate__c",
+                                "TASKRAY__trActualCompletionDate__c",
+                                "TASKRAY__Repeat_End_Date__c",
+                                "TASKRAY__Deadline__c",
+                                "TASKRAY__trTaskGroup__c",
+                                "TASKRAY__Archived__c"
+                            ],
+                            "fieldsToConsider": {
+                                "TASKRAY__trLockDates__c": ["true"]
+                            },
+                            "relatedSObjects": [
+                                {
+                                    "TASKRAY__trTaskTime__c": {
+                                        "count": 1,
+                                        "pickLeftFields": true,
+                                        "fieldsToExclude": [
+                                            "TASKRAY__Owner__c",
+                                            "TASKRAY__trUnsavedTimeEntry__c"
+                                        ],
+                                        "fieldsToConsider": {},
+                                        "relatedSObjects": []
+                                    }
+                                },
+                                {
+                                    "TASKRAY__trChecklistGroup__c": {
+                                        "count": 1,
+                                        "pickLeftFields": true,
+                                        "fieldsToExclude": [],
+                                        "fieldsToConsider": {},
+                                        "relatedSObjects": [
+                                            {
+                                                "TASKRAY__trChecklistItem__c": {
+                                                    "count": 1,
+                                                    "pickLeftFields": true,
+                                                    "fieldsToExclude": [
+                                                        "TASKRAY__trOwner__c",
+                                                        "TASKRAY__trGroupId__c"
+                                                    ],
+                                                    "fieldsToConsider": {}
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
+`;
+
+const CPQ_TEMPLATE = `
+{
+  "namespaceToExclude": [],
+  "outputFormat": [
+    "di"
+  ],
+  "Count": 1,
+  "sObjects": [
+    {
+      "Account": {
+        "count": 1,
+        "fieldsToConsider": {},
+        "fieldsToExclude": [],
+        "pickLeftFields": true,
+        "relatedSObjects": [
+          {
+            "Contact": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true,
+              "relatedSObjects": [
+                {
+                  "Opportunity": {
+                    "count": 1,
+                    "fieldsToConsider": {},
+                    "fieldsToExclude": [],
+                    "pickLeftFields": true,
+                    "relatedSObjects": [
+                      {
+                        "SBQQ__Quote__c": {
+                          "count": 1,
+                          "fieldsToConsider": {
+                            "SBQQ__Primary__c": [
+                              "true"
+                            ]
+                          },
+                          "fieldsToExclude": [
+                            "SBQQ__SalesRep__c",
+                            "SBQQ__MasterEvergreenContract__c"
+                          ],
+                          "pickLeftFields": true,
+                          "relatedSObjects": [
+                            {
+                              "SBQQ__QuoteLineGroup__c": {
+                                "count": 1,
+                                "relatedSObjects": [
+                                  {
+                                    "SBQQ__QuoteLine__c": {
+                                      "count": 1,
+                                      "fieldsToExclude": [
+                                        "SBQQ__ContractedPrice__c",
+                                        "SBQQ__Dimension__c",
+                                        "SBQQ__DiscountTier__c",
+                                        "SBQQ__TermDiscountTier__c",
+                                        "SBQQ__RenewedAsset__c",
+                                        "SBQQ__UpgradedAsset__c"
+                                      ],
+                                      "fieldsToConsider": {},
+                                      "pickLeftFields": true
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "Order": {
+                                "count": 1,
+                                "fieldsToConsider": {
+                                  "SBQQ__Contracted__c": ["false"],
+                                  "Status": ["Draft"]
+                                },
+                                "fieldsToExclude": [
+                                  "ContractId",
+                                  "OriginalOrderId"
+                                ],
+                                "pickLeftFields": true,
+                                "relatedSObjects": [
+                                  {
+                                    "OrderItem": {
+                                      "count": 1,
+                                      "fieldsToConsider": {},
+                                      "fieldsToExclude": [
+                                        "SBQQ__Asset__c",
+                                        "SBQQ__PriceDimension__c",
+                                        "SBQQ__OrderedQuantity__c",
+                                        "ListPrice"
+                                      ],
+                                      "pickLeftFields": true
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         }
                       }
                     ]
@@ -102,10 +294,10 @@ export class TemplateCreator {
   /**
    * Creates a data template file of the specified type.
    * @param templatePath - The path to the templates directory.
-   * @param templateType - The type of template to create ('default', 'salesprocess').
+   * @param templateType - The type of template to create ('default', 'salesprocess', taskray , cpq).
    * @returns The path of the created template file.
    */
-  public createTemplate(templatePath: string, templateType: 'default' | 'salesprocess'): string {
+  public createTemplate(templatePath: string, templateType: 'default' | 'salesprocess' | 'taskray' | 'cpq'): string {
     let baseName: string;
     let templateContent: string;
 
@@ -117,6 +309,14 @@ export class TemplateCreator {
       case 'salesprocess':
         baseName = 'default_salesprocess_template';
         templateContent = SALESPROCESS_TEMPLATE;
+        break;
+      case 'taskray':
+        baseName = 'default_taskray_template';
+        templateContent = TASKRAY_TEMPLATE;
+        break;
+      case 'cpq':
+        baseName = 'default_cpq_template';
+        templateContent = CPQ_TEMPLATE;
         break;
       default:
         throw new Error(`Unknown template type: ${templateType}`);

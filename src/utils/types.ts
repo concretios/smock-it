@@ -160,6 +160,9 @@ export type FieldRecord = {
   };
   RelationshipName: string | null;
   IsNillable: boolean;
+  Length?: number | null | undefined;
+  Precision: number;
+  Scale: number;
 };
 
 export type RecordId = {
@@ -178,6 +181,7 @@ export type Fields = {
   referenceTo?: string;
   'max-length'?: number;
   'child-dependent-field'?: string;
+  maxLength?: number;
 };
 
 /* ------------------------------------------*/
@@ -190,6 +194,8 @@ export type TargetData = {
   decimals?: number;
   values?: string[];
   label?: string;
+  maxLength?: number;
+  length?: number;
 };
 
 export type fieldType = 'picklist' | 'reference' | 'dependent-picklist';

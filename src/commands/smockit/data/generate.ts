@@ -231,13 +231,15 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, fields, object);
 
       if (countofRecordsToGenerate === undefined) {
-        this.log(chalk.red(`❌ Missing count for ${object}`));
+        this.log(chalk.red(`Missing count for ${object}`));
         throw new Error(`Count for object "${object}" is undefined.`);
       }
 
       const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object, localIndex);
 
-      const jsonData = this.enhanceDataWithSpecialFields(basicJsonData, processedFields, countofRecordsToGenerate, object);
+      const trimmedJsonData = await this.trimFieldsData(jsonDataForObjectNames, basicJsonData, object); 
+
+      const jsonData = this.enhanceDataWithSpecialFields(trimmedJsonData, processedFields, countofRecordsToGenerate, object);
 
       let relatedJsonData = [];
 
@@ -284,8 +286,105 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     return { path: flags.templateName };
   }
 
+  /**
+ * Trims field values in generated JSON data based on Salesforce field metadata.
+ * For each record, the method checks field length constraints defined in the
+ * output configuration and shortens values that exceed the maximum allowed length.
+ *
+ * @param {any} generatedOutputconfigData - Configuration containing sObject metadata,
+ * including field definitions and length constraints.
+ * @param {any[]} basicJsonData - Array of records whose field values need to be validated
+ * and trimmed according to metadata.
+ * @param {string} sObjectName - The Salesforce sObject name used to locate the relevant
+ * metadata in the configuration.
+ * @returns {Promise<any[]>} - A new array of records with field values trimmed to their
+ * maximum allowed lengths where applicable.
+ */
 
+  private async trimFieldsData(
+    generatedOutputconfigData: any,
+    basicJsonData: any[],
+    sObjectName: string
+  ): Promise<any[]> {
+    const childMetadata = generatedOutputconfigData.sObjects.find(
+      (obj: any) => obj.sObject.toLowerCase() === sObjectName.toLowerCase()
+    );
 
+    if (!childMetadata) {
+      this.log(chalk.red(`No metadata found for ${sObjectName}`));
+      throw new Error(`No metadata found for ${sObjectName}`);
+    }
+
+    const fields = childMetadata.fields;
+
+    const modifiedJsonData = basicJsonData.map((record: any) => {
+      const newRecord = { ...record };
+
+      for (const key in record) {
+        const fieldMeta = fields[key];
+        const value = record[key];
+
+        if (!fieldMeta || !fieldMeta.length || value === null || value === undefined) {
+          continue;
+        }
+
+        let valueAsString = String(value);
+
+        if (valueAsString.length > fieldMeta.length) {
+          valueAsString = valueAsString.substring(0, fieldMeta.length);
+
+          switch (fieldMeta.type) {
+            case "double":
+            case "currency":
+            case "percent":
+            case "number":
+              newRecord[key] = Number(valueAsString);
+              break;
+
+            default:
+              newRecord[key] = valueAsString;
+          }
+        }
+      }
+
+      return newRecord;
+    });
+
+    return modifiedJsonData;
+  }
+
+  /**
+   * Builds a hierarchical JSON structure for related Salesforce sObjects by recursively
+   * traversing parent–child relationships and generating test data for each related object.
+   *
+   * This method performs the following high-level steps:
+   * - Tracks parent sObjects to correctly resolve reference relationships.
+   * - Normalizes related object configuration by ensuring pickLeftFields is set.
+   * - Generates or updates field configuration metadata for each related sObject.
+   * - Identifies the parent reference field in the related sObject metadata.
+   * - Generates base JSON data and enriches it with:
+   *   - Parent reference values
+   *   - Picklist and reference field handling
+   *   - Trimmed field values based on metadata length constraints
+   *   - Special field enhancements
+   * - Recursively processes nested related sObjects to build a complete hierarchy.
+   *
+   * The final result is a structured JSON output where each related sObject contains
+   * its generated records along with any nested related objects.
+   *
+   * @param {any} currentSObject - The current sObject configuration being processed,
+   * including its related sObjects.
+   * @param {any} baseConfig - The base configuration used for field generation and
+   * output configuration updates.
+   * @param {any} includeSObject - Configuration specifying which sObjects to include
+   * during data generation.
+   * @param {any} excludeSObjectsString - Comma-separated list or configuration of
+   * sObjects to exclude from processing.
+   * @param {any} flags - Additional runtime flags (e.g., record type) that influence
+   * field generation and data processing.
+   * @param {any} conn - Salesforce connection instance used for metadata queries
+   * and field processing.
+   */
   private async buildRelatedHierarchy(
     currentSObject: any,
     baseConfig: any,
@@ -307,7 +406,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const key = Object.keys(obj)[0];
       const value = obj[key];
 
-      if (!value.pickLeftFields) {
+      const hasPickLeftFields = Object.keys(value).some(
+        key => key.toLowerCase() === 'pickleftfields'
+      );
+
+      if (!hasPickLeftFields) {
         value.pickLeftFields = true;
       }
     }
@@ -445,7 +548,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
         return {
           name,
-          type: def.type || 'Unknown'
+          type: def.type || 'Unknown',
+          values: def.values || []
         };
       });
 
@@ -462,8 +566,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
       const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, modifiedFields, relatedKey);
 
+      const trimmedJsonData = await this.trimFieldsData(generatedOutputconfigData, basicJsonData, relatedKey);
+
       const jsonData = this.enhanceDataWithSpecialFields(
-        basicJsonData,
+        trimmedJsonData,
         processedFields,
         countOfRecordsToGenerate,
         relatedKey
@@ -779,7 +885,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const namespacePrefixToExclude = baseConfig['namespaceToExclude']?.map((ns: string) => `'${ns}'`).join(', ') || 'NULL';
 
       const allFields = await conn.query(
-        `SELECT QualifiedApiName, IsDependentPicklist, Label, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable
+        `SELECT QualifiedApiName, IsDependentPicklist, Label, NamespacePrefix, DataType, ReferenceTo, RelationshipName, IsNillable, Length, Precision, Scale
         FROM EntityParticle
         WHERE EntityDefinition.QualifiedApiName = '${objectName}'
         AND IsCreatable = true
@@ -956,7 +1062,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     considerMap: Record<string, string[]>
   ): Promise<Record<string, Fields>> {
     const fieldsObject: Record<string, Fields> = {};
-
+    
     this.dependentPicklistResults = {};
 
     for (const inputObject of fieldsToPass) {
@@ -974,6 +1080,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             fieldConfig = {
               type: 'address',
               label: inputObject.Label,
+              length: inputObject.Length
             };
           }
 
@@ -994,6 +1101,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
                 ? considerMap[inputObject.QualifiedApiName.toLowerCase()]
                 : [],
               label,
+              length: inputObject.Length
             };
           }
           break;
@@ -1018,7 +1126,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             await this.depPicklist(conn, objectName, inputObject.QualifiedApiName, considerMap);
           } else {
             let picklistValues = await this.getPicklistValues(conn, objectName, inputObject.QualifiedApiName, considerMap);
-            if ((objectName === 'contract' || objectName === 'order' || objectName === 'listemail') && inputObject.QualifiedApiName === 'Status') {
+            if ((objectName === 'contract' || objectName === 'listemail') && inputObject.QualifiedApiName === 'Status') {
               picklistValues = ['Draft'];
             }
 
@@ -1061,7 +1169,22 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
               values: considerMap[inputObject.QualifiedApiName.toLowerCase()],
               label: inputObject.Label,
             };
-          } else {
+          }
+          else if( inputObject.DataType === 'double' || inputObject.DataType === 'currency' || inputObject.DataType === 'percent') {
+            fieldConfig = {
+              type: inputObject.DataType,
+              label: inputObject.Label,
+              length: inputObject.Precision - inputObject.Scale,
+            };
+          }
+          else if(inputObject.DataType === 'text' || inputObject.DataType === 'url' || inputObject.DataType === 'address') {
+            fieldConfig = {
+              type: inputObject.DataType,
+              label: inputObject.Label,
+              length: inputObject.Length,
+            };
+          }
+          else {
             fieldConfig = {
               type: inputObject.DataType,
               label: inputObject.Label,
@@ -1205,7 +1328,8 @@ public async handleDirectInsert(
         considerMap[key.toLowerCase()].length > 0 &&
         key.toLowerCase() === field.toLowerCase()
       ) {
-        const fieldConsiderationValues: string[] = considerMap[field.toLowerCase()] as string[];
+        const rawValue = considerMap[field.toLowerCase()];
+        const fieldConsiderationValues: string[] = (Array.isArray(rawValue) ? rawValue : [rawValue]).filter(v => typeof v === 'string');
         const pickListSet = new Set(pickListValues);
         const missingValues = fieldConsiderationValues?.filter((value: string) => !pickListSet.has(value));
 
@@ -1431,7 +1555,9 @@ public async handleDirectInsert(
    * @returns {FieldRecord[]} - An array containing only the required (non-nillable) fields.
    */
   private getRequiredFields(fields: FieldRecord[]): FieldRecord[] {
-    return fields.filter((record) => record.IsNillable === false);
+    return fields.filter((record) => (
+      record.IsNillable === false && record.DataType.toLowerCase() !== 'boolean'
+    ));
   }
 
   /**
@@ -1503,7 +1629,7 @@ public async handleDirectInsert(
    */
 
   private buildFieldQuery(object: string, onlyRequiredFields: boolean): string {
-    let query = `SELECT QualifiedApiName, DataType, IsNillable, ReferenceTo, RelationshipName FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${object}' AND IsCreatable = true`;
+    let query = `SELECT QualifiedApiName, DataType, IsNillable, ReferenceTo, Length, Precision, Scale, RelationshipName FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${object}' AND IsCreatable = true`;
     if (onlyRequiredFields) {
       query += ' AND IsNillable = false';
     }
@@ -1531,7 +1657,6 @@ public async handleDirectInsert(
 
     const sObjectName = Array.isArray(object) ? object[0] : object;
     const copyDataArray = JSON.parse(JSON.stringify(dataArray));
-
     const results: CreateResult[] = [];
     const errorCountMap: Map<string, number> = new Map();
     let failedCount = 0;
@@ -1569,7 +1694,7 @@ public async handleDirectInsert(
 
     const displayErrors = () => {
       if (failedCount > 0) {
-        console.error(chalk.yellowBright(`❌ Failed to insert ${failedCount} record(s) for ${sObjectName}`));
+        console.error(chalk.yellowBright(`Failed to insert ${failedCount} record(s) for ${sObjectName}`));
         console.error(chalk.whiteBright('Error breakdown:'));
         errorCountMap.forEach((_, message) => {
           console.error(`• ${chalk.redBright(message)}`);
@@ -1750,10 +1875,39 @@ public async handleDirectInsert(
   ): Promise<Array<Partial<TargetData>>> {
     const result = await conn.query(query);
     const nameFieldResult = await conn.query(
-      `SELECT QualifiedApiName, DataType, IsNillable, ReferenceTo FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${object}' AND IsCreatable = true AND IsNillable = true  AND IsNameField = true`
+      `SELECT QualifiedApiName, DataType, IsNillable, Length, ReferenceTo FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${object}' AND IsCreatable = true AND IsNillable = true  AND IsNameField = true`
     );
     const combinedResults = [...result.records, ...nameFieldResult.records];
-    return this.processFieldsForParentObjects(combinedResults, conn, object, currentDepth);
+    const processFields = await this.processFieldsForParentObjects(combinedResults, conn, object, currentDepth);
+
+    const allowedTypes = ['double', 'text', 'currency', 'percent', 'string'];
+
+    const combinedResultsMap: { [key: string]: any } = {};
+    combinedResults.forEach(field => {
+        combinedResultsMap[field.QualifiedApiName] = field;
+    });
+
+    const updatedProcessFields: Partial<TargetData>[] = processFields.map(f => {
+      if (!f.name || !f.type) {
+          return f;
+      }
+
+      const updated: Partial<TargetData> = { ...f };
+
+      const matching = combinedResultsMap[f.name];
+
+      if (allowedTypes.includes(f.type)) {
+        if(matching?.Length !== undefined && matching?.Length > 0) {
+          updated.length = matching.Length;
+        }
+        else if(matching?.Precision !== undefined && matching?.Precision > 0) {
+          updated.length = matching.Precision - (matching.Scale || 0);
+        }
+      }
+
+      return updated;
+    });
+    return updatedProcessFields;
   }
 
   /**
@@ -1777,6 +1931,27 @@ public async handleDirectInsert(
     currentDepth: number
   ): Promise<Array<Partial<TargetData>>> {
     const processedFields: Array<Partial<TargetData>> = [];
+
+    if(object.toString().toLowerCase() === 'sbqq__quoteline__c' && isParentObject === true) {
+      records.forEach(element => {
+        if(element.QualifiedApiName === 'SBQQ__Product__c')
+          element.IsNillable = false;
+      });
+    }
+
+    if(object.toString().toLowerCase() === 'orderitem' && isParentObject === true) {
+      records.forEach(element => {
+        if(element.QualifiedApiName === 'UnitPrice')
+          element.IsNillable = false;
+      });
+    }
+
+    if(object.toString().toLowerCase() === 'order' && isParentObject === true) {
+      records.forEach(element => {
+        if(element.QualifiedApiName === 'AccountId' || element.QualifiedApiName === 'Pricebook2Id')
+          element.IsNillable = false;
+      });
+    }
 
     for (const item of records) {
       const fieldName = isParentObject ? item.QualifiedApiName : item.name;
@@ -1827,7 +2002,6 @@ public async handleDirectInsert(
         'ProductServiceCampaignItemId',
         'ServiceTerritoryId',
         'ServiceReportTemplateId',
-        'PricebookEntryId',
         'ParentWorkOrderLineItemId',
         'WorkOrderLineItemId',
         'RootAssetId',
@@ -1847,7 +2021,13 @@ public async handleDirectInsert(
         'ShiftTemplateId',
         'PaymentGatewayProviderId',
         'ReturnedById',
-
+        'ProfileId', 
+        'UserLicenseId', 
+        'Groupid',       
+        'ServiceContractId',
+        'ProcessInstanceId', 
+        'EmailTemplateId', 
+        'Alias',
       ];
 
 
@@ -1882,6 +2062,15 @@ public async handleDirectInsert(
             continue;
           }
           if (object === 'Contract' && item.QualifiedApiName === 'AccountId' && item.RelationshipName === 'Account') {
+            continue;
+          }
+          if(item.referenceTo === 'BusinessHours' ) {
+            const result = await conn.query<{ Id: string }>(
+                'SELECT Id FROM BusinessHours WHERE IsDefault = true LIMIT 1'
+            );
+
+            details.values = result.records.map(r => r.Id);
+            processedFields.push(details);
             continue;
           }
           details.values = await this.fetchRelatedMasterRecordIds(conn, item.referenceTo || item.ReferenceTo?.referenceTo, object, currentDepth + 1);
@@ -1987,21 +2176,30 @@ public async handleDirectInsert(
     }
 
     if (this.createdRecordCache[referenceTo]?.length > 0) {
-      return this.createdRecordCache[referenceTo];
+      return  this.createdRecordCache[referenceTo];
     }
 
-    if ((referenceTo === 'Order' || referenceTo === 'Pricebookentry') && object !== 'returnorder') {
-      throw new Error(`SmockIt cannot generate data for the reference sObject: ${chalk.blue(referenceTo)}. Please try using a different sObject.`);
+    if(referenceTo.toString().toLowerCase() === 'pricebook2') {
+      const result = await conn.query(
+        "SELECT Id FROM Pricebook2 WHERE Name = 'Standard Price Book' LIMIT 1"
+      );
+      if (!result.records.length) {
+        throw new Error('Standard Price Book not found');
+      }
+      const pbId = result.records.length ? result.records[0].Id : null;
+
+      return pbId ? [pbId] : [];
     }
 
     const processFields = await this.processObjectFieldsForParentObjects(conn, referenceTo, true, currentDepth);
 
     const fieldMap = processFields.reduce<Record<string, any>>((acc, field) => {
-      if (field.name) {
+      if (field.name && field.type?.toLowerCase() !== 'boolean') {
         acc[field.name] = {
           type: field.type,
           values: field.values ?? [],
           label: field.label ?? field.name,
+          length: field.length ?? undefined,
         };
       }
       return acc;
@@ -2019,8 +2217,7 @@ public async handleDirectInsert(
         label: 'Account ID',
       };
     }
-
-    if (referenceTo === 'Contract') {
+    if (referenceTo.toString().toLowerCase() === 'contract') {
         const accountResult = await conn.query('SELECT Id FROM Account ORDER BY CreatedDate DESC LIMIT 1');
         const accountIds = accountResult.records.map((record: any) => record.Id);
 
@@ -2033,14 +2230,33 @@ public async handleDirectInsert(
         fieldMap['Status'] = { type: 'Custom List', values: ['Draft'], label: 'Status' };
         fieldMap['StartDate'] = { type: 'Custom List', values: [new Date().toISOString().split('T')[0]], label: 'Start Date' };
         fieldMap['ContractTerm'] = { type: 'Custom List', values: [12], label: 'Contract Term' };
+        if(this.isObjectTemplateRelated(fieldMap, 'SBQQ')){
+          fieldMap['SBQQ__Evergreen__c'] = { type: 'Custom List', values: [false], label: 'Evergreen' };
+        }
     }
 
-    if (referenceTo === 'Order') {
-      const accountResult = await conn.query('SELECT Id FROM Account ORDER BY CreatedDate DESC LIMIT 1');
-      const accountIds = accountResult.records.map((record: any) => record.Id);
-
+    if (referenceTo.toString().toLowerCase() === 'order') {
       fieldMap['Status'] = { type: 'Custom List', values: ['Draft'], label: 'Status' };
-      fieldMap['AccountId'] = { type: 'reference', values: accountIds, label: 'Account ID' };
+    }
+
+    if (referenceTo.toString().toLowerCase() === 'product2') {
+      fieldMap['IsActive'] = { type: 'Custom List', values: ["true"], label: 'Is Active' };
+    }
+
+    if(referenceTo.toString().toLowerCase() === 'pricebookentry') {
+      fieldMap['IsActive'] = { type: 'Custom List', values: ["false"], label: 'Is Active' };
+      fieldMap['UseStandardPrice'] = { type: 'Custom List', values: ["false"], label: 'Use Standard Price' };
+    }
+
+    if(referenceTo.toString().toLowerCase() === 'orderitem'){
+      const productResult = await conn.query('SELECT Id FROM Product2 ORDER BY CreatedDate DESC LIMIT 1');
+      // Check if any records were returned
+      if (productResult.records && productResult.records.length > 0) {
+          const productId = productResult.records[0].Id;
+          fieldMap['Product2Id'] = { type: 'Custom List', values: [productId], label: 'Product' };
+      }
+      const randomVal = Math.floor(Math.random() * 100000);
+      fieldMap['UnitPrice'] = { type: 'Custom List', values: [randomVal], label: 'Unit Price' };
     }
 
     const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
@@ -2048,7 +2264,6 @@ public async handleDirectInsert(
     if (!initialJsonData || initialJsonData.length === 0) {
       throw new Error(`Failed to generate valid data for ${referenceTo}`);
     }
-
     const enhancedJsonData = this.getJsonDataParentFields(initialJsonData, fieldMap);
 
     const insertResult = await DataGenerate.insertRecords(conn, referenceTo, enhancedJsonData);
@@ -2255,6 +2470,33 @@ public async handleDirectInsert(
     }
   }
 
+/**
+ * Checks if a single record object contains any field that starts 
+ * with the specified prefix (e.g., 'SBQQ__').
+ * * @param record The single record object (map) to check (e.g., enhancedData[index]).
+ * @param prefix The field API name prefix to search for (case-insensitive).
+ * @returns true if any field in the record starts with the prefix, false otherwise.
+ */
+private isObjectTemplateRelated(record: Record<string, any>, prefix: string): boolean {
+    if (typeof record !== 'object' || record === null) {
+        return false;
+    }
+
+    const prefixLower = prefix.toLowerCase();
+
+    // Iterate over the keys (field API names) of the record object
+    for (const fieldName in record) {
+        // Use hasOwnProperty to ensure we only check fields directly on the record
+        if (Object.prototype.hasOwnProperty.call(record, fieldName)) {
+            if (fieldName.toLowerCase().startsWith(prefixLower)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
   /**
    * Enhances basic data by adding values from processed fields, particularly for "Custom List" fields.
    * It randomly assigns values from the `processedFields` array to the corresponding records in `basicData`.
@@ -2323,10 +2565,47 @@ public async handleDirectInsert(
         record['DeathDate'] = '2023-05-10';
       });
     }
+    if(object.toLowerCase() === 'sbqq__quote__c'){
+      enhancedData.forEach((record) => {
+        record['SBQQ__Key__c'] = record['SBQQ__Key__c'] +  Math.floor(Math.random()*1000)
+      });
+    }
     if (object === 'shifttemplate') {
       enhancedData.forEach((record) => {
         record['BackgroundColor'] = '#000000';
         record['StartTime'] = '08:00:00.000Z';
+      });
+    }    
+    if (object.toLowerCase() === 'opportunity' && this.isObjectTemplateRelated(enhancedData[0], 'SBQQ')) {
+      enhancedData.forEach((record) => {
+        if('Pricebook2Id' in record){
+          record['SBQQ__QuotePricebookId__c'] = record['Pricebook2Id'];
+        }else{
+          record['SBQQ__QuotePricebookId__c'] = '';
+        }
+      })
+    }
+    if(object.toLowerCase() === 'sbqq__quote__c'){
+      enhancedData.forEach((record) => {
+        if('SBQQ__PriceBook__c' in record){
+          record['SBQQ__PricebookId__c'] = record['SBQQ__PriceBook__c'];
+        }else{
+          record['SBQQ__PricebookId__c'] = '';
+        }
+        record['SBQQ__Primary__c'] = 'true';
+      })
+    }
+    if(object.toLowerCase() === 'contract' && this.isObjectTemplateRelated(enhancedData[0], 'SBQQ')){
+      enhancedData.forEach((record) => {
+        record['Status'] = 'Draft'; 
+        record['SBQQ__Evergreen__c'] = 'false';
+      })
+    }
+    if(object.toString().toLowerCase() === 'taskray__project__c') {
+      enhancedData.forEach(record => {
+        if('TASKRAY__trNickname__c' in record) {
+          record.TASKRAY__trNickname__c = record.TASKRAY__trNickname__c + '-' + Math.floor(Math.random() * 1000)
+        }
       });
     }
 
@@ -2342,8 +2621,72 @@ public async handleDirectInsert(
               record['TaskSubtype'] = 'Task';
             });
           }
+          
         });
       }
+    }
+
+    if(object.toLowerCase() === 'sbqq__quoteline__c'){
+      enhancedData.forEach((record) => {
+        if('SBQQ__ProductSubscriptionType__c' in record) {
+          record['SBQQ__SubscriptionType__c'] = record['SBQQ__ProductSubscriptionType__c'].includes('/')? 'Renewable': record['SBQQ__ProductSubscriptionType__c'];
+          if(record['SBQQ__ProductSubscriptionType__c'].toLowerCase() === 'evergreen'){
+            record['SBQQ__SubscriptionTerm__c'] = 1;
+            if(record['SBQQ__BillingFrequency__c'] === "Invoice Plan") record['SBQQ__BillingFrequency__c'] = "";
+            delete record['SBQQ__EndDate__c'];
+          }
+          if(record['SBQQ__ChargeType__c'] === 'One-Time'){
+            record['SBQQ__ChargeType__c'] = 'Recurring';
+          }
+        }
+        if('SBQQ__ChargeType__c' in record) {
+          if(record['SBQQ__ChargeType__c'] === 'One-Time' ||  record['SBQQ__ChargeType__c'] === 'Usage'){
+            record['SBQQ__BillingType__c'] = "";
+          }
+          if(record['SBQQ__ChargeType__c'] === 'One-Time'){
+            record['SBQQ__BillingFrequency__c'] = "";
+          }
+        }
+        const earliest = record['SBQQ__EarliestValidAmendmentStartDate__c'];
+        const start = record['SBQQ__StartDate__c'];
+
+        if (earliest && start && earliest > start) {
+          record['SBQQ__EarliestValidAmendmentStartDate__c'] = start;
+          record['SBQQ__StartDate__c'] = earliest;
+        }
+
+        if('SBQQ__AdditionalDiscountAmount__c' in record){
+          delete record['SBQQ__Discount__c'];
+        }
+        if('SBQQ__MarkupAmount__c' in record){
+          delete record['SBQQ__MarkupRate__c'];
+        }
+      })
+    }
+
+    if(object.toLowerCase() === 'orderitem'){
+      enhancedData.forEach((record) => {
+        if('SBQQ__ProductSubscriptionType__c' in record) {
+          record['SBQQ__SubscriptionType__c'] = record['SBQQ__ProductSubscriptionType__c'].includes('/')? 'Renewable': record['SBQQ__ProductSubscriptionType__c'];
+          if(record['SBQQ__ProductSubscriptionType__c'].toLowerCase() === 'evergreen'){
+            record['SBQQ__SubscriptionTerm__c'] = 1;
+            if(record['SBQQ__BillingFrequency__c'] === "Invoice Plan") record['SBQQ__BillingFrequency__c'] = "";
+            delete record['EndDate'];
+
+            if(record['SBQQ__ChargeType__c'] === 'One-Time'){
+              record['SBQQ__ChargeType__c'] = 'Recurring';
+            }
+          }
+        }
+        if('SBQQ__ChargeType__c' in record) {
+          if(record['SBQQ__ChargeType__c'] === 'One-Time' ||  record['SBQQ__ChargeType__c'] === 'Usage'){
+            record['SBQQ__BillingType__c'] = "";
+          }
+          if(record['SBQQ__ChargeType__c'] === 'One-Time'){
+            record['SBQQ__BillingFrequency__c'] = "";
+          }
+        }
+      })
     }
 
     return enhancedData;
@@ -2360,7 +2703,7 @@ public async handleDirectInsert(
 
   private getJsonDataParentFields(
     jsonData: any[],
-    fieldMap: Record<string, { type: string; values: any[]; label: string }>
+    fieldMap: Record<string, { type: string; values: any[]; label: string ; length?: number}>
   ): any[] {
 
     if (!jsonData || jsonData.length === 0) {
@@ -2388,6 +2731,34 @@ public async handleDirectInsert(
         });
       }
     }
+
+    enhancedData = enhancedData.map((record) => {
+      const updatedRecord = { ...record };
+
+      for (const [fieldName, fieldDetails] of Object.entries(fieldMap)) {
+        const { length } = fieldDetails;
+
+        if (length !== undefined && length > 0 && fieldName in updatedRecord) {
+          let valueAsString = String(updatedRecord[fieldName]);
+          if (valueAsString.length > length) {
+            valueAsString = valueAsString.substring(0, length);
+
+            switch (fieldDetails.type) {
+              case "double":
+              case "currency":
+              case "percent":
+              case "number":
+                updatedRecord[fieldName] = Number(valueAsString);
+                break;
+              default:
+                updatedRecord[fieldName] = valueAsString;
+            }
+          }
+        }
+      }
+
+      return updatedRecord;
+    });
 
     return enhancedData;
   }

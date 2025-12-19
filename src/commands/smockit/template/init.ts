@@ -17,8 +17,10 @@ import * as path from 'node:path';
 import chalk from 'chalk';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import Enquirer from 'enquirer';
-import { SetupInitResult, typeSObjectSettingsMap, flagsForInit, fieldsToConsiderMap } from '../../../utils/types.js';
+import { SetupInitResult, typeSObjectSettingsMap, fieldsToConsiderMap } from '../../../utils/types.js';
 import { outputChoices } from '../../../utils/constants.js';
+import { TemplateCreator } from '../../../utils/templateCreator.js';
+
 
 /* ------------------- Functions ---------------------- */
 
@@ -133,105 +135,7 @@ async function validateTemplateName(fileNameParam: string, templatePath: string)
     }
   }
 }
-function createDefaultTemplate(flags: flagsForInit, templatePath: string): void {
-  if (flags.default !== undefined) {
-    let defaultTemplatePath = path.join(templatePath, 'default_data_template.json');
-    let defaultTemplateNumber: number = 0;
 
-    while (fs.existsSync(defaultTemplatePath)) {
-      defaultTemplateNumber++;
-      defaultTemplatePath = path.join(templatePath, `default_data_template_${defaultTemplateNumber}.json`);
-    }
-
-    const defaultTemplate = `
-{
-  "namespaceToExclude": [],
-  "outputFormat": ["csv","di","json"],
-  "count": 1,
-  "sObjects": [
-    {"account": {}},
-    {"contact": {}},
-    {
-      "lead": {
-        "count": 5,
-        "fieldsToExclude": ["fax", "website"],
-        "fieldsToConsider": {
-          "email": ["smockit@gmail.com"],
-          "phone": ["9090909090","6788899990"]
-        },
-        "pickLeftFields": true
-      }
-    }
-  ]
-}
-    `;
-    // Write the JSON object to the file with custom formatting
-    fs.writeFileSync(defaultTemplatePath, defaultTemplate, 'utf8');
-    console.log(chalk.green(`Success: default data template created at ${defaultTemplatePath}`));
-  }
-}
-// default template for the sales process
-function createSalesProcessTemplate(templatePath: string): void {
-  let defaultTemplatePath = path.join(templatePath, 'default_salesprocess_template.json');
-  let defaultTemplateNumber = 0;
-
-  while (fs.existsSync(defaultTemplatePath)) {
-    defaultTemplateNumber++;
-    defaultTemplatePath = path.join(templatePath, `default_salesprocess_template_${defaultTemplateNumber}.json`);
-  }
-
-  const salesProcessTemplate = `
-{
-  "namespaceToExclude": [],
-  "outputFormat": ["di"],
-  "Count": 1,
-  "sObjects": [
-    {
-      "Account": {
-        "count": 1,
-        "fieldsToConsider": {},
-        "fieldsToExclude": [],
-        "pickLeftFields": true,
-        "relatedSObjects": [
-          {
-            "Contact": {
-              "count": 1,
-              "fieldsToConsider": {},
-              "fieldsToExclude": [],
-              "pickLeftFields": true,
-              "relatedSObjects": [
-                {
-                  "Opportunity": {
-                    "count": 1,
-                    "fieldsToConsider": {},
-                    "fieldsToExclude": [],
-                    "pickLeftFields":true,
-                    "relatedSObjects": [
-                      {
-                        "Quote": {
-                          "count": 1,
-                          "pickLeftFields": true,
-                          "fieldsToConsider":{},
-                          "fieldsToExclude": ["AdditionalState"]
-                        }
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          }
-        ]
-      }
-    }
-  ]
-}
-`;
-
-
-  fs.writeFileSync(defaultTemplatePath, salesProcessTemplate, 'utf8');
-  console.log(chalk.green(`Success: default Sales Process template created at ${defaultTemplatePath}`));
-}
 async function getJSONFileName(templatePath: string): Promise<string> {
   let fileName: string;
 
@@ -585,7 +489,7 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     default: Flags.boolean({
       summary: 'Configure templates for data generation.',
       description: "Creates a default template that can be used for initial 'json' adaption.",
-      char: 't',
+      char: 'd',
       required: false,
     }),
     salesprocess: Flags.boolean({
@@ -593,7 +497,20 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
       description: 'Generates a pre-configured template for Sales Process automation setup.',
       char: 's',
       required: false,
-    })
+    }),
+    cpq: Flags.boolean({
+      summary: 'Create a default CPQ template.',
+      description: 'Generates a pre-configured template for Salesforce CPQ automation setup.',
+      char: 'c',
+      required: false,
+    }),
+
+    taskray: Flags.boolean({
+      summary: 'Create a default TaskRay template.',
+      description: 'Generates a pre-configured template for TaskRay project automation setup.',
+      char: 't',
+      required: false,
+    }),
   };
 
 
@@ -609,14 +526,42 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     );
     this.log(chalk.bold('====================================='));
     const { flags } = await this.parse(SetupInit);
+
+    const templateCreator = new TemplateCreator();
+
     if (flags.default) {
-      createDefaultTemplate(flags, templatePath);
+      const filePath = templateCreator.createTemplate(templatePath, 'default');
+      console.log(
+        chalk.green(`Success: default data template created at ${filePath}`)
+      );
       process.exit(0);
     }
+
     if (flags.salesprocess) {
-      createSalesProcessTemplate(templatePath);
+      const filePath = templateCreator.createTemplate(templatePath, 'salesprocess');
+      console.log(
+        chalk.green(`Success: default Sales Process template created at ${filePath}`)
+      );
       process.exit(0);
     }
+
+    if (flags.cpq) {
+      const filePath = templateCreator.createTemplate(templatePath, 'cpq');
+      console.log(
+        chalk.green(`Success: default CPQ template created at ${filePath}`)
+      );
+      process.exit(0);
+    }
+
+    if (flags.taskray) {
+      const filePath = templateCreator.createTemplate(templatePath, 'taskray');
+      console.log(
+        chalk.green(`Success: default TaskRay template created at ${filePath}`)
+      );
+      process.exit(0);
+    }
+
+    
     const templateFileName = await getJSONFileName(templatePath);
     const filePath = path.join(templatePath, templateFileName);
     const namespaceToExclude = await getNamespaceToExclude();

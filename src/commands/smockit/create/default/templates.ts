@@ -12,7 +12,7 @@ Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('smock-it', 'create.default.templates'); 
 
 // All predefined template types the utility can handle
-const ALL_TEMPLATE_TYPES = ['default', 'salesprocess'] as const;
+const ALL_TEMPLATE_TYPES = ['default', 'salesprocess', 'taskray', 'cpq'] as const;
 type TemplateType = typeof ALL_TEMPLATE_TYPES[number];
 
 export default class TemplateCreate extends SfCommand<void> {
@@ -52,7 +52,7 @@ export default class TemplateCreate extends SfCommand<void> {
             }
         }
         
-        this.log(chalk.green(`\nSuccessfully created all available data templates.`));
+        this.log(chalk.green(`\nSuccessfully created all default templates.`));
         
         this.log(chalk.cyan('\nYou can review and customize the generated templates using this directory:',templateDirPath));
 
