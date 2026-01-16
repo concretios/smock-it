@@ -233,40 +233,43 @@ const CPQ_TEMPLATE =
                                   }
                                 ]
                               }
-                            },
-                            {
-                              "Order": {
-                                "count": 1,
-                                "fieldsToConsider": {
-                                  "SBQQ__Contracted__c": ["false"],
-                                  "Status": ["Draft"]
-                                },
-                                "fieldsToExclude": [
-                                  "ContractId",
-                                  "OriginalOrderId"
-                                ],
-                                "pickLeftFields": true,
-                                "relatedSObjects": [
-                                  {
-                                    "OrderItem": {
-                                      "count": 1,
-                                      "fieldsToConsider": {},
-                                      "fieldsToExclude": [
-                                        "SBQQ__Asset__c",
-                                        "SBQQ__PriceDimension__c",
-                                        "SBQQ__OrderedQuantity__c",
-                                        "ListPrice"
-                                      ],
-                                      "pickLeftFields": true
-                                    }
-                                  }
-                                ]
-                              }
                             }
                           ]
                         }
                       }
                     ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "Order": {
+              "count": 1,
+              "fieldsToConsider": {
+                "SBQQ__Contracted__c": [
+                  "false"
+                ],
+                "Status": [
+                  "Draft"
+                ],
+                "AccountId": [],
+                "Pricebook2Id": []
+              },
+              "fieldsToExclude": [],
+              "pickLeftFields": false,
+              "relatedSObjects": [
+                {
+                  "OrderItem": {
+                    "count": 1,
+                    "fieldsToConsider": {},
+                    "fieldsToExclude": [
+                      "SBQQ__Asset__c",
+                      "SBQQ__PriceDimension__c",
+                      "SBQQ__OrderedQuantity__c",
+                      "ListPrice"
+                    ],
+                    "pickLeftFields": true
                   }
                 }
               ]
