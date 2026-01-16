@@ -1,5 +1,3 @@
-// src/utils/templateCreator.ts
-
 /**
  * Copyright (c) 2025 concret.io
  *
@@ -15,8 +13,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 // Define the template strings (kept outside the class for cleanliness)
-const DEFAULT_TEMPLATE = `
-{
+const DEFAULT_TEMPLATE = 
+`{
   "namespaceToExclude": [],
   "outputFormat": ["di"],
   "count": 1,
@@ -38,11 +36,11 @@ const DEFAULT_TEMPLATE = `
 }
 `;
 
-const SALESPROCESS_TEMPLATE = `
-{
+const SALESPROCESS_TEMPLATE = 
+`{
   "namespaceToExclude": [],
   "outputFormat": ["di"],
-  "Count": 1,
+  "count": 1,
   "sObjects": [
     {
       "Account": {
@@ -86,8 +84,8 @@ const SALESPROCESS_TEMPLATE = `
 }
 `;
 
-const TASKRAY_TEMPLATE = `
-{
+const TASKRAY_TEMPLATE = 
+`{
     "namespaceToExclude": [],
     "outputFormat": [
         "di"
@@ -168,13 +166,13 @@ const TASKRAY_TEMPLATE = `
 }
 `;
 
-const CPQ_TEMPLATE = `
-{
+const CPQ_TEMPLATE = 
+`{
   "namespaceToExclude": [],
   "outputFormat": [
     "di"
   ],
-  "Count": 1,
+  "count": 1,
   "sObjects": [
     {
       "Account": {
@@ -214,6 +212,9 @@ const CPQ_TEMPLATE = `
                             {
                               "SBQQ__QuoteLineGroup__c": {
                                 "count": 1,
+                                "fieldsToConsider": {},
+                                "pickLeftFields": true,
+                                "fieldsToExclude": [],
                                 "relatedSObjects": [
                                   {
                                     "SBQQ__QuoteLine__c": {
@@ -278,6 +279,182 @@ const CPQ_TEMPLATE = `
 }
 `;
 
+const HEALTHCLOUD_TEMPLATE = 
+`{
+  "namespaceToExclude": [],
+  "outputFormat": [
+    "di"
+  ],
+  "count": 1,
+  "sObjects": [
+    {
+      "Account": {
+        "count": 1,
+        "fieldsToExclude": [
+          "BillingCountryCode",
+          "BillingStateCode",
+          "ShippingCountryCode",
+          "ShippingStateCode",
+          "PersonMailingCountryCode",
+          "PersonMailingCountry",
+          "PersonMailingStateCode",
+          "PersonOtherCountryCode",
+          "PersonOtherCountry",
+          "PersonOtherStateCode",
+          "PersonSequenceInMultipleBirth",
+          "Name",
+          "BillingState",
+          "ShippingState",
+          "PersonMailingState",
+          "PersonOtherState"
+        ],
+        "fieldsToConsider": {},
+        "pickLeftFields": true,
+        "relatedSObjects": [
+          {
+            "Opportunity": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [
+                "HealthCloudGA__ReferredToUser__c",
+                "HealthCloudGA__ReferringUser__c"
+              ],
+              "pickLeftFields": true,
+              "relatedSObjects": []
+            }
+          },
+          {
+            "Medication": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true,
+              "relatedSObjects": [
+                {
+                  "MedicationStatement": {
+                    "count": 1,
+                    "fieldsToConsider": {},
+                    "fieldsToExclude": [
+                      "MedicationCodeId"
+                    ],
+                    "pickLeftFields": true,
+                    "relatedSObjects": [
+                      {
+                        "CareObservation": {
+                          "count": 1,
+                          "pickLeftFields": true,
+                          "fieldsToConsider": {},
+                          "fieldsToExclude": [
+                            "DeviceId"
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "CareMetricTarget": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true,
+              "relatedSObjects": [
+                {
+                  "CareObservation": {
+                    "count": 1,
+                    "fieldsToConsider": {},
+                    "pickLeftFields": true,
+                    "fieldsToExclude": [
+                      "DeviceId"
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "MedicationRequest": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true
+            }
+          },
+          {
+            "AllergyIntolerance": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true
+            }
+          },
+          {
+            "HealthCondition": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true
+            }
+          },
+          {
+            "ClinicalEncounter": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true
+            }
+          },
+          {
+            "PatientImmunization": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true
+            }
+          },
+          {
+            "Case": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [],
+              "pickLeftFields": true,
+              "relatedSObjects": [
+                {
+                  "CareRequest": {
+                    "count": 1,
+                    "fieldsToConsider": {},
+                    "fieldsToExclude": [
+                      "OriginalDenialMedicalDirectorId",
+                      "FirstReviewerId",
+                      "MedicalDirectorId"
+                    ],
+                    "pickLeftFields": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "PatientMedicalProcedure": {
+              "count": 1,
+              "fieldsToConsider": {},
+              "fieldsToExclude": [
+                "PerformedAtAgeLowerLimit",
+                "PerformedAtAgeUpperLimit",
+                "DurationTimeString"
+              ],
+              "pickLeftFields": true
+            }
+          }
+        ]
+      }
+    }
+  ]
+}`;
+
 export class TemplateCreator {
 
   private getUniqueFilePath(templatePath: string, baseName: string): string {
@@ -294,10 +471,10 @@ export class TemplateCreator {
   /**
    * Creates a data template file of the specified type.
    * @param templatePath - The path to the templates directory.
-   * @param templateType - The type of template to create ('default', 'salesprocess', taskray , cpq).
+   * @param templateType - The type of template to create ('default', 'salesprocess', taskray , cpq, healthcloud).
    * @returns The path of the created template file.
    */
-  public createTemplate(templatePath: string, templateType: 'default' | 'salesprocess' | 'taskray' | 'cpq'): string {
+  public createTemplate(templatePath: string, templateType: 'default' | 'salesprocess' | 'taskray' | 'cpq' | 'healthcloud'): string {
     let baseName: string;
     let templateContent: string;
 
@@ -317,6 +494,10 @@ export class TemplateCreator {
       case 'cpq':
         baseName = 'default_cpq_template';
         templateContent = CPQ_TEMPLATE;
+        break;
+      case 'healthcloud':
+        baseName = 'default_healthcloud_template';
+        templateContent = HEALTHCLOUD_TEMPLATE;
         break;
       default:
         throw new Error(`Unknown template type: ${templateType}`);

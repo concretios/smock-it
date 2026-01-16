@@ -226,6 +226,13 @@ export type jsonConfig = {
   sObjects: SObjectConfig[];
 };
 
+export type RelatedSObjectNode = {
+  sObject: string;
+  records: {
+    relatedSObjects: RelatedSObjectNode[];
+  }[];
+};
+
 export type GenericRecord = { [key: string]: any };
 export type CreateResult = { id: string; success: boolean; errors: any[] };
 

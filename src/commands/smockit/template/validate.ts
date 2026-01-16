@@ -493,7 +493,7 @@ function validateDependentPicklists(
 
         if (missingControllers.length > 0) {
             structuralErrors.push(
-                chalk.red(`❌ Error: 'pickLeftFields' is false and required controller fields are missing from fieldsToConsider: ${missingControllers.join(', ')}.`)
+                chalk.red(`Error: 'pickLeftFields' is false and required controller fields are missing from fieldsToConsider: ${missingControllers.join(', ')}.`)
             );
             
         }
@@ -523,7 +523,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
   let isObjFieldsMissing: boolean = false;
   const objectFieldsMissing: string[] = [];
 
-  console.log(chalk.magenta('Please wait!! while we validate Objects and Fields...'));
+  console.log(chalk.magenta('Please wait!! while we validate Objects and Fields'));
   spinner.start('');
 
   try {
@@ -612,7 +612,14 @@ export async function validateConfigJson(connection: Connection, configPath: str
 
         const fieldsToExclude = (childData.fieldsToExclude ?? []).map((f) => f.toLowerCase());
         const fieldsToConsider = childData.fieldsToConsider ?? {};
-        const pickLeftFields = childData.pickLeftFields ?? false;
+        const pickLeftFields = childData.pickLeftFields ?? true;
+
+        if (!pickLeftFields && fieldsToConsider !== undefined && Object.keys(fieldsToConsider).length === 0
+        ) {
+          isObjFieldsMissing = true;
+          objectFieldsMissing.push(childName);
+        }
+        
         // Call the revised validation function
         const dependentValidationResult = validateDependentPicklists(
             childMeta, 
@@ -769,7 +776,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
     // Check missing SObjects
     if (invalidObjects.length > 0) {
       console.log();
-      console.warn(chalk.red(`❌ Error: SObjects not found or inaccessible:\n • ${invalidObjects.join(', ')}`));
+      console.warn(chalk.red(`Error: SObjects not found or inaccessible:\n • ${invalidObjects.join(', ')}`));
       isDataValid = false;
     }
 
@@ -782,7 +789,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
             .filter(([key]) => key.endsWith(' (Rules)'));
 
         if (structuralErrors.length > 0) {
-            console.warn(chalk.red.bold('❌ CRITICAL LOGIC/STRUCTURAL ERRORS FOUND:'));
+            console.warn(chalk.red.bold('CRITICAL LOGIC/STRUCTURAL ERRORS FOUND:'));
             for (const [objKey, errors] of structuralErrors) {
                 // Clean up the key name for presentation
                 const sObjectName = objKey.replace(' (Rules)', '');
@@ -796,7 +803,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
             .filter(([key]) => !key.endsWith(' (Rules)'));
 
         if (fieldExistenceErrors.length > 0) {
-            console.warn(chalk.magenta('❌ Invalid fields found (Typos/Missing Fields):'));
+            console.warn(chalk.magenta('Invalid fields found (Typos/Missing Fields):'));
             for (const [obj, fields] of fieldExistenceErrors) {
                 console.warn(chalk.magenta(` • ${obj}: ${fields.join(', ')}`));
             }
@@ -806,7 +813,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
     // Check relationship errors
     if (Object.keys(relationshipErrors).length > 0) {
       console.log();
-      console.warn(chalk.red('❌ Invalid relationships found:'));
+      console.warn(chalk.red('Invalid relationships found:'));
       Object.values(relationshipErrors).forEach((errs) => {
         errs.forEach((err) => console.log(chalk.red(` • ${err}`)));
       });

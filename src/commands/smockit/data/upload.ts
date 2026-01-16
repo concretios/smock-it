@@ -38,7 +38,7 @@ import chalk from 'chalk';
 import { connectToSalesforceOrg } from '../../../utils/generic_function.js';
 import DataGenerate from './generate.js';
 import { GenericRecord, CreateResult, FieldRecord } from '../../../utils/types.js';
-import { insertRecordsspecial } from '../../../utils/conditional_object_handling.js';
+// import { insertRecordsspecial } from '../../../utils/conditional_object_handling.js';
 
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -346,7 +346,14 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
         throw new SfError(`Failed to create parent record for ${referenceTo}: ${errorMsg}`, 'ParentInsertFailed');
       }
 
-      DataUpload.createdRecordsIds.set(referenceTo, [newId]);
+      if (insertResult[0]?.success && newId) {
+          // Add to local cache using the specific referenceTo name
+          const existing = DataUpload.createdRecordsIds.get(referenceTo) || [];
+          DataUpload.createdRecordsIds.set(referenceTo, [...existing, newId]);
+          return newId;
+      }
+
+      // DataUpload.createdRecordsIds.set(referenceTo, [newId]);
       return newId;
     } catch (err: any) {
       this.spinner.stop('Error');
@@ -455,24 +462,32 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     this.log(chalk.blueBright('⏳ Please wait while records are being processed...\n'));
 
     let insertResults;
-    if (
-      sobject.toLowerCase() === 'order' ||
-      sobject.toLowerCase() === 'task' ||
-      sobject.toLowerCase() === 'productitemtransaction' ||
-      sobject.toLowerCase() === 'event'
-    ) {
-      insertResults = await insertRecordsspecial(conn, sobject, finalRecordsToInsert);
-    } else {
-      insertResults = await DataGenerate.insertRecords(conn, sobject, finalRecordsToInsert);
-    }
+    // if (
+    //   sobject.toLowerCase() === 'order' ||
+    //   sobject.toLowerCase() === 'task' ||
+    //   sobject.toLowerCase() === 'productitemtransaction' ||
+    //   sobject.toLowerCase() === 'event'
+    // ) {
+    //   insertResults = await insertRecordsspecial(conn, sobject, finalRecordsToInsert);
+    // } else {
+      insertResults = await DataGenerate.insertRecords(conn, sobject, finalRecordsToInsert, true);
+    // }
 
     DataUpload.processInsertResults(sobject, insertResults, finalRecordsToInsert.length, this.log.bind(this));
 
-    const successfulMainRecordIds = insertResults.filter((r) => r.success).map((r) => r.id as string);
-    if (successfulMainRecordIds.length > 0) {
-      const existingIds = DataUpload.createdRecordsIds.get(sobject) || [];
-      DataUpload.createdRecordsIds.set(sobject, [...existingIds, ...successfulMainRecordIds]);
-    }
+    // const successfulMainRecordIds = insertResults.filter((r) => r.success).map((r) => r.id as string);
+    // if (successfulMainRecordIds.length > 0) {
+    //   const existingIds = DataUpload.createdRecordsIds.get(sobject) || [];
+    //   DataUpload.createdRecordsIds.set(sobject, [...existingIds, ...successfulMainRecordIds]);
+    // }
+
+// Sync the local createdRecordsIds with the static ones from DataGenerate
+// This ensures all nested objects are captured separately
+DataGenerate.createdRecordsIds.forEach((ids, objectName) => {
+    const existing = DataUpload.createdRecordsIds.get(objectName) || [];
+    // Ensure we only store unique IDs and keep the SObject names correct
+    DataUpload.createdRecordsIds.set(objectName, [...new Set([...existing, ...ids])]);
+});
 
     DataUpload.saveCreatedRecordIds(this.log.bind(this));
 

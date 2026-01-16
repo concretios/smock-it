@@ -142,7 +142,7 @@ export async function insertRecordsspecial(
     }
 
     if (failedCount > 0) {
-        console.error(chalk.yellowBright(`❌ Failed to insert ${failedCount} record(s) for sObject: ${object}`));
+        console.error(chalk.yellowBright(`Failed to insert ${failedCount} record(s) for sObject: ${object}`));
         console.error(chalk.whiteBright('Error breakdown:'));
         errorCountMap.forEach((count, message) => {
             console.error(`• Insertion failed with: ${chalk.redBright(message)}`);
