@@ -142,7 +142,7 @@ export async function insertRecordsspecial(
     }
 
     if (failedCount > 0) {
-        console.error(chalk.yellowBright(`❌ Failed to insert ${failedCount} record(s) for sObject: ${object}`));
+        console.error(chalk.yellowBright(`Failed to insert ${failedCount} record(s) for sObject: ${object}`));
         console.error(chalk.whiteBright('Error breakdown:'));
         errorCountMap.forEach((count, message) => {
             console.error(`• Insertion failed with: ${chalk.redBright(message)}`);
@@ -153,7 +153,7 @@ export async function insertRecordsspecial(
 }
 
 
-export const restrictedObjects = ['accountcleaninfo', 'activity', 'timeslot', 'pricebookentry', 'paymentgatewayprovider', 'consumptionschedule', 'AppointmentTopicTimeSlot', 'approvalsubmission', 'approvalworkitem', 'dandbcompany', 'approvalsubmissiondetail', 'assetaction', 'assetactionsource', 'assetstateperiod', 'contactcleaninfo', 'creditmemo', 'creditmemoinvapplication', 'creditmemoline', 'entitymilestone', 'financebalancesnapshot', 'floworchestrationinstance', 'floworchestrationlog', 'floworchestrationstageinstance', 'floworchestrationstepinstance', 'floworchestrationworkitem', 'invoice', 'invoiceline', 'leadcleaninfo', 'paymentmethod', 'serializedproducttransaction', 'serviceappointmentcapacityusage'];
+export const restrictedObjects = ['accountcleaninfo', 'activity', 'timeslot', 'paymentgatewayprovider', 'consumptionschedule', 'AppointmentTopicTimeSlot', 'approvalsubmission', 'approvalworkitem', 'dandbcompany', 'approvalsubmissiondetail', 'assetaction', 'assetactionsource', 'assetstateperiod', 'contactcleaninfo', 'creditmemo', 'creditmemoinvapplication', 'creditmemoline', 'entitymilestone', 'financebalancesnapshot', 'floworchestrationinstance', 'floworchestrationlog', 'floworchestrationstageinstance', 'floworchestrationstepinstance', 'floworchestrationworkitem', 'invoice', 'invoiceline', 'leadcleaninfo', 'paymentmethod', 'serializedproducttransaction', 'serviceappointmentcapacityusage'];
 
 export const userLicenseObjects = new Set(['resourceabsence', 'resourcepreference', 'servicecrewmember', 'serviceresource', 'serviceresourcecapacity', 'serviceresourcepreference', 'serviceresourceskill', 'serviceterritorymember', 'timesheet', 'timesheetentry', 'user', 'userprovisioningrequest', 'workbadge', 'workthanks', 'shift']);
 

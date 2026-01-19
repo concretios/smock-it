@@ -17,10 +17,10 @@ import * as path from 'node:path';
 import chalk from 'chalk';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import Enquirer from 'enquirer';
-import { SetupInitResult, typeSObjectSettingsMap, flagsForInit, fieldsToConsiderMap } from '../../../utils/types.js';
+import { SetupInitResult, typeSObjectSettingsMap, fieldsToConsiderMap } from '../../../utils/types.js';
 import { outputChoices } from '../../../utils/constants.js';
+import { TemplateCreator } from '../../../utils/templateCreator.js';
 
-/* ------------------- Functions ---------------------- */
 
 /*
  Create data_gen structure on current CLI path.
@@ -63,7 +63,7 @@ async function runMultiSelectPrompt(): Promise<string[]> {
     const answers = await Enquirer.prompt<Answers>({
       type: 'multiselect',
       name: 'choices',
-      message: `Select output format [CSV, JSON, DI] ${chalk.dim(
+      message: `Select output format ${chalk.dim(
         `(use ${chalk.cyanBright('<space>')} to select, ${chalk.cyanBright('↑')} ${chalk.cyanBright('↓')} to navigate)`
       )}:`,
       choices: outputChoices,
@@ -133,48 +133,12 @@ async function validateTemplateName(fileNameParam: string, templatePath: string)
     }
   }
 }
-function createDefaultTemplate(flags: flagsForInit, templatePath: string): void {
-  if (flags.default !== undefined) {
-    let defaultTemplatePath = path.join(templatePath, 'default_data_template.json');
-    let defaultTemplateNumber: number = 0;
 
-    while (fs.existsSync(defaultTemplatePath)) {
-      defaultTemplateNumber++;
-      defaultTemplatePath = path.join(templatePath, `default_data_template_${defaultTemplateNumber}.json`);
-    }
-
-    const defaultTemplate = `
-{
-  "namespaceToExclude": [],
-  "outputFormat": ["csv", "json"],
-  "count": 1,
-  "sObjects": [
-    {"account": {}},
-    {"contact": {}},
-    {
-      "lead": {
-        "count": 5,
-        "fieldsToExclude": ["fax", "website"],
-        "fieldsToConsider": {
-          "email": ["smockit@gmail.com"],
-          "phone": ["9090909090","6788899990"]
-        },
-        "pickLeftFields": true
-      }
-    }
-  ]
-}
-    `;
-    // Write the JSON object to the file with custom formatting
-    fs.writeFileSync(defaultTemplatePath, defaultTemplate, 'utf8');
-    console.log(chalk.green(`Success: default data template created at ${defaultTemplatePath}`));
-  }
-}
 async function getJSONFileName(templatePath: string): Promise<string> {
   let fileName: string;
 
   while (true) {
-    fileName = await askQuestion('Provide a template name', 'account_creation');
+    fileName = await askQuestion('Enter a template name', 'account_creation');
     if (/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(fileName)) {
       break;
     } else {
@@ -187,7 +151,7 @@ async function getJSONFileName(templatePath: string): Promise<string> {
   return templateFileName;
 }
 async function getNamespaceToExclude(): Promise<string[]> {
-  const namespaceExcludeValue = await askQuestion('Exclude namespace(s)' + chalk.dim('(comma-separated)'), '');
+  const namespaceExcludeValue = await askQuestion('Namespace(s) to exclude' + chalk.dim('(comma-separated)'), '');
   const namespaceToExclude = namespaceExcludeValue
     ? namespaceExcludeValue
         .toLowerCase()
@@ -284,7 +248,7 @@ async function showConditionalCommand(
       value: obj,
     }));
 
-    const sObjectName = await runSelectPrompt('Override the global settings for Object', objInTemplateChoices);
+    const sObjectName = await runSelectPrompt('Select SObject to customize', objInTemplateChoices);
 
     if (!sObjectName) {
       overWriteGlobalSettings = await askQuestion(
@@ -321,7 +285,7 @@ async function showConditionalCommand(
 
     const fieldsToExcludeInput = await askQuestion(
       chalk.white.bold(`[${sObjectName} - fieldsToExclude]`) +
-        ' List fields (API names) to exclude' +
+        ' Enter fields (API names) to exclude' +
         chalk.dim('(comma-separated)'),
       ''
     );
@@ -334,17 +298,9 @@ async function showConditionalCommand(
       sObjectSettingsMap[sObjectName]['fieldsToExclude'] = fieldsToExclude;
     }
 
-    /* ---------------------New features added------------------------------*/
-
-    console.log(
-      chalk.blue.bold(
-        'Note: For dependent picklists, define values in order (e.g., dp-Country: [India], dp-State: [Goa]).'
-      )
-    );
-
     const fieldsToConsiderInput = await askQuestion(
       chalk.white.bold(`[${sObjectName} - fieldsToConsider]`) +
-        ' List fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
+        ' Enter fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
       ''
     );
 
@@ -370,7 +326,7 @@ async function showConditionalCommand(
       { name: 'false', message: 'false', value: 'false', hint: '' },
     ];
     const pickLeftFieldsInput = await runSelectPrompt(
-      `[${sObjectName} - pickLeftFields] Want to generate data for fields neither in 'fields to consider' nor in 'fields to exclude'`,
+      `[${sObjectName} - pickLeftFields] Generate data for remaining fields`,
       pickLeftFields
     );
     if (pickLeftFieldsInput) {
@@ -385,10 +341,14 @@ async function showConditionalCommand(
       );
       continue;
     }
-    /* -------------------------------------------- */
+
+    const relatedSObjects = await handleRelatedSObjectsQuestionnaire(sObjectName);
+    if (relatedSObjects.length > 0) {
+        sObjectSettingsMap[sObjectName]['relatedSObjects'] = relatedSObjects;
+    }
 
     if (remainingObjects.length !== 0) {
-      overWriteGlobalSettings = await askQuestion('Override global settings for another Object(API name)? (Y/n)', 'n');
+      overWriteGlobalSettings = await askQuestion('Customize settings for another SObject? (Y/n)', 'n');
     }
   }
 }
@@ -407,19 +367,157 @@ export const askQuestion = async (query: string, defaultValue?: string): Promise
 
   return (response as unknown as { answer: string }).answer;
 };
+async function handleRelatedSObjectsQuestionnaire(
+  parentName: string
+): Promise<Array<{ [key: string]: typeSObjectSettingsMap }>> {
+  const relatedSObjects: Array<{ [key: string]: typeSObjectSettingsMap }> = [];
+  let continueAdding = true;
+  let sObjectSettingsMap: { [key: string]: typeSObjectSettingsMap } = {};
 
+  while (continueAdding) {
+    const addRelated = await askQuestion(
+      chalk.white.bold(`[${parentName}]`) + ' Add a related (child) SObject? (Y/n)',
+      'n'
+    );
+
+    if (addRelated.toLowerCase() === 'yes' || addRelated.toLowerCase() === 'y') {
+      const childName = await askQuestion(
+        chalk.white.bold(`[${parentName} -> Child]`) + ' Enter child SObject API name',
+        'Contact'
+      );
+
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(childName)) {
+        console.error(chalk.red('Invalid SObject name! Try again.'));
+        continue;
+      }
+
+      sObjectSettingsMap = { [childName]: {} }; // Reset for new child
+      
+      // Get Count
+      sObjectSettingsMap = await handleSObjectSettingsMap(sObjectSettingsMap, childName);
+
+      // Get Fields to Exclude
+      const fieldsToExcludeInput = await askQuestion(
+        chalk.white.bold(`[${childName} - fieldsToExclude]`) +
+          ' Enter fields (API names) to exclude' +
+          chalk.dim('(comma-separated)'),
+        ''
+      );
+      const fieldsToExclude: string[] = fieldsToExcludeInput
+        .toLowerCase()
+        .split(/[\s,]+/)
+        .filter(Boolean);
+
+      if (fieldsToExclude.length > 0) {
+        sObjectSettingsMap[childName]['fieldsToExclude'] = fieldsToExclude;
+      }
+
+      const fieldsToConsiderInput = await askQuestion(
+        chalk.white.bold(`[${childName} - fieldsToConsider]`) +
+          ' Enter fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
+        ''
+      );
+
+      const fieldsToConsider: fieldsToConsiderMap = handleFieldsToConsider(fieldsToConsiderInput);
+
+      const conflictingFields = Object.keys(fieldsToConsider).filter((field) =>
+        fieldsToExclude.includes(field.toLowerCase())
+      );
+      if (conflictingFields.length > 0) {
+        console.log(
+          chalk.yellow(
+            `Warning: Common fields found in 'fields-to-exclude' and 'fields-to-consider' in sObject '${childName}' is '${conflictingFields.join(
+              ','
+            )}' . You must remove them!`
+          )
+        );
+      }
+
+      if (Object.keys(fieldsToConsider).length > 0) {
+        sObjectSettingsMap[childName]['fieldsToConsider'] = fieldsToConsider;
+      }
+
+      // Get pickLeftFields
+      const pickLeftFieldsChoices = [
+        { name: 'true', message: 'true', value: 'true', hint: '' },
+        { name: 'false', message: 'false', value: 'false', hint: '' },
+      ];
+      const pickLeftFieldsInput = await runSelectPrompt(
+        `[${childName} - pickLeftFields] Generate data for remaining fields`,
+        pickLeftFieldsChoices
+      );
+      if (pickLeftFieldsInput) {
+        sObjectSettingsMap[childName]['pickLeftFields'] = pickLeftFieldsInput === 'true';
+      }
+
+      if (Object.keys(fieldsToConsider).length === 0 && pickLeftFieldsInput === 'false') {
+        console.log(
+          chalk.red.bold(
+            "No fields found to generate data. Set pick-left-fields' to true or add fields to 'fields-to-consider'."
+          )
+        );
+        continue;
+      }
+      
+      // RECURSIVE CALL for nested relatedSObjects
+      const nestedRelated = await handleRelatedSObjectsQuestionnaire(childName);
+      if (nestedRelated.length > 0) {
+          sObjectSettingsMap[childName]['relatedSObjects'] = nestedRelated;
+      }
+      // Add the fully configured child to the list
+      relatedSObjects.push({ [childName]: sObjectSettingsMap[childName] });
+
+    } else {
+      // User chose 'n', stop adding related objects at this level
+      continueAdding = false;
+    }
+  }
+
+  return relatedSObjects;
+}
 export default class SetupInit extends SfCommand<SetupInitResult> {
   public static summary = 'Creates a default template that can be used for initial json adaption.';
   public static examples = ['sf template init --default'];
 
   public static readonly flags = {
+    all: Flags.boolean({
+      summary: 'Create all available default templates.',
+      description: 'Generates all pre-configured templates (default, salesprocess, cpq, etc.) at once in the data_gen/templates directory.',
+      char: 'a',
+      required: false,
+    }),
     default: Flags.boolean({
       summary: 'Configure templates for data generation.',
       description: "Creates a default template that can be used for initial 'json' adaption.",
+      char: 'd',
+      required: false,
+    }),
+    salesprocess: Flags.boolean({
+      summary: 'Create a default Sales Process template.',
+      description: 'Generates a pre-configured template for Sales Process automation setup.',
+      char: 's',
+      required: false,
+    }),
+    healthcloud: Flags.boolean({
+      summary: 'Create a default HealthCloud template.',
+      description: 'Generates a pre-configured template for HealthCloud automation setup.',
+      char: 'h',
+      required: false,
+    }),
+    cpq: Flags.boolean({
+      summary: 'Create a default CPQ template.',
+      description: 'Generates a pre-configured template for Salesforce CPQ automation setup.',
+      char: 'c',
+      required: false,
+    }),
+    taskray: Flags.boolean({
+      summary: 'Create a default TaskRay template.',
+      description: 'Generates a pre-configured template for TaskRay project automation setup.',
       char: 't',
       required: false,
     }),
   };
+
 
   public async run(): Promise<SetupInitResult> {
     const dirname = handleDirStruct();
@@ -433,10 +531,31 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     );
     this.log(chalk.bold('====================================='));
     const { flags } = await this.parse(SetupInit);
-    if (flags.default) {
-      createDefaultTemplate(flags, templatePath);
-      process.exit(0);
+
+    const templateCreator = new TemplateCreator();
+
+    // Define the mapping of flags to template types
+    const templateMapping: Array<{ flag: boolean; type: 'default' | 'salesprocess' | 'healthcloud' | 'cpq' | 'taskray', label: string }> = [
+      { flag: flags.default, type: 'default', label: 'Default' },
+      { flag: flags.salesprocess, type: 'salesprocess', label: 'Sales Process' },
+      { flag: flags.healthcloud, type: 'healthcloud', label: 'HealthCloud' },
+      { flag: flags.cpq, type: 'cpq', label: 'CPQ' },
+      { flag: flags.taskray, type: 'taskray', label: 'TaskRay' },
+    ];
+    const anyFlagActive = templateMapping.some(m => m.flag) || flags.all;
+
+    if (anyFlagActive) {
+      for (const item of templateMapping) {
+        if (flags.all || item.flag) {
+          let filePath = templateCreator.createTemplate(templatePath, item.type);
+          console.log(chalk.green(`Success: ${item.label} template created at ${filePath}`));
+        }
+      }
+      this.log('Use the created template\'s file name to generate data using this command:',chalk.yellow('sf smockit data generate -t <TemplateName> -a <OrgAlias>'));
+      process.exit(0); 
     }
+
+    
     const templateFileName = await getJSONFileName(templatePath);
     const filePath = path.join(templatePath, templateFileName);
     const namespaceToExclude = await getNamespaceToExclude();
@@ -446,7 +565,7 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
 
     let count = 0;
     while (count === 0) {
-      const preSanitizedCount = parseInt(await askQuestion('Specify test data count', '1'), 10);
+      const preSanitizedCount = parseInt(await askQuestion('Default record count', '1'), 10);
       if (preSanitizedCount > 0 && !isNaN(preSanitizedCount)) {
         count = preSanitizedCount;
         break;
@@ -459,8 +578,8 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     }
 
     const objectsToConfigureInput = await askQuestion(
-      'List Objects(API names) for data creation' + chalk.dim(' (comma-separated)'),
-      'Lead'
+      'Enter Objects' + chalk.dim(' (API names) ') + 'to Generate' + chalk.dim(' (comma-separated)'),
+      'Account'
     );
     const tempObjectsToConfigure = objectsToConfigureInput
       .toLowerCase()
@@ -473,10 +592,10 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     );
 
     if (objectsToConfigure.length === 0) {
-      objectsToConfigure.push('lead');
+      objectsToConfigure.push('Account');
     }
 
-    const overWriteGlobalSettings = await askQuestion('Customize settings for individual SObjects? (Y/n)', 'n');
+    const overWriteGlobalSettings = await askQuestion('Customize settings per SObjects? (Y/n)', 'n');
     const sObjectSettingsMap: { [key: string]: typeSObjectSettingsMap } = {};
 
     let remainingObjectsToConfigure = [...objectsToConfigure];
@@ -508,37 +627,47 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     // Write the values of the config to the file template
     fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf8');
     const wantToValidate = await askQuestion(
-      chalk.bold('Validate the added sObjects and their fields from your org?(Y/n)'),
+      chalk.bold('Validate selected SObjects and fields against your Salesforce org? (Y/n)'),
       'n'
     );
     if (wantToValidate.toLowerCase() === 'yes' || wantToValidate.toLowerCase() === 'y') {
       const userAliasorUsernName = await askQuestion(
-        chalk.bold('Enter the alias or username for the Salesforce org you wish to connect to (case-sensetive)')
+        chalk.bold('Enter Salesforce org alias or username (case-sensetive)')
       );
-
+      let correctAlias = false;
       try {
         const { connectToSalesforceOrg } = await import('../../../utils/generic_function.js');
         const { validateConfigJson } = await import('./validate.js');
 
-        const conn = await connectToSalesforceOrg(userAliasorUsernName);
+        const conn = await connectToSalesforceOrg(userAliasorUsernName);  
+        correctAlias = true;
         await validateConfigJson(conn, filePath);
-        console.log(chalk.green(' Validation successful!'));
       } catch (err: unknown) {
-        if (err instanceof Error) {
-          console.log(chalk.red(` Validation failed: ${err.message}`));
-        } else {
+        if (!(err instanceof Error)) {
           console.log(chalk.red(' Validation failed due to an unknown error.'));
+        }else{
+          if(!correctAlias){
+            console.log(
+              chalk.yellow.bold('\n⚠️ Invalid alias or username!\n') + +
+                chalk.yellow(
+                  'The template will still be created. Please verify the alias/username or authenticate using `sf org login web`\n'
+                ) +
+                chalk.yellow('or use the `sf template validate --help` command..')
+            );
+          }else{
+            console.log(err.message);
+          }
         }
-        console.log(
-          chalk.yellow('It seems there was an issue with the alias or username provided.\n') +
-            chalk.yellow(
-              'The template will still be created. Please verify the alias/username or authenticate using `sf org login web`\n'
-            ) +
-            chalk.yellow('or use the `sf template validate --help` command..')
-        );
+        
       }
     }
-    console.log(chalk.green(`Success: ${templateFileName} created at ${filePath}`));
+    console.log(
+      chalk.green('Template created successfully.') +
+      '\n' +
+      chalk.cyan(`File: ${templateFileName}`) +
+      '\n' +
+      chalk.gray(`Location: ${filePath}`)
+    );
     return config;
   }
 }

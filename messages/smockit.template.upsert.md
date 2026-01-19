@@ -91,3 +91,11 @@ Use `--pickLeftFields` or `-p` to specify fields for test data generation. Set t
 - `sf template add -t <template-name> <global flags with values -f,-x,-c,-l>`
 - `sf template add -t <template-name> -o <object-name> <object flags with values -e,-c,-l>`
 
+
+# flags.relatedSObjects.summary
+
+Specify related SObjects to upsert in the template.
+
+# flags.relatedSObjects.description
+
+Use --relatedSObjects or -k to upsert related SObject configurations for the selected object in the template. This allows you to add or update nested related SObject definitions during the upsert operation.

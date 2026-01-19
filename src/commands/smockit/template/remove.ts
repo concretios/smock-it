@@ -160,7 +160,7 @@ function validateFlags(flags: string[]): boolean {
     throw new Error('pickLeftFields can not be deleted, it can only be set to true or false using the update command');
   } else if (
     !flags.includes('sObject') &&
-    (flags.includes('fieldsToExclude') || flags.includes('count') || flags.includes('language'))
+    (flags.includes('fieldsToExclude') || flags.includes('count') || flags.includes('language') || flags.includes('fieldsToConsider'))
   ) {
     errorMessage = flags.includes('count')
       ? 'Default count can not be deleted! You can update instead.'
@@ -177,7 +177,6 @@ function validateFlags(flags: string[]): boolean {
   return true;
 }
 function checkValidObject(flags: flagObj, jsonData: templateSchema): void {
-  let concernedObject;
   if (
     Object.keys(flags).includes('sObject') &&
     (Object.keys(flags).includes('fieldsToExclude') ||
@@ -189,54 +188,78 @@ function checkValidObject(flags: flagObj, jsonData: templateSchema): void {
       throw new Error('Object-level values can only be removed from a single object at a time.');
     }
     const sObjectName = (flags.sObject as string).toLowerCase();
-    concernedObject = jsonData.sObjects.find((obj) =>
-      Object.keys(obj).some((key) => key.toLowerCase() === sObjectName)
-    );
-    if (!concernedObject || concernedObject === undefined) {
-      throw new Error(`The specified sObject '${sObjectName}' does not exist in the data template file.`);
-    }
+    const sObjectNames = sObjectName.split('/').map(n => n.toLowerCase());
+    let sObjectsArray = jsonData.sObjects;
+
+    sObjectNames.forEach((name, index) => {
+      const concernedObject = sObjectsArray?.find((obj) =>
+        Object.keys(obj).some((key) => key.toLowerCase() === name)
+      );
+
+      if (!concernedObject) {
+        throw new Error(`The specified sObject '${name}' does not exist in the data template file.`);
+      }
+
+      const actualKey = Object.keys(concernedObject).find(
+        (k) => k.toLowerCase() === name
+      )!;
+
+      const objConfig = concernedObject[actualKey];
+
+      if (index < sObjectNames.length - 1 && !objConfig.relatedSObjects) {
+        throw new Error(
+          `'${actualKey}' does not contain relatedSObjects, so '${sObjectNames[index + 1]}' cannot exist under it.`
+        );
+      }
+
+      sObjectsArray = objConfig.relatedSObjects ?? [];
+    });
   }
 }
 function validateInput(flags: flagObj, jsonData: templateSchema): templateSchema {
   checkValidObject(flags, jsonData);
-  let updatedJsonData = jsonData;
+  const sObjectName = (flags.sObject as string)?.toLowerCase();
+  const sObjectNames = sObjectName?.split('/').map(n => n.toLowerCase());
+  let updatedJsonData = getUpdatedData(jsonData, sObjectNames);
+
   for (const [key] of Object.entries(flags)) {
     switch (key) {
       case 'fieldsToExclude':
         if ('sObject' in flags && 'fieldsToExclude' in flags && Array.isArray(flags.fieldsToExclude)) {
           updatedJsonData = DeleteSObjectArrayValue(
             updatedJsonData,
-            (flags.sObject as string).toLowerCase(),
+            sObjectNames[sObjectNames.length - 1],
             parseInput(flags.fieldsToExclude)
           );
         }
         break;
       // case 'language':
       case 'count':
-        updatedJsonData = deleteSObjectField(updatedJsonData, (flags.sObject as string).toLowerCase(), key);
+        updatedJsonData = deleteSObjectField(updatedJsonData, sObjectNames[sObjectNames.length - 1], key);
         break;
 
-      case 'namespaceToExclude':
-      case 'outputFormat': {
-        const fieldValues = key === 'outputFormat' ? flags.outputFormat : flags.namespaceToExclude;
-        if (Array.isArray(fieldValues)) {
-          updatedJsonData = DeleteArrayValue(updatedJsonData, key, parseInput(fieldValues));
-        }
-        break;
-      }
       case 'sObject':
         updatedJsonData =
           Object.keys(flags).length === 2 && flags.sObject
-            ? DeletesObject(updatedJsonData, parseInput([flags.sObject]))
+            ? DeletesObject(updatedJsonData, [sObjectNames[sObjectNames.length - 1]])
             : updatedJsonData;
         break;
       case 'fieldsToConsider':
         updatedJsonData = flags.fieldsToConsider
           ? DeleteFieldsToConsiderValues(
             updatedJsonData,
-            (flags.sObject as string).toLowerCase(),
+            sObjectNames[sObjectNames.length - 1],
             parseInput(flags.fieldsToConsider)
           )
+          : updatedJsonData;
+        break;
+      case 'relatedSObjects':
+        updatedJsonData = flags.relatedSObjects
+          ? (removeRelatedSObjects(
+            updatedJsonData,
+            sObjectNames[sObjectNames.length - 1],
+            parseInput(flags.relatedSObjects)
+          ))
           : updatedJsonData;
         break;
       default:
@@ -246,8 +269,31 @@ function validateInput(flags: flagObj, jsonData: templateSchema): templateSchema
   if (updatedJsonData === undefined) {
     throw new Error('JSON data is undefined after processing the flags.');
   }
+
+  let outputData = updateSObjectPath(jsonData, sObjectNames, updatedJsonData.sObjects??[0]);
+  outputData.namespaceToExclude = updatedJsonData.namespaceToExclude;
+  outputData.outputFormat = updatedJsonData.outputFormat;
+
+  return outputData;
+}
+function validateGlobalInput(flags: flagObj, jsonData: templateSchema): templateSchema {
+  let updatedJsonData = jsonData;
+  for (const [key] of Object.entries(flags)) {
+    switch (key) {
+      case 'namespaceToExclude':
+      case 'outputFormat': {
+        const fieldValues = key === 'outputFormat' ? flags.outputFormat : flags.namespaceToExclude;
+        if (Array.isArray(fieldValues)) {
+          updatedJsonData = DeleteArrayValue(updatedJsonData, key, parseInput(fieldValues));
+        }
+        break;
+      }
+    }
+  }
+
   return updatedJsonData;
 }
+
 function getJsonData(templateName: string): string {
   const filename = templateName.endsWith('.json') ? templateName : `${templateName}.json`;
   if (!filename) {
@@ -263,6 +309,138 @@ function getJsonData(templateName: string): string {
   }
   return configFilePath;
 }
+export function getUpdatedData(jsonData: any, path: string[]): any {
+  let currentLevel = jsonData.sObjects;
+
+  for (let i = 0; i < path.length; i++) {
+    const name = path[i].toLowerCase();
+
+    const found = currentLevel.find((obj: any) =>
+      Object.keys(obj)[0].toLowerCase() === name
+    );
+
+    if (!found) {
+      throw new Error(`'${path[i]}' does not exist in the template.`);
+    }
+
+    const realKey = Object.keys(found)[0];
+    const config = found[realKey];
+
+    if (i === path.length - 1) {
+      return {
+        namespaceToExclude: jsonData.namespaceToExclude,
+        outputFormat: jsonData.outputFormat,
+        sObjects: [
+          {
+            [realKey.toLowerCase()]: config
+          }
+        ]
+      };
+    }
+
+    currentLevel = config.relatedSObjects || [];
+  }
+
+  throw new Error("Invalid path.");
+}
+
+function updateSObjectPath(
+  jsonData: any,
+  path: string[],
+  updatedData: any
+): any {
+  const newJson = JSON.parse(JSON.stringify(jsonData)); // deep clone
+  const sObjects = newJson.sObjects;
+
+  // If updatedData is array, extract object inside
+  if (Array.isArray(updatedData)) {
+    if (updatedData.length === 1 && typeof updatedData[0] === "object") {
+      updatedData = updatedData[0];
+    } else {
+      throw new Error("updatedData should not be an array.");
+    }
+  }
+
+  let currentLevelArray = sObjects;
+
+  for (let i = 0; i < path.length; i++) {
+    const key = path[i].toLowerCase();
+
+    const objIndex = currentLevelArray.findIndex(
+      (obj: any) => Object.keys(obj)[0].toLowerCase() === key
+    );
+    if (objIndex === -1) return newJson;
+
+    const currentObjKey = Object.keys(currentLevelArray[objIndex])[0];
+    const currentObj = currentLevelArray[objIndex][currentObjKey];
+
+    // LAST NODE → replace object
+    if (i === path.length - 1) {
+      currentLevelArray[objIndex] = { ...updatedData };
+      return newJson;
+    }
+
+    // go deeper
+    if (!currentObj.relatedSObjects || !Array.isArray(currentObj.relatedSObjects)) {
+      return newJson;
+    }
+
+    currentLevelArray = currentObj.relatedSObjects;
+  }
+
+  return newJson;
+}
+
+function removeRelatedSObjects(
+  jsonData: templateSchema,
+  sObject: string,
+  relatedSObjectsToRemove: string[]
+): templateSchema {
+  if (!relatedSObjectsToRemove || relatedSObjectsToRemove.length === 0) {
+    return jsonData;
+  }
+
+  const targetObj = sObject.toLowerCase();
+  const removeSet = new Set(
+    relatedSObjectsToRemove?.map((r) => r.toLowerCase())
+  );
+
+  if (!Array.isArray(jsonData.sObjects)) return jsonData;
+
+  console.log(`Removing '${relatedSObjectsToRemove.join(', ')}' from the sObject '${sObject}' settings.`);
+
+  const updatedSObjects = jsonData.sObjects.map((obj) => {
+    const key = Object.keys(obj)[0];
+    const value = obj[key];
+
+    if (key.toLowerCase() !== targetObj) {
+      return obj;
+    }
+
+    if (!Array.isArray(value.relatedSObjects)) {
+      return obj;
+    }
+
+    const filteredRelated = value.relatedSObjects.filter((relObj) => {
+      const relKey = Object.keys(relObj)[0];
+      return !removeSet.has(relKey.toLowerCase());
+    });
+
+    return {
+      [key]: {
+        ...value,
+        relatedSObjects: filteredRelated,
+      },
+    };
+  });
+
+  return {
+    ...jsonData,
+    sObjects: updatedSObjects,
+  };
+}
+
+
 
 export default class TemplateRemove extends SfCommand<TemplateRemoveResult> {
   public static readonly summary: string = messages.getMessage('summary');
@@ -320,6 +498,12 @@ export default class TemplateRemove extends SfCommand<TemplateRemoveResult> {
       description: messages.getMessage('flags.pickLeftFields.description'),
       char: 'p',
     }),
+    relatedSObjects: Flags.string({
+      summary: messages.getMessage('flags.relatedSObjects.summary'),
+      description: messages.getMessage('flags.relatedSObjects.description'),
+      char: 'k',
+      multiple: true,
+    }),
   };
 
   public async run(): Promise<TemplateRemoveResult> {
@@ -331,7 +515,20 @@ export default class TemplateRemove extends SfCommand<TemplateRemoveResult> {
     if (flagKeys.length === 1 && flagKeys.includes('templateName')) {
       this.error('Error: Data Template File cannot be deleted! You must specify at least one setting flag to remove');
     }
-    const updatedJson = validateInput(flags, jsonData);
+
+    let isGlobal = false;
+    if (flags.namespaceToExclude || flags.outputFormat) {
+      isGlobal = true;
+    }
+
+    let  updatedJson;
+    if(!isGlobal) {
+      this.log(chalk.magenta.bold(`Working on the object level settings for ${flags.sObject}`));
+      updatedJson = validateInput(flags, jsonData);
+    }
+    else
+      updatedJson = validateGlobalInput(flags, jsonData);
+
     fs.writeFileSync(configFilePath, JSON.stringify(updatedJson, null, 2), 'utf8');
     this.log(chalk.green(`Success: Configuration updated in data template file ${configFilePath}`));
     return {

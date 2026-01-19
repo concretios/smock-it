@@ -49,20 +49,90 @@ export function createTable(): Table {
   });
 }
 
-export function createResultEntryTable(object: string, outputFormat: string[], failedCount: number, count: number): ResultEntry {
+// export function createResultEntryTable(object: string, outputFormat: string[], failedCount: number, count: number): ResultEntry {
+//   return {
+//     'SObject(s)': object.toUpperCase(),
+//     JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
+//     CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
+//     DI:
+//       outputFormat.includes('di') || outputFormat.includes('DI')
+//         ? failedCount === count
+//           ? chalk.red('X')
+//           : failedCount > 0
+//             ? chalk.red('X (Partially Failed)')
+//             : '\u2714'
+//         : '-',
+//     'Failed(DI)': failedCount,
+//   };
+// }
+
+// export function createResultEntryTable(
+//   object: string, 
+//   outputFormat: string[], 
+//   failedCount: number, 
+//   count: number, 
+//   level: number = 0 // Add level parameter
+// ): ResultEntry {
+//   // Create indentation: empty for level 0, " └── " for children
+//   const indentation = level > 0 ? '  '.repeat(level - 1) + '└── ' : '';
+  
+//   return {
+//     'SObject(s)': indentation + object.toUpperCase(),
+//     JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
+//     CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
+//     DI:
+//       outputFormat.includes('di') || outputFormat.includes('DI')
+//         ? failedCount === count
+//           ? chalk.red('X')
+//           : failedCount > 0
+//             ? chalk.red('X (Partially Failed)')
+//             : '\u2714'
+//         : '-',
+//     'Failed(DI)': failedCount,
+//   };
+// }
+
+// export function createResultEntryTable(
+//   object: string, 
+//   outputFormat: string[], 
+//   failedCount: number, 
+//   count: number,
+//   level: number = 0 // Accept the level
+// ): ResultEntry {
+//   // Use a branch symbol for levels > 0
+//   const indentation = level > 0 ? '  '.repeat(level - 1) + '└── ' : '';
+  
+//   return {
+//     'SObject(s)': indentation + object.toUpperCase(),
+//     JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
+//     CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
+//     DI:
+//       outputFormat.includes('di') || outputFormat.includes('DI')
+//         ? failedCount === count ? chalk.red('X') : failedCount > 0 ? chalk.red('X (Partially Failed)') : '\u2714'
+//         : '-',
+//     'Failed(DI)': failedCount,
+//   };
+// }
+
+// In output_table.ts
+export function createResultEntryTable(
+  object: string, 
+  outputFormat: string[], 
+  failedCount: number, 
+  count: number, 
+  level: number = 0
+): ResultEntry {
+  // Use distinct symbols based on level for better readability
+  const indentation = level > 0 ? '  '.repeat(level - 1) + '└── ' : '';
+  
   return {
-    'SObject(s)': object.toUpperCase(),
+    'SObject(s)': indentation + object.toUpperCase(),
     JSON: outputFormat.includes('json') || outputFormat.includes('JSON') ? '\u2714' : '-',
     CSV: outputFormat.includes('csv') || outputFormat.includes('CSV') ? '\u2714' : '-',
     DI:
       outputFormat.includes('di') || outputFormat.includes('DI')
-        ? failedCount === count
-          ? chalk.red('X')
-          : failedCount > 0
-            ? chalk.red('X (Partially Failed)')
-            : '\u2714'
+        ? failedCount === count ? chalk.red('X') : failedCount > 0 ? chalk.red('X (Partially Failed)') : '\u2714'
         : '-',
     'Failed(DI)': failedCount,
   };
 }
-
