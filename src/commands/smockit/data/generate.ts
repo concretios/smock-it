@@ -237,7 +237,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         throw new Error(`Count for object "${object}" is undefined.`);
       }
 
-      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object);
+      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object, localIndex);
 
       const trimmedJsonData = await this.trimFieldsData(jsonDataForObjectNames, basicJsonData, object);
 
@@ -606,7 +606,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         throw new Error(`Unable to find parent field in ${relatedKey} that references ${parentObjectName}`);
       }
 
-      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, relatedKey);
+      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, relatedKey, 0);
 
       const countOfRecordsToGenerate = basicJsonData.length ?? 1;
 
@@ -1797,7 +1797,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         if (!result.success) {
           failedCount++;
           (result.errors ?? []).forEach((err: any) => handleErrors(err));
-          console.log(chalk.redBright('Error Message', result.errors[0].message));
         }
         return {
           id: result.id ?? '',
@@ -1815,8 +1814,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         });
       }
     };
-
-    //correct one with wrong table
 
     // const insertRelatedRecords = async (
     //   insertedResults: CreateResult[],
@@ -1866,8 +1863,6 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     //   }
     //   return allInsertedChildIds;
     // };
-
-    // order probelm with correct table
 
     const insertRelatedRecords = async (
       insertedResults: CreateResult[],
@@ -1955,7 +1950,14 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const initialBatch = dataArray.splice(0, BATCH_SIZE);
       const initialWithoutRelated = initialBatch.map(({ relatedSObjects, ...rest }) => rest);
       const initialResults = await conn.sobject(sObjectName).create(initialWithoutRelated);
-      DataGenerate.storeDataForOutputTable(sObjectName, failedCount, initialResults, level);
+
+      //  Update the global ID cache for reference resolution
+      const ids = (Array.isArray(initialResults) ? initialResults : [initialResults])
+        .filter(r => r.success)
+        .map(r => r.id);
+      const existing = DataGenerate.createdRecordsIds.get(sObjectName) || [];
+      DataGenerate.createdRecordsIds.set(sObjectName, existing.concat(ids as string[]));
+
       results.push(...mapResults(initialResults));
 
       // BULK INSERT FOR REMAINDER

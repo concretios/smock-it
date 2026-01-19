@@ -666,7 +666,6 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
         
       }
     }
-    // console.log(chalk.green(`Success: ${templateFileName} created at ${filePath}`));
     console.log(
       chalk.green('Template created successfully.') +
       '\n' +
