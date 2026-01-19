@@ -267,7 +267,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       }
 
       saveOutputFileOfJsonAndCsv(relatedJsonData as GenericRecord[], object, outputFormat, flags.templateName);
-
+      spinner.stop('');
       await this.handleDirectInsert(conn, outputFormat, object, relatedJsonData as GenericRecord[]);
 
       // Build output hierarchy for result table
@@ -300,7 +300,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
     saveCreatedRecordIds(outputFormat, flags.templateName);
 
-    spinner.stop('');
+    // spinner.stop('');
 
     const endTime = Date.now();
     const totalTime = ((endTime - startTime) / 1000).toFixed(2);
@@ -1952,11 +1952,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const initialResults = await conn.sobject(sObjectName).create(initialWithoutRelated);
 
       //  Update the global ID cache for reference resolution
-      const ids = (Array.isArray(initialResults) ? initialResults : [initialResults])
-        .filter(r => r.success)
-        .map(r => r.id);
-      const existing = DataGenerate.createdRecordsIds.get(sObjectName) || [];
-      DataGenerate.createdRecordsIds.set(sObjectName, existing.concat(ids as string[]));
+      DataGenerate.storeDataForOutputTable(sObjectName, failedCount, initialResults, level);
 
       results.push(...mapResults(initialResults));
 
@@ -1975,8 +1971,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             batch.on('queue', () => batch.poll(1000, 900_000));
             batch.on('response', (rets: any[]) => {
               results.push(...mapResults(rets));
-              const countFailed = rets.filter(r => r.success === false).length;
-              DataGenerate.storeDataForOutputTable(sObjectName, countFailed, rets, level);
+              const ids = (Array.isArray(initialResults) ? initialResults : [initialResults])
+                .filter(r => r.success)
+                .map(r => r.id);
+              const existing = DataGenerate.createdRecordsIds.get(sObjectName) || [];
+              DataGenerate.createdRecordsIds.set(sObjectName, existing.concat(ids as string[]));
               const progress = Math.ceil(((i + batchData.length) / copyDataArray.length) * 100);
               progressBar.update(progress);
               resolve();
