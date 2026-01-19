@@ -237,7 +237,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         throw new Error(`Count for object "${object}" is undefined.`);
       }
 
-      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object);
+      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object, localIndex);
 
       const trimmedJsonData = await this.trimFieldsData(jsonDataForObjectNames, basicJsonData, object);
 
@@ -606,7 +606,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         throw new Error(`Unable to find parent field in ${relatedKey} that references ${parentObjectName}`);
       }
 
-      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, relatedKey);
+      const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, relatedKey, 0);
 
       const countOfRecordsToGenerate = basicJsonData.length ?? 1;
 

@@ -22,8 +22,6 @@ import { outputChoices } from '../../../utils/constants.js';
 import { TemplateCreator } from '../../../utils/templateCreator.js';
 
 
-/* ------------------- Functions ---------------------- */
-
 /*
  Create data_gen structure on current CLI path.
 */
@@ -300,7 +298,6 @@ async function showConditionalCommand(
       sObjectSettingsMap[sObjectName]['fieldsToExclude'] = fieldsToExclude;
     }
 
-    /* ---------------------New features added------------------------------*/
     const fieldsToConsiderInput = await askQuestion(
       chalk.white.bold(`[${sObjectName} - fieldsToConsider]`) +
         ' Enter fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
@@ -345,12 +342,10 @@ async function showConditionalCommand(
       continue;
     }
 
-    /*  NEW RELATED OBJECTS QUESTIONNAIRE */
     const relatedSObjects = await handleRelatedSObjectsQuestionnaire(sObjectName);
     if (relatedSObjects.length > 0) {
         sObjectSettingsMap[sObjectName]['relatedSObjects'] = relatedSObjects;
     }
-    /* -------------------------------------------- */
 
     if (remainingObjects.length !== 0) {
       overWriteGlobalSettings = await askQuestion('Customize settings for another SObject? (Y/n)', 'n');
@@ -539,7 +534,7 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
 
     const templateCreator = new TemplateCreator();
 
-    // 1. Define the mapping of flags to template types
+    // Define the mapping of flags to template types
     const templateMapping: Array<{ flag: boolean; type: 'default' | 'salesprocess' | 'healthcloud' | 'cpq' | 'taskray', label: string }> = [
       { flag: flags.default, type: 'default', label: 'Default' },
       { flag: flags.salesprocess, type: 'salesprocess', label: 'Sales Process' },

@@ -12,7 +12,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// Define the template strings (kept outside the class for cleanliness)
+// Define the template strings
 const DEFAULT_TEMPLATE = 
 `{
   "namespaceToExclude": [],
@@ -33,8 +33,7 @@ const DEFAULT_TEMPLATE =
       }
     }
   ]
-}
-`;
+}`;
 
 const SALESPROCESS_TEMPLATE = 
 `{
@@ -81,8 +80,7 @@ const SALESPROCESS_TEMPLATE =
       }
     }
   ]
-}
-`;
+}`;
 
 const TASKRAY_TEMPLATE = 
 `{
@@ -163,8 +161,7 @@ const TASKRAY_TEMPLATE =
             }
         }
     ]
-}
-`;
+}`;
 
 const CPQ_TEMPLATE = 
 `{
@@ -279,8 +276,7 @@ const CPQ_TEMPLATE =
       }
     }
   ]
-}
-`;
+}`;
 
 const HEALTHCLOUD_TEMPLATE = 
 `{
