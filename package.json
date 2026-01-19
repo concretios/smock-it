@@ -1,11 +1,13 @@
 {
   "name": "smock-it",
   "description": "Smock-it is a CLI plugin for generating synthetic test data in Salesforce, helping SF devs, QAs, and admins create realistic data without using live customer info—boosting efficiency and privacy.",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "dependencies": {
     "@oclif/core": "^4",
     "@salesforce/core": "^8.2.7",
     "@salesforce/sf-plugins-core": "^11.2.4",
+    "@vercel/node": "^5.3.11",
+    "axios": "^1.10.0",
     "chalk": "^5.3.0",
     "cli-loading-animation": "^1.0.6",
     "cli-progress": "^3.12.0",
@@ -19,6 +21,7 @@
     "lru-cache": "^9.0.0",
     "minimatch": "^5.0.0",
     "node-fetch": "^3.3.2",
+    "openai": "^5.9.0",
     "rimraf": "^6.0.1",
     "shell": "^0.12.0",
     "smockit-data-engine": "^0.0.3",
