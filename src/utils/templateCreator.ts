@@ -16,19 +16,37 @@ import * as path from 'node:path';
 const DEFAULT_TEMPLATE = 
 `{
   "namespaceToExclude": [],
-  "outputFormat": ["di"],
+  "outputFormat": ["di", "json"],
   "count": 1,
   "sObjects": [
-    {"account": {}},
-    {"contact": {}},
     {
-      "lead": {
-        "count": 5,
-        "fieldsToExclude": ["fax", "website"],
+      "Account": {
+        "count": 1,
         "fieldsToConsider": {
-          "email": ["smockit@gmail.com"],
-          "phone": ["9090909090","6788899990"]
+        "name": ["John"]
         },
+        "fieldsToExclude": ["fax"],
+        "pickLeftFields": true,
+        "relatedSObjects": [
+          {
+            "Contact": {
+              "count": 1,
+              "fieldsToConsider": {
+               "LastName": ["Smith"],    
+               "email": ["smith@gmail.com"]
+               },
+              "fieldsToExclude": [],
+              "pickLeftFields": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "Lead": {
+        "count": 1,
+        "fieldsToConsider": {},
+        "fieldsToExclude": [],
         "pickLeftFields": true
       }
     }
