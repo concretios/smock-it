@@ -180,7 +180,7 @@ export function updateOrInitializeConfig(
             );
             if (exists) {
               throw new Error(
-                `One or more relatedSObjects already exist in the configuration. Please check and try again.`
+                'One or more relatedSObjects already exist in the configuration. Please check and try again.'
               );
             }
             const modifiedData = valuesArray.map(item => ({ [item]: {} }));
@@ -286,10 +286,10 @@ export function getTemplateJsonData(templateName: string): string {
 }
 
 
-function getSObjectDataByPath(jsonData: any, path: string): any | null {
-  const parts = path.toLowerCase().split("/");
+function getSObjectDataByPath(jsonData: any, path2: string): any {
+  const parts = path2.toLowerCase().split('/');
   let currentLevel = jsonData.sObjects;
-  let currentPath = "sObjects";
+  let currentPath = 'sObjects';
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
@@ -318,7 +318,7 @@ function getSObjectDataByPath(jsonData: any, path: string): any | null {
     // Continue deeper → must have relatedSObjects
     if (!value.relatedSObjects) {
       throw new Error(
-        `Object '${key}' does not contain relatedSObjects while resolving path '${path}'`
+        `Object '${key}' does not contain relatedSObjects while resolving path '${path2}'`
       );
     }
 
@@ -376,6 +376,14 @@ export default class TemplateAdd extends SfCommand<void> {
       allowedFlags = ['fieldsToExclude', 'language', 'count', 'pickLeftFields', 'fieldsToConsider', 'relatedSObjects'];
       updateOrInitializeConfig(configFileForSobject, flags, allowedFlags, this.log.bind(this));
     } else {
+      if(Object.keys(flags).includes('relatedSObjects') || 
+        Object.keys(flags).includes('pickLeftFields') || 
+        Object.keys(flags).includes('fieldsToConsider') || 
+        Object.keys(flags).includes('fieldsToExclude')) 
+      {
+        this.error('Plaese add --s-object flag when updating object-level settings like relatedSObjects, pickLeftFields, fieldsToConsider, or fieldsToExclude.');
+      }
+      
       const configFile: templateSchema = config;
       allowedFlags = ['outputFormat', 'namespaceToExclude', 'language', 'count'];
       updateOrInitializeConfig(configFile, flags, allowedFlags, this.log.bind(this));

@@ -555,7 +555,7 @@ export async function validateConfigJson(connection: Connection, configPath: str
     }
 
     const BATCH_SIZE = 10; // Set the safe batch size
-    let batchedMetadata: any[] = [];
+    const batchedMetadata: any[] = [];
     
     // FIX: Loop through sObjectNames in batches of 10
     for (let i = 0; i < sObjectNames.length; i += BATCH_SIZE) {

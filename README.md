@@ -45,11 +45,11 @@ Smock-it v4 introduces enhanced command support for managing related sObjects us
 
 - **Upsert related sObjects**
 ``` 
-   sf smockit template upsert -t <templateName> -s Account/Contact/Opportunity
+   sf smockit template upsert -t <templateName> -s Account/Contact -k Opportunity
 ```
 - **Remove related sObjects**
 ``` 
-   sf smockit template upsert -t <templateName> -s Account -k Contact
+   sf smockit template remove -t <templateName> -s Account/Contact -k Opportunity
 ```
    These commands support upsert and remove operations using “/” notation for relatedSObjects, making template management more flexible and intuitive.
 
@@ -60,11 +60,11 @@ Smock-it v4 introduces enhanced command support for managing related sObjects us
 Smock-it v4 enhances the template init command to support default and guided template creation.
   - **Initialize specific default templates:**
   ``` 
-   sf smockit template init [--default || -d] [--salesprocess || -s] [--taskray || -t] [--cpq || -c] [--healthcloud || -h]
+   sf smockit template init [--default] [--salesprocess] [--taskray] [--cpq] [--healthcloud]
   ```
    - **Initialize all default templates:**
   ```
-   sf smockit template init --all || -a
+   sf smockit template init --all
   ```
    - **Initialize a custom template interactively by answering questions:**
   ``` 
@@ -223,7 +223,7 @@ Smock-it generates output based on the format provided in the template configura
 Create fresh template for data generation. [Read more](https://github.com/concretios/smock-it/wiki/Template-Init-Command)
 
 ``` 
-sf smockit template init [--default || -d] [--salesprocess || -s] [--taskray || -t] [--cpq || -c] [--healthcloud || -h]
+sf smockit template init [--default] [--salesprocess] [--taskray] [--cpq] [--healthcloud]
 ```
 
 #### 2. Generate Template and Data via Prompt
@@ -305,12 +305,12 @@ sf smockit template remove -t <templateFileName> [-s <sObject>] [-c <recordCount
 | `--excludeSObjects` | `-z` | ExcludesObjects |This flag skips a specific SObject during data generation, even if it's included in the template file. |
 | `--recordType` | `-r` | recordType | Generate data for a specific Record Type for specified object by passing its name with the -r flag. |
 | `--relatedSObjects` | `-k` | relatedSObjects | This flag ensures proper generation hierarchy when child sObjects are related to a parent. |
-| `--default` | `-d` | Default Template | Creates a default template. |
-| `--salesprocess` | `-s` | Default Template | Creates a sales process template. |
-| `--taskray` | `-t` | Default Template | Creates a taskray template. |
-| `--cpq` | `-c` | Default Template | Creates a CPQ template. |
-| `--healthcloud` | `-h` | Default Template | Creates a health cloud template. |
-| `--all` | `-a` | Default Template | Creates all default templates. |
+| `--default` |  | Default Template | Creates a default template. |
+| `--salesprocess` |  | Default Template | Creates a sales process template. |
+| `--taskray` |  | Default Template | Creates a taskray template. |
+| `--cpq` |  | Default Template | Creates a CPQ template. |
+| `--healthcloud` |  | Default Template | Creates a health cloud template. |
+| `--all` |  | Default Template | Creates all default templates. |
 
 ## Legacy Command Migration
 
