@@ -93,7 +93,7 @@
     "format": "wireit",
     "link-check": "wireit",
     "lint": "wireit",
-    "postpack": "sf-clean --ignore-signing-artifacts",
+    "postpack": "sf-clean --ignore-signing-artifacts --ignore lib",
     "prepack": "sf-prepack",
     "semantic-release": "semantic-release",
     "test": "wireit",
