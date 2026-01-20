@@ -205,7 +205,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     for (const [index, currentSObject] of jsonDataForObjectNames.sObjects.entries()) {
       this.createdRecordCache = {};
       const object = currentSObject.sObject ?? '';
-      //Reset and seed the stack for the current hierarchy
+      // Reset and seed the stack for the current hierarchy
       DataGenerate.parentSObjects = [object.toLowerCase()];
       const localIndex = sObjectCounter[object] ?? 0;
       sObjectCounter[object] = localIndex + 1;
@@ -239,7 +239,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
       const basicJsonData = await GenerateTestData.generate(generateOutputconfigPath, object, localIndex);
 
-      const trimmedJsonData = await this.trimFieldsData(jsonDataForObjectNames, basicJsonData, object);
+      const trimmedJsonData = this.trimFieldsData(jsonDataForObjectNames, basicJsonData, object);
 
       const jsonData = this.enhanceDataWithSpecialFields(trimmedJsonData, processedFields, countofRecordsToGenerate, object);
 
@@ -312,7 +312,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     return { path: flags.templateName };
   }
 
-  /**
+  /*
  * Builds an output hierarchy for generated Salesforce data.
  *
  * This method creates a flat list representing the parent-to-child
@@ -327,7 +327,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   public static buildOutputHierarchy(
     data: { relatedSObjects: RelatedSObjectNode[] },
     rootObjectName: string
-  ): { sObject: string; failedCount: number; count: number; level: number; }[] {
+  ): Array<{ sObject: string; failedCount: number; count: number; level: number }> {
     const result = [];
 
     // Add root object
@@ -361,7 +361,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     return result;
   }
 
-  /**
+  /*
  * Trims field values in generated JSON data based on Salesforce field metadata.
  * For each record, the method checks field length constraints defined in the
  * output configuration and shortens values that exceed the maximum allowed length.
@@ -376,11 +376,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
  * maximum allowed lengths where applicable.
  */
 
-  private async trimFieldsData(
+  private trimFieldsData(
     generatedOutputconfigData: any,
     basicJsonData: any[],
     sObjectName: string
-  ): Promise<any[]> {
+  ): any[] {
     const childMetadata = generatedOutputconfigData.sObjects.find(
       (obj: any) => obj.sObject.toLowerCase() === sObjectName.toLowerCase()
     );
@@ -395,11 +395,11 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     const modifiedJsonData = basicJsonData.map((record: any) => {
       const newRecord = { ...record };
 
-      for (const key in record) {
+      for (const key of Object.keys(record)) {
         const fieldMeta = fields[key];
         const value = record[key];
 
-        if (!fieldMeta || !fieldMeta.length || value === null || value === undefined) {
+        if (!fieldMeta?.length || !value) {
           continue;
         }
 
@@ -409,10 +409,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           valueAsString = valueAsString.substring(0, fieldMeta.length);
 
           switch (fieldMeta.type) {
-            case "double":
-            case "currency":
-            case "percent":
-            case "number":
+            case 'double':
+            case 'currency':
+            case 'percent':
+            case 'number':
               newRecord[key] = Number(valueAsString);
               break;
 
@@ -438,10 +438,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
    * - Generates or updates field configuration metadata for each related sObject.
    * - Identifies the parent reference field in the related sObject metadata.
    * - Generates base JSON data and enriches it with:
-   *   - Parent reference values
-   *   - Picklist and reference field handling
-   *   - Trimmed field values based on metadata length constraints
-   *   - Special field enhancements
+   * - Parent reference values
+   * - Picklist and reference field handling
+   * - Trimmed field values based on metadata length constraints
+   * - Special field enhancements
    * - Recursively processes nested related sObjects to build a complete hierarchy.
    *
    * The final result is a structured JSON output where each related sObject contains
@@ -483,7 +483,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       const value = obj[key];
 
       const hasPickLeftFields = Object.keys(value).some(
-        key => key.toLowerCase() === 'pickleftfields'
+        k => k.toLowerCase() === 'pickleftfields'
       );
 
       if (!hasPickLeftFields) {
@@ -648,7 +648,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
 
       const processedFields = await this.processObjectFieldsForIntitalJsonFile(conn, modifiedFields, relatedKey);
 
-      const trimmedJsonData = await this.trimFieldsData(generatedOutputconfigData, basicJsonData, relatedKey);
+      const trimmedJsonData = this.trimFieldsData(generatedOutputconfigData, basicJsonData, relatedKey);
 
       const jsonData = this.enhanceDataWithSpecialFields(
         trimmedJsonData,
@@ -1335,7 +1335,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     outputFormat: string[],
     object: string,
     jsonData: GenericRecord[]
-  )//: Promise<{ failedCount: number; insertedIds: string[] }> 
+  )// : Promise<{ failedCount: number; insertedIds: string[] }> 
   {
     if (!outputFormat.includes('DI') && !outputFormat.includes('di')) {
       return;
@@ -1762,7 +1762,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     conn: Connection,
     object: string,
     jsonData: GenericRecord[],
-    addToOutputTable: Boolean = false,
+    addToOutputTable: boolean = false,
     level: number = 0
   ): Promise<CreateResult[]> {
     const dataArray = Array.isArray(jsonData) ? jsonData : [jsonData];
@@ -1975,7 +1975,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
                 .filter(r => r.success)
                 .map(r => r.id);
               const existing = DataGenerate.createdRecordsIds.get(sObjectName) || [];
-              DataGenerate.createdRecordsIds.set(sObjectName, existing.concat(ids as string[]));
+              DataGenerate.createdRecordsIds.set(sObjectName, existing.concat(ids));
               const progress = Math.ceil(((i + batchData.length) / copyDataArray.length) * 100);
               progressBar.update(progress);
               resolve();
@@ -2077,7 +2077,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       combinedResultsMap[field.QualifiedApiName] = field;
     });
 
-    const updatedProcessFields: Partial<TargetData>[] = processFields.map(f => {
+    const updatedProcessFields: Array<Partial<TargetData>> = processFields.map(f => {
       if (!f.name || !f.type) {
         return f;
       }
@@ -2310,7 +2310,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       }
     }
     if (object.toString().toLowerCase() === 'contact' && this.isObjectTemplateRelated(processedFields[0], 'HealthCloudGA')) {
-      const result = await conn.query<{ Id: string; DeveloperName: string; }>(`
+      const result = await conn.query<{ Id: string; DeveloperName: string }>(`
         SELECT Id, DeveloperName
         FROM RecordType
         WHERE SObjectType = 'Contact'
@@ -2319,7 +2319,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       `);
       const businessContactRTId = result.records[0]?.Id;
       if (businessContactRTId) {
-        processedFields.push({ "name": "RecordTypeId", "type": "Custom List", "values": [businessContactRTId] })
+        processedFields.push({ 'name': 'RecordTypeId', 'type': 'Custom List', 'values': [businessContactRTId] });
       }
     }
     return processedFields;
@@ -2441,7 +2441,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }, {});
 
     if ('Name' in fieldMap) {
-      fieldMap['Name'] = { "type": "text", "values": [], "label": `${referenceTo}Name`, "length": fieldMap['Name'].length ?? 255 }
+      fieldMap['Name'] = { 'type': 'text', 'values': [], 'label': `${referenceTo}Name`, 'length': fieldMap['Name'].length ?? 255 };
     }
 
     if (((referenceTo === 'Contact' && (object === 'asset' || object === 'Asset')) ||
@@ -2479,13 +2479,13 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
 
     if (referenceTo.toString().toLowerCase() === 'product2') {
-      fieldMap['IsActive'] = { type: 'Custom List', values: ["true"], label: 'Is Active' };
-      // fieldMap['Name'] = { "type": "text", "values": [], "label": "Product Name", "length": 255 }
+      fieldMap['IsActive'] = { type: 'Custom List', values: ['true'], label: 'Is Active' };
+      // fieldMap['Name'] = { 'type': 'text', 'values': [], 'label': 'Product Name', 'length': 255 }
     }
 
     if (referenceTo.toString().toLowerCase() === 'pricebookentry') {
-      fieldMap['IsActive'] = { type: 'Custom List', values: ["false"], label: 'Is Active' };
-      fieldMap['UseStandardPrice'] = { type: 'Custom List', values: ["false"], label: 'Use Standard Price' };
+      fieldMap['IsActive'] = { type: 'Custom List', values: ['false'], label: 'Is Active' };
+      fieldMap['UseStandardPrice'] = { type: 'Custom List', values: ['false'], label: 'Use Standard Price' };
     }
 
     if (referenceTo.toString().toLowerCase() === 'orderitem') {
@@ -2513,7 +2513,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     }
 
     if (referenceTo.toString().toLowerCase() === 'problemdefinition') {
-      fieldMap['UsageType'] = { type: 'Custom List', values: ["HealthCondition", "CareGap"], label: 'Usage Type' };
+      fieldMap['UsageType'] = { type: 'Custom List', values: ['HealthCondition', 'CareGap'], label: 'Usage Type' };
     }
 
     const initialJsonData = await GenerateTestData.getFieldsData(fieldMap, 1);
@@ -2767,7 +2767,8 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   /**
    * Checks if a single record object contains any field that starts 
    * with the specified prefix (e.g., 'SBQQ__').
-   * * @param record The single record object (map) to check (e.g., enhancedData[index]).
+   * 
+   * @param record The single record object (map) to check (e.g., enhancedData[index]).
    * @param prefix The field API name prefix to search for (case-insensitive).
    * @returns true if any field in the record starts with the prefix, false otherwise.
    */
@@ -2901,7 +2902,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
     if (object.toString().toLowerCase() === 'taskray__project__c') {
       enhancedData.forEach(record => {
         if ('TASKRAY__trNickname__c' in record) {
-          record.TASKRAY__trNickname__c = record.TASKRAY__trNickname__c + '-' + Math.floor(Math.random() * 1000)
+          record['TASKRAY__trNickname__c'] = record['TASKRAY__trNickname__c'] + '-' + Math.floor(Math.random() * 1000)
         }
       });
     }
@@ -2911,17 +2912,17 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
       this.isObjectTemplateRelated(enhancedData[0], 'HealthCloudGA')
     ) {
       enhancedData.forEach((record: any) => {
-        if (record.HealthCloudGA__SourceSystemId__c) {
-          record.HealthCloudGA__SourceSystemId__c =
-            generateUniqueSourceSystemId(record.HealthCloudGA__SourceSystemId__c);
+        if (record['HealthCloudGA__SourceSystemId__c']) {
+          record['HealthCloudGA__SourceSystemId__c'] =
+            generateUniqueSourceSystemId(record['HealthCloudGA__SourceSystemId__c']);
         }
-        if (record.HealthCloudGA__SourceSystemId__pc) {
-          record.HealthCloudGA__SourceSystemId__pc =
-            generateUniqueSourceSystemId(record.HealthCloudGA__SourceSystemId__pc);
+        if (record['HealthCloudGA__SourceSystemId__pc']) {
+          record['HealthCloudGA__SourceSystemId__pc'] =
+            generateUniqueSourceSystemId(record['HealthCloudGA__SourceSystemId__pc']);
         }
-        if (record.SourceSystemIdentifier) {
-          record.SourceSystemIdentifier =
-            generateUniqueSourceSystemId(record.SourceSystemIdentifier);
+        if (record['SourceSystemIdentifier']) {
+          record['SourceSystemIdentifier'] =
+            generateUniqueSourceSystemId(record['SourceSystemIdentifier']);
         }
       });
     }
@@ -2973,7 +2974,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           record['SBQQ__SubscriptionType__c'] = record['SBQQ__ProductSubscriptionType__c'].includes('/') ? 'Renewable' : record['SBQQ__ProductSubscriptionType__c'];
           if (record['SBQQ__ProductSubscriptionType__c'].toLowerCase() === 'evergreen') {
             record['SBQQ__SubscriptionTerm__c'] = 1;
-            if (record['SBQQ__BillingFrequency__c'] === "Invoice Plan") record['SBQQ__BillingFrequency__c'] = "";
+            if (record['SBQQ__BillingFrequency__c'] === 'Invoice Plan') record['SBQQ__BillingFrequency__c'] = '';
             delete record['SBQQ__EndDate__c'];
           }
           if (record['SBQQ__ChargeType__c'] === 'One-Time') {
@@ -2982,10 +2983,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         }
         if ('SBQQ__ChargeType__c' in record) {
           if (record['SBQQ__ChargeType__c'] === 'One-Time' || record['SBQQ__ChargeType__c'] === 'Usage') {
-            record['SBQQ__BillingType__c'] = "";
+            record['SBQQ__BillingType__c'] = '';
           }
           if (record['SBQQ__ChargeType__c'] === 'One-Time') {
-            record['SBQQ__BillingFrequency__c'] = "";
+            record['SBQQ__BillingFrequency__c'] = '';
           }
         }
         const earliest = record['SBQQ__EarliestValidAmendmentStartDate__c'];
@@ -3011,7 +3012,7 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
           record['SBQQ__SubscriptionType__c'] = record['SBQQ__ProductSubscriptionType__c'].includes('/') ? 'Renewable' : record['SBQQ__ProductSubscriptionType__c'];
           if (record['SBQQ__ProductSubscriptionType__c'].toLowerCase() === 'evergreen') {
             record['SBQQ__SubscriptionTerm__c'] = 1;
-            if (record['SBQQ__BillingFrequency__c'] === "Invoice Plan") record['SBQQ__BillingFrequency__c'] = "";
+            if (record['SBQQ__BillingFrequency__c'] === 'Invoice Plan') record['SBQQ__BillingFrequency__c'] = '';
             delete record['EndDate'];
 
             if (record['SBQQ__ChargeType__c'] === 'One-Time') {
@@ -3021,10 +3022,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
         }
         if ('SBQQ__ChargeType__c' in record) {
           if (record['SBQQ__ChargeType__c'] === 'One-Time' || record['SBQQ__ChargeType__c'] === 'Usage') {
-            record['SBQQ__BillingType__c'] = "";
+            record['SBQQ__BillingType__c'] = '';
           }
           if (record['SBQQ__ChargeType__c'] === 'One-Time') {
-            record['SBQQ__BillingFrequency__c'] = "";
+            record['SBQQ__BillingFrequency__c'] = '';
           }
         }
       })
@@ -3115,10 +3116,10 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
             valueAsString = valueAsString.substring(0, length);
 
             switch (fieldDetails.type) {
-              case "double":
-              case "currency":
-              case "percent":
-              case "number":
+              case 'double':
+              case 'currency':
+              case 'percent':
+              case 'number':
                 updatedRecord[fieldName] = Number(valueAsString);
                 break;
               default:
@@ -3142,9 +3143,9 @@ export default class DataGenerate extends SfCommand<DataGenerateResult> {
   ) {
     DataGenerate.objectWithFaliures.push({
       sObject: sObjectName,
-      failedCount: failedCount,
+      failedCount,
       count: dataArray.length,
-      level: level
+      level
     });
 
     //  Update the global ID cache for reference resolution

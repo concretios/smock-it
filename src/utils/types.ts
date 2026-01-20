@@ -228,9 +228,9 @@ export type jsonConfig = {
 
 export type RelatedSObjectNode = {
   sObject: string;
-  records: {
+  records: Array<{
     relatedSObjects: RelatedSObjectNode[];
-  }[];
+  }>;
 };
 
 export type GenericRecord = { [key: string]: any };

@@ -17,6 +17,7 @@ import {
   TemplateRemoveResult,
   flagObj,
   namespaceAndOutputSchema,
+  SObjectItem,
 } from '../../../utils/types.js';
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('smock-it', 'template.remove');
@@ -270,7 +271,7 @@ function validateInput(flags: flagObj, jsonData: templateSchema): templateSchema
     throw new Error('JSON data is undefined after processing the flags.');
   }
 
-  let outputData = updateSObjectPath(jsonData, sObjectNames, updatedJsonData.sObjects??[0]);
+  const outputData = updateSObjectPath(jsonData, sObjectNames, updatedJsonData.sObjects?.[0]);
   outputData.namespaceToExclude = updatedJsonData.namespaceToExclude;
   outputData.outputFormat = updatedJsonData.outputFormat;
 
@@ -309,24 +310,24 @@ function getJsonData(templateName: string): string {
   }
   return configFilePath;
 }
-export function getUpdatedData(jsonData: any, path: string[]): any {
+export function getUpdatedData(jsonData: templateSchema, objectPath: string[]): templateSchema {
   let currentLevel = jsonData.sObjects;
 
-  for (let i = 0; i < path.length; i++) {
-    const name = path[i].toLowerCase();
+  for (let i = 0; i < objectPath.length; i++) {
+    const name = objectPath[i].toLowerCase();
 
-    const found = currentLevel.find((obj: any) =>
+    const found = currentLevel.find((obj: SObjectItem) =>
       Object.keys(obj)[0].toLowerCase() === name
     );
 
     if (!found) {
-      throw new Error(`'${path[i]}' does not exist in the template.`);
+      throw new Error(`'${objectPath[i]}' does not exist in the template.`);
     }
 
     const realKey = Object.keys(found)[0];
     const config = found[realKey];
 
-    if (i === path.length - 1) {
+    if (i === objectPath.length - 1) {
       return {
         namespaceToExclude: jsonData.namespaceToExclude,
         outputFormat: jsonData.outputFormat,
@@ -334,40 +335,42 @@ export function getUpdatedData(jsonData: any, path: string[]): any {
           {
             [realKey.toLowerCase()]: config
           }
-        ]
+        ],
+        templateFileName: '',
+        count: 0
       };
     }
 
-    currentLevel = config.relatedSObjects || [];
+    currentLevel = config.relatedSObjects ?? [];
   }
 
-  throw new Error("Invalid path.");
+  throw new Error('Invalid sObjectPath.');
 }
 
 function updateSObjectPath(
-  jsonData: any,
-  path: string[],
-  updatedData: any
-): any {
-  const newJson = JSON.parse(JSON.stringify(jsonData)); // deep clone
+  jsonData: templateSchema,
+  objectPath: string[],
+  updatedData: SObjectItem
+): templateSchema {
+  const newJson: templateSchema = JSON.parse(JSON.stringify(jsonData)) as templateSchema;
   const sObjects = newJson.sObjects;
-
+  let normalizedData = updatedData;
   // If updatedData is array, extract object inside
   if (Array.isArray(updatedData)) {
-    if (updatedData.length === 1 && typeof updatedData[0] === "object") {
-      updatedData = updatedData[0];
+    if (updatedData.length === 1 && typeof updatedData[0] === 'object') {
+      normalizedData = updatedData[0] as SObjectItem;
     } else {
-      throw new Error("updatedData should not be an array.");
+      throw new Error('updatedData should not be an array.');
     }
   }
 
   let currentLevelArray = sObjects;
 
-  for (let i = 0; i < path.length; i++) {
-    const key = path[i].toLowerCase();
+  for (let i = 0; i < objectPath.length; i++) {
+    const key = objectPath[i].toLowerCase();
 
     const objIndex = currentLevelArray.findIndex(
-      (obj: any) => Object.keys(obj)[0].toLowerCase() === key
+      (obj: SObjectItem) => Object.keys(obj)[0].toLowerCase() === key
     );
     if (objIndex === -1) return newJson;
 
@@ -375,8 +378,8 @@ function updateSObjectPath(
     const currentObj = currentLevelArray[objIndex][currentObjKey];
 
     // LAST NODE → replace object
-    if (i === path.length - 1) {
-      currentLevelArray[objIndex] = { ...updatedData };
+    if (i === objectPath.length - 1) {
+      currentLevelArray[objIndex] = { ...normalizedData };
       return newJson;
     }
 
@@ -420,6 +423,18 @@ function removeRelatedSObjects(
     if (!Array.isArray(value.relatedSObjects)) {
       return obj;
     }
+
+    const keysFound: string[] = [];
+    value.relatedSObjects.forEach((relObj) => {
+      const relKey = Object.keys(relObj)[0];
+      keysFound.push(relKey.toLowerCase());
+    });
+
+    relatedSObjectsToRemove.forEach((relObj) => {
+      if (!keysFound.includes(relObj.toLowerCase())) {
+        throw new Error(`Related sObject '${relObj}' does not exist under sObject '${sObject}'.`);
+      }
+    });
 
     const filteredRelated = value.relatedSObjects.filter((relObj) => {
       const relKey = Object.keys(relObj)[0];
@@ -517,13 +532,16 @@ export default class TemplateRemove extends SfCommand<TemplateRemoveResult> {
     }
 
     let isGlobal = false;
-    if (flags.namespaceToExclude || flags.outputFormat) {
+    if (flags.namespaceToExclude ?? flags.outputFormat) {
       isGlobal = true;
     }
 
-    let  updatedJson;
-    if(!isGlobal) {
-      this.log(chalk.magenta.bold(`Working on the object level settings for ${flags.sObject}`));
+    let updatedJson;
+    if (!isGlobal) {
+      if(!flags.sObject) {
+        this.error('When removing object-level settings, you must specify the --s-object flag.');
+      }
+      this.log(chalk.magenta.bold('Working on the object level settings for ', flags.sObject));
       updatedJson = validateInput(flags, jsonData);
     }
     else

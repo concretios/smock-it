@@ -473,20 +473,9 @@ const HEALTHCLOUD_TEMPLATE =
 }`;
 
 export class TemplateCreator {
-
-  private getUniqueFilePath(templatePath: string, baseName: string): string {
-    let filePath = path.join(templatePath, `${baseName}.json`);
-    let counter: number = 0;
-
-    while (fs.existsSync(filePath)) {
-      counter++;
-      filePath = path.join(templatePath, `${baseName}_${counter}.json`);
-    }
-    return filePath;
-  }
-
   /**
    * Creates a data template file of the specified type.
+   * 
    * @param templatePath - The path to the templates directory.
    * @param templateType - The type of template to create ('default', 'salesprocess', taskray , cpq, healthcloud).
    * @returns The path of the created template file.
@@ -517,11 +506,22 @@ export class TemplateCreator {
         templateContent = HEALTHCLOUD_TEMPLATE;
         break;
       default:
-        throw new Error(`Unknown template type: ${templateType}`);
+        throw new Error('Unknown template type');
     }
 
     const filePath = this.getUniqueFilePath(templatePath, baseName);
     fs.writeFileSync(filePath, templateContent, 'utf8');
+    return filePath;
+  }
+
+  private getUniqueFilePath(templatePath: string, baseName: string): string {
+    let filePath = path.join(templatePath, `${baseName}.json`);
+    let counter: number = 0;
+
+    while (fs.existsSync(filePath)) {
+      counter++;
+      filePath = path.join(templatePath, `${baseName}_${counter}.json`);
+    }
     return filePath;
   }
 }

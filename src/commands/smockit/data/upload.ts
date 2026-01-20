@@ -461,7 +461,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     );
     this.log(chalk.blueBright('⏳ Please wait while records are being processed...\n'));
 
-    let insertResults;
+    // let insertResults;
     // if (
     //   sobject.toLowerCase() === 'order' ||
     //   sobject.toLowerCase() === 'task' ||
@@ -470,7 +470,7 @@ export default class DataUpload extends SfCommand<DataUploadResult> {
     // ) {
     //   insertResults = await insertRecordsspecial(conn, sobject, finalRecordsToInsert);
     // } else {
-      insertResults = await DataGenerate.insertRecords(conn, sobject, finalRecordsToInsert, true);
+    const insertResults = await DataGenerate.insertRecords(conn, sobject, finalRecordsToInsert, true);
     // }
 
     DataUpload.processInsertResults(sobject, insertResults, finalRecordsToInsert.length, this.log.bind(this));

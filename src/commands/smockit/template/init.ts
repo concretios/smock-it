@@ -154,9 +154,9 @@ async function getNamespaceToExclude(): Promise<string[]> {
   const namespaceExcludeValue = await askQuestion('Namespace(s) to exclude' + chalk.dim('(comma-separated)'), '');
   const namespaceToExclude = namespaceExcludeValue
     ? namespaceExcludeValue
-        .toLowerCase()
-        .split(/[\s,]+/)
-        .filter(Boolean)
+      .toLowerCase()
+      .split(/[\s,]+/)
+      .filter(Boolean)
     : [];
   return namespaceToExclude;
 }
@@ -264,7 +264,7 @@ async function showConditionalCommand(
     if (!objectsToConfigure.includes(sObjectName)) {
       const addObjectIfProvidedIsMissingFromArray = await askQuestion(
         chalk.yellow(`Warning: '${sObjectName}' is missing from the data template.`) +
-          chalk.white('\nDo you want to add? (Y/n)'),
+        chalk.white('\nDo you want to add? (Y/n)'),
         'n'
       );
       const addObject = addObjectIfProvidedIsMissingFromArray.toLowerCase();
@@ -285,8 +285,8 @@ async function showConditionalCommand(
 
     const fieldsToExcludeInput = await askQuestion(
       chalk.white.bold(`[${sObjectName} - fieldsToExclude]`) +
-        ' Enter fields (API names) to exclude' +
-        chalk.dim('(comma-separated)'),
+      ' Enter fields (API names) to exclude' +
+      chalk.dim('(comma-separated)'),
       ''
     );
     const fieldsToExclude: string[] = fieldsToExcludeInput
@@ -300,7 +300,7 @@ async function showConditionalCommand(
 
     const fieldsToConsiderInput = await askQuestion(
       chalk.white.bold(`[${sObjectName} - fieldsToConsider]`) +
-        ' Enter fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
+      ' Enter fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
       ''
     );
 
@@ -344,7 +344,7 @@ async function showConditionalCommand(
 
     const relatedSObjects = await handleRelatedSObjectsQuestionnaire(sObjectName);
     if (relatedSObjects.length > 0) {
-        sObjectSettingsMap[sObjectName]['relatedSObjects'] = relatedSObjects;
+      sObjectSettingsMap[sObjectName]['relatedSObjects'] = relatedSObjects;
     }
 
     if (remainingObjects.length !== 0) {
@@ -392,15 +392,15 @@ async function handleRelatedSObjectsQuestionnaire(
       }
 
       sObjectSettingsMap = { [childName]: {} }; // Reset for new child
-      
+
       // Get Count
       sObjectSettingsMap = await handleSObjectSettingsMap(sObjectSettingsMap, childName);
 
       // Get Fields to Exclude
       const fieldsToExcludeInput = await askQuestion(
         chalk.white.bold(`[${childName} - fieldsToExclude]`) +
-          ' Enter fields (API names) to exclude' +
-          chalk.dim('(comma-separated)'),
+        ' Enter fields (API names) to exclude' +
+        chalk.dim('(comma-separated)'),
         ''
       );
       const fieldsToExclude: string[] = fieldsToExcludeInput
@@ -414,7 +414,7 @@ async function handleRelatedSObjectsQuestionnaire(
 
       const fieldsToConsiderInput = await askQuestion(
         chalk.white.bold(`[${childName} - fieldsToConsider]`) +
-          ' Enter fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
+        ' Enter fields (API names) to include. (E.g. Phone: [909090, 6788489], Fax )',
         ''
       );
 
@@ -458,11 +458,11 @@ async function handleRelatedSObjectsQuestionnaire(
         );
         continue;
       }
-      
+
       // RECURSIVE CALL for nested relatedSObjects
       const nestedRelated = await handleRelatedSObjectsQuestionnaire(childName);
       if (nestedRelated.length > 0) {
-          sObjectSettingsMap[childName]['relatedSObjects'] = nestedRelated;
+        sObjectSettingsMap[childName]['relatedSObjects'] = nestedRelated;
       }
       // Add the fully configured child to the list
       relatedSObjects.push({ [childName]: sObjectSettingsMap[childName] });
@@ -483,37 +483,31 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     all: Flags.boolean({
       summary: 'Create all available default templates.',
       description: 'Generates all pre-configured templates (default, salesprocess, cpq, etc.) at once in the data_gen/templates directory.',
-      char: 'a',
       required: false,
     }),
     default: Flags.boolean({
       summary: 'Configure templates for data generation.',
       description: "Creates a default template that can be used for initial 'json' adaption.",
-      char: 'd',
       required: false,
     }),
     salesprocess: Flags.boolean({
       summary: 'Create a default Sales Process template.',
       description: 'Generates a pre-configured template for Sales Process automation setup.',
-      char: 's',
       required: false,
     }),
     healthcloud: Flags.boolean({
       summary: 'Create a default HealthCloud template.',
       description: 'Generates a pre-configured template for HealthCloud automation setup.',
-      char: 'h',
       required: false,
     }),
     cpq: Flags.boolean({
       summary: 'Create a default CPQ template.',
       description: 'Generates a pre-configured template for Salesforce CPQ automation setup.',
-      char: 'c',
       required: false,
     }),
     taskray: Flags.boolean({
       summary: 'Create a default TaskRay template.',
       description: 'Generates a pre-configured template for TaskRay project automation setup.',
-      char: 't',
       required: false,
     }),
   };
@@ -522,20 +516,20 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
   public async run(): Promise<SetupInitResult> {
     const dirname = handleDirStruct();
     const templatePath = path.join(dirname, 'templates');
-    this.log(chalk.bold('====================================='));
-    this.log(chalk.bold('🚀 Creating Data Template File 🚀'));
+    this.log(chalk.bold('====================================='), false);
+    this.log(chalk.bold('🚀 Creating Data Template File 🚀'), false);
     this.log(
       '🔗 ' +
-        chalk.gray('For more template creation info, visit: ') +
-        chalk.underline('https://github.com/concretios/smock-it/wiki/Template-Init-Questionnaire')
+      chalk.gray('For more template creation info, visit: ') +
+      chalk.underline('https://github.com/concretios/smock-it/wiki/Template-Init-Questionnaire'), false
     );
-    this.log(chalk.bold('====================================='));
+    this.log(chalk.bold('====================================='), false);
     const { flags } = await this.parse(SetupInit);
 
     const templateCreator = new TemplateCreator();
 
     // Define the mapping of flags to template types
-    const templateMapping: Array<{ flag: boolean; type: 'default' | 'salesprocess' | 'healthcloud' | 'cpq' | 'taskray', label: string }> = [
+    const templateMapping: Array<{ flag: boolean; type: 'default' | 'salesprocess' | 'healthcloud' | 'cpq' | 'taskray'; label: string }> = [
       { flag: flags.default, type: 'default', label: 'Default' },
       { flag: flags.salesprocess, type: 'salesprocess', label: 'Sales Process' },
       { flag: flags.healthcloud, type: 'healthcloud', label: 'HealthCloud' },
@@ -547,15 +541,15 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
     if (anyFlagActive) {
       for (const item of templateMapping) {
         if (flags.all || item.flag) {
-          let filePath = templateCreator.createTemplate(templatePath, item.type);
+          const filePath = templateCreator.createTemplate(templatePath, item.type);
           console.log(chalk.green(`Success: ${item.label} template created at ${filePath}`));
         }
       }
-      this.log('Use the created template\'s file name to generate data using this command:',chalk.yellow('sf smockit data generate -t <TemplateName> -a <OrgAlias>'));
-      process.exit(0); 
+      this.log('Use the created template\'s file name to generate data using this command:', chalk.yellow('sf smockit data generate -t <TemplateName> -a <OrgAlias>'));
+      process.exit(0);
     }
 
-    
+
     const templateFileName = await getJSONFileName(templatePath);
     const filePath = path.join(templatePath, templateFileName);
     const namespaceToExclude = await getNamespaceToExclude();
@@ -639,34 +633,33 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
         const { connectToSalesforceOrg } = await import('../../../utils/generic_function.js');
         const { validateConfigJson } = await import('./validate.js');
 
-        const conn = await connectToSalesforceOrg(userAliasorUsernName);  
+        const conn = await connectToSalesforceOrg(userAliasorUsernName);
         correctAlias = true;
         await validateConfigJson(conn, filePath);
       } catch (err: unknown) {
         if (!(err instanceof Error)) {
           console.log(chalk.red(' Validation failed due to an unknown error.'));
-        }else{
-          if(!correctAlias){
-            console.log(
-              chalk.yellow.bold('\n⚠️ Invalid alias or username!\n') + +
-                chalk.yellow(
-                  'The template will still be created. Please verify the alias/username or authenticate using `sf org login web`\n'
-                ) +
-                chalk.yellow('or use the `sf template validate --help` command..')
-            );
-          }else{
-            console.log(err.message);
-          }
+        } else if (!correctAlias) {
+          console.log(
+            chalk.yellow.bold('\n⚠️ Invalid alias or username!\n') + +
+            chalk.yellow(
+              'The template will still be created. Please verify the alias/username or authenticate using `sf org login web`\n'
+            ) +
+            chalk.yellow('or use the `sf template validate --help` command..')
+          );
+        } else {
+          console.log(err.message);
         }
-        
       }
+
     }
+
     console.log(
       chalk.green('Template created successfully.') +
       '\n' +
       chalk.cyan(`File: ${templateFileName}`) +
       '\n' +
-      chalk.gray(`Location: ${filePath}`)
+      chalk.gray('Location: ' + filePath)
     );
     return config;
   }
