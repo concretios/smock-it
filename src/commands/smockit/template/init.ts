@@ -516,14 +516,14 @@ export default class SetupInit extends SfCommand<SetupInitResult> {
   public async run(): Promise<SetupInitResult> {
     const dirname = handleDirStruct();
     const templatePath = path.join(dirname, 'templates');
-    this.log(chalk.bold('====================================='), false);
-    this.log(chalk.bold('🚀 Creating Data Template File 🚀'), false);
+    this.log(chalk.bold('====================================='));
+    this.log(chalk.bold('🚀 Creating Data Template File 🚀'));
     this.log(
       '🔗 ' +
       chalk.gray('For more template creation info, visit: ') +
-      chalk.underline('https://github.com/concretios/smock-it/wiki/Template-Init-Questionnaire'), false
+      chalk.underline('https://github.com/concretios/smock-it/wiki/Template-Init-Questionnaire')
     );
-    this.log(chalk.bold('====================================='), false);
+    this.log(chalk.bold('====================================='));
     const { flags } = await this.parse(SetupInit);
 
     const templateCreator = new TemplateCreator();
